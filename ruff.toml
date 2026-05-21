@@ -1,0 +1,12 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "N", "RUF", "SIM"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+
+[format]
+quote-style = "double"
