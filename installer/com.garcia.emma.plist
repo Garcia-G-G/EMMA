@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent template. install_macos.sh substitutes @EMMA_ROOT@,
+  @VENV_PYTHON@, and @HOME@ before copying to ~/Library/LaunchAgents/.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.garcia.emma</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@VENV_PYTHON@</string>
+        <string>-m</string>
+        <string>emma</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>@EMMA_ROOT@</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>EMMA_ROOT</key>
+        <string>@EMMA_ROOT@</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      KeepAlive: restart only on non-zero exit. A clean exit (e.g. the
+      developer-mode tool sets `dev_state.shutdown_requested` and we
+      sys.exit(0)) leaves Emma stopped until the user manually
+      `launchctl enable && kickstart`-s the service again.
+    -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>@HOME@/Library/Logs/Emma/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/Library/Logs/Emma/stderr.log</string>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>
