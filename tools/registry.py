@@ -32,6 +32,15 @@ def _discover() -> None:
         except Exception as exc:
             log.error("tool_module_import_failed", module=module_info.name, error=str(exc))
     _discovered = True
+    # Refresh self/capabilities.md from the now-populated registry so
+    # the `describe_capabilities` tool reads a current list rather than
+    # the day-zero scaffold stub. Best-effort; never fatal.
+    try:
+        from tools.self_tool import regenerate_capabilities_md
+
+        regenerate_capabilities_md()
+    except Exception as exc:
+        log.warning("self_capabilities_regen_failed", error=str(exc))
 
 
 def list_tools() -> list[str]:

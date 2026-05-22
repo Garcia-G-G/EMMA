@@ -128,9 +128,13 @@ def _build_messages(
     transcript: Transcript,
     history: list[Message],
     spoken_lang: SpokenLang,
+    memory_priming: str = "",
 ) -> list[dict[str, Any]]:
     msgs: list[dict[str, Any]] = [
-        {"role": "system", "content": build_system_prompt(transcript, spoken_lang)}
+        {
+            "role": "system",
+            "content": build_system_prompt(transcript, spoken_lang, memory_priming),
+        }
     ]
     for m in history[-20:]:
         msgs.append({"role": m.role, "content": m.content})
@@ -206,16 +210,19 @@ async def converse(
     history: list[Message],
     spoken_lang: SpokenLang,
     pending: list[PendingConfirmation] | None = None,
+    memory_priming: str = "",
 ) -> AsyncIterator[str]:
     """Drive the LLM tool loop. Yields text for TTS.
 
     ``pending`` is a mutable list the caller checks after iteration: if
     non-empty, a destructive tool needs a yes/no follow-up before it
-    actually fires.
+    actually fires. ``memory_priming`` is a pre-formatted block of
+    known facts about the user that gets folded into the system prompt
+    (built by the orchestrator from :mod:`memory.long_term`).
     """
     if pending is None:
         pending = []
-    messages = _build_messages(transcript, history, spoken_lang)
+    messages = _build_messages(transcript, history, spoken_lang, memory_priming)
     tools_spec = openai_tool_specs()
 
     for step in range(settings.MAX_TOOL_STEPS + 1):
