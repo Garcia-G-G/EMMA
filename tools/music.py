@@ -7,6 +7,12 @@ refresh token is cached at ``~/.emma/spotify_token.json``.
 
 If `SPOTIFY_CLIENT_ID`/`SECRET` are missing, every Spotify call returns a
 clean failure and the AppleScript-driven Apple Music path takes over.
+
+# TODO(phase-06): hook into actions.environment.detect_preferred("music")
+#   to surface an install prompt when the user prefers Spotify but it's
+#   not installed. In practice detect_preferred("music") never returns
+#   None because Apple Music ships with macOS, so the existing two-tier
+#   fallback already covers all realistic configurations.
 """
 from __future__ import annotations
 

@@ -1,0 +1,207 @@
+# Acceptance scenarios. JSON-formatted YAML so the runner can parse with
+# stdlib `json` (no PyYAML dependency). The file is valid YAML either way.
+#
+# Schema per entry:
+#   id, name, language ("es"|"en")
+#   given            : human-readable precondition
+#   utterance        : exact text to inject (mic + Whisper are bypassed)
+#   expected_actions : list of { tool, args_contain } - each must appear,
+#                      args_contain is a subset match on the tool's args
+#   expected_spoken_pattern : regex matched against the assistant's full
+#                      response text (case-insensitive, DOTALL)
+#   mock_spoken_text : text the runner returns in --mock-external mode
+#                      (chosen to satisfy expected_spoken_pattern)
+#   max_latency_ms   : turn-duration budget (live mode only)
+#   destructive      : informational
+#   expects_phase    : optional, integer phase that must exist for this
+#                      scenario to be valid in live mode. The runner
+#                      treats unmet expectations as a labelled SKIP
+#                      rather than a FAIL.
+#   follows          : optional scenario id; run as a continuation,
+#                      reusing the prior session/history
+#   live_blocked_by  : optional one-line note about why live mode can't
+#                      run this scenario in this environment
+
+[
+  {
+    "id": "A01",
+    "name": "latest_video_creator",
+    "language": "es",
+    "given": "YouTube API key configured; system default browser installed.",
+    "utterance": "Hey Emma, abre el video más reciente de Nill Ojeda.",
+    "expected_actions": [
+      { "tool": "latest_video_from_creator", "args_contain": { "creator_name": "Nill Ojeda" } }
+    ],
+    "expected_spoken_pattern": "abriendo el video más reciente de nill ojeda",
+    "mock_spoken_text": "Abriendo el video más reciente de Nill Ojeda: ejemplo de video.",
+    "max_latency_ms": 3500,
+    "destructive": false
+  },
+  {
+    "id": "A02",
+    "name": "play_music_track",
+    "language": "es",
+    "given": "Spotify creds configured and an active device available.",
+    "utterance": "Hey Emma, pon música de Bad Bunny.",
+    "expected_actions": [
+      { "tool": "play_track", "args_contain": { "query": "Bad Bunny" } }
+    ],
+    "expected_spoken_pattern": "reproduciendo .* bad bunny",
+    "mock_spoken_text": "Reproduciendo Tití Me Preguntó de Bad Bunny.",
+    "max_latency_ms": 4000,
+    "destructive": false
+  },
+  {
+    "id": "A03",
+    "name": "set_volume",
+    "language": "es",
+    "given": "Default audio output device available.",
+    "utterance": "Hey Emma, sube el volumen a 70.",
+    "expected_actions": [
+      { "tool": "set_volume", "args_contain": { "percent": 70 } }
+    ],
+    "expected_spoken_pattern": "volumen al 70",
+    "mock_spoken_text": "Volumen al 70 por ciento.",
+    "max_latency_ms": 2500,
+    "destructive": false
+  },
+  {
+    "id": "A04",
+    "name": "search_web",
+    "language": "en",
+    "given": "BRAVE_API_KEY or TAVILY_API_KEY set.",
+    "utterance": "Hey Emma, search the web for the weather in Monterrey tomorrow.",
+    "expected_actions": [
+      { "tool": "search_web", "args_contain": { "query": "weather in Monterrey tomorrow" } }
+    ],
+    "expected_spoken_pattern": "monterrey",
+    "mock_spoken_text": "Tomorrow in Monterrey: sunny with a high near 32 degrees.",
+    "max_latency_ms": 5000,
+    "destructive": false
+  },
+  {
+    "id": "A05",
+    "name": "current_time_tokyo",
+    "language": "es",
+    "given": "Local zoneinfo database available.",
+    "utterance": "Hey Emma, ¿qué hora es en Tokio?",
+    "expected_actions": [
+      { "tool": "current_time", "args_contain": { "timezone": "Asia/Tokyo" } }
+    ],
+    "expected_spoken_pattern": "asia/tokyo",
+    "mock_spoken_text": "Son las 09:42 en Asia/Tokyo.",
+    "max_latency_ms": 2500,
+    "destructive": false
+  },
+  {
+    "id": "A06",
+    "name": "memory_write",
+    "language": "es",
+    "given": "Long-term memory is available (Phase 03).",
+    "utterance": "Hey Emma, recuérdame que soy alérgico a los mariscos.",
+    "expected_actions": [
+      { "tool": "remember_fact", "args_contain": { "fact": "alérgico a los mariscos" } }
+    ],
+    "expected_spoken_pattern": "anotado|guardado|listo",
+    "mock_spoken_text": "Listo, lo anoté: eres alérgico a los mariscos.",
+    "max_latency_ms": 2500,
+    "destructive": false,
+    "expects_phase": 3,
+    "live_blocked_by": "Phase 03 (memory) not yet implemented."
+  },
+  {
+    "id": "A07",
+    "name": "memory_read_new_session",
+    "language": "es",
+    "given": "A06 ran in a previous session and a fresh session reloads memory.",
+    "utterance": "Hey Emma, ¿qué sabes de mí?",
+    "expected_actions": [
+      { "tool": "recall_facts" }
+    ],
+    "expected_spoken_pattern": "marisco",
+    "mock_spoken_text": "Sé que eres alérgico a los mariscos, entre otras cosas.",
+    "max_latency_ms": 2500,
+    "destructive": false,
+    "expects_phase": 3,
+    "live_blocked_by": "Phase 03 (memory) not yet implemented."
+  },
+  {
+    "id": "A08",
+    "name": "introspection",
+    "language": "es",
+    "given": "self/capabilities.md exists.",
+    "utterance": "Hey Emma, ¿qué puedes hacer?",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(música|video|volumen|tiempo|navegador|web)",
+    "mock_spoken_text": "Puedo controlar música, videos, volumen, abrir el navegador y buscar en la web.",
+    "max_latency_ms": 4000,
+    "destructive": false,
+    "live_blocked_by": "Dedicated introspection tool not built; LLM must answer from its tool list. Acceptable but not guaranteed."
+  },
+  {
+    "id": "A09",
+    "name": "amazon_search_no_purchase",
+    "language": "es",
+    "given": "Playwright Chromium installed and persistent profile exists.",
+    "utterance": "Hey Emma, busca en Amazon unos audífonos Sony WH-1000XM5.",
+    "expected_actions": [
+      { "tool": "browser_do", "args_contain": { "intent": "Amazon" } }
+    ],
+    "expected_spoken_pattern": "(¿lo agrego al carrito\\?|encontré)",
+    "mock_spoken_text": "Encontré 'Sony WH-1000XM5'. ¿Lo agrego al carrito?",
+    "max_latency_ms": 15000,
+    "destructive": true,
+    "live_blocked_by": "Requires Playwright Chromium + a live Amazon session."
+  },
+  {
+    "id": "A10",
+    "name": "amazon_confirm_add_to_cart",
+    "language": "es",
+    "given": "A09 just ran and left a pending confirmation.",
+    "follows": "A09",
+    "utterance": "sí, agrégalos al carrito.",
+    "expected_actions": [
+      { "tool": "browser_do" }
+    ],
+    "expected_spoken_pattern": "(agregué|carrito)",
+    "mock_spoken_text": "Listo. Agregué los audífonos al carrito.",
+    "max_latency_ms": 15000,
+    "destructive": true,
+    "live_blocked_by": "Cart-add runs only after explicit user authorization in a live session."
+  },
+  {
+    "id": "A11",
+    "name": "offline_degradation",
+    "language": "es",
+    "given": "Network is unreachable; ElevenLabs/OpenAI both unreachable.",
+    "utterance": "Hey Emma, qué hora es.",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(sin conexión|offline|son las)",
+    "mock_spoken_text": "Estoy sin conexión a internet, no puedo pensar ni hablar bien ahorita.",
+    "max_latency_ms": 12000,
+    "destructive": false,
+    "live_blocked_by": "Requires Wi-Fi to be disabled at the OS level."
+  },
+  {
+    "id": "A12",
+    "name": "bilingual_switch",
+    "language": "es",
+    "given": "Two-turn run; second turn switches language.",
+    "utterance": "Hey Emma, ¿cómo estás?",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(bien|bien gracias|todo)",
+    "mock_spoken_text": "Bien, gracias por preguntar.",
+    "max_latency_ms": 4000,
+    "destructive": false,
+    "followup": {
+      "language": "en",
+      "utterance": "Hey Emma, what's the weather?",
+      "expected_actions": [
+        { "tool": "search_web", "args_contain": { "query": "weather" } }
+      ],
+      "expected_spoken_pattern": "(weather|forecast|sunny|rain|cloudy)",
+      "mock_spoken_text": "Today's weather: sunny with a high near 25.",
+      "max_latency_ms": 5000
+    }
+  }
+]

@@ -4,6 +4,15 @@ Phase 02 ships lower-level helpers and one case-specific
 ``browser_do(intent)`` that scripts the Amazon "find product and add to
 cart" flow with a confirmation gate.
 
+Browser-detection policy (phase 06): Emma NEVER automates the user's
+real browser, regardless of preferences. Every Playwright action below
+uses the dedicated Chromium with the persistent profile at
+``~/.emma/playwright-profile/``. "Open this URL" actions live in
+``tools/web.open_url`` and ``actions.macos.open_url`` and go through
+``open <url>`` so macOS routes to the user's system default. There is
+no browser-preference memory fact - behavior is determined by the
+action type, not by who the user prefers.
+
 # TODO(future-phase): replace the scripted browser_do with a general
 #   LLM-driven agent. The agent should take a free-form intent, drive the
 #   browser turn-by-turn using screenshots + DOM context with GPT-4o,
