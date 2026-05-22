@@ -64,6 +64,42 @@ def _now() -> dt.datetime:
     return dt.datetime.now().astimezone()
 
 
+def _language_block(transcript: Transcript, lang_name: str) -> str:
+    if not settings.STRICT_LANGUAGE_POLICY:
+        return (
+            f"Detected language for this turn: {transcript.language}. "
+            f"Respond in {lang_name}."
+        )
+    if transcript.language == "other":
+        return (
+            "LANGUAGE GUIDANCE:\n"
+            "- The user's utterance had mixed or unclear language. Choose the\n"
+            "  response language based on what the user most likely wants given\n"
+            "  the content. Default to the user's prior language if ambiguous.\n"
+            "- If the user explicitly requests a specific language for the\n"
+            "  response, use that language.\n"
+            "- Avoid mixing languages within one response unless the user asked\n"
+            "  for translation."
+        )
+    return (
+        "LANGUAGE POLICY (mandatory):\n"
+        f"- The user's current utterance was detected as: {transcript.language}.\n"
+        f"- Respond entirely in {lang_name}. Do not insert words, phrases, or sentences in any\n"
+        "  other language inside your response.\n"
+        "- This rule has exactly four exceptions; outside of them, code-switching is forbidden:\n"
+        "  1. The user explicitly asked you to translate something\n"
+        "     (e.g., \"traduce esto al inglés\", \"how do you say X in Spanish\").\n"
+        "  2. The user asked for a vocabulary, definition, or comparison across languages\n"
+        "     (e.g., \"qué significa 'deadline' en español\", \"what's the English for 'sobremesa'\").\n"
+        "  3. You are repeating back a proper noun (person name, brand, place, song title)\n"
+        "     that was originally in the other language. Quote it verbatim; do not translate it.\n"
+        "  4. The user explicitly asked you to switch the response language\n"
+        "     (e.g., \"háblame en español\", \"respond in English\", \"switch to French\").\n"
+        "     Use the requested language for this turn and subsequent turns until they switch back.\n"
+        "- When in doubt, do not switch languages."
+    )
+
+
 def build_system_prompt(
     transcript: Transcript,
     spoken_language: SpokenLang,
@@ -74,10 +110,10 @@ def build_system_prompt(
     return (
         "You are Emma, a warm and concise bilingual voice assistant for Garcia.\n"
         f"Current local time: {now.strftime('%A %Y-%m-%d %H:%M %Z')}.\n"
-        f"Detected language for this turn: {transcript.language}. "
-        f"Respond in {lang_name}. Keep replies short and conversational - "
-        "this will be spoken aloud, not read. Prefer tools over guessing when a "
-        "tool can do it. After a tool runs, briefly confirm what happened.\n"
+        f"{_language_block(transcript, lang_name)}\n"
+        "Keep replies short and conversational - this will be spoken aloud, not read. "
+        "Prefer tools over guessing when a tool can do it. After a tool runs, briefly "
+        "confirm what happened.\n"
         f"{memory_priming}"
     ).strip()
 
