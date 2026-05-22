@@ -13,6 +13,21 @@ log = structlog.get_logger("emma.tools.youtube")
 _API = "https://www.googleapis.com/youtube/v3"
 
 
+def _normalize_channel_name(s: str) -> str:
+    """Lowercase, strip whitespace, drop common leading articles, collapse spaces.
+
+    Used to compare the user's spoken creator name against YouTube's
+    channel titles for an exact-match short-circuit in
+    :func:`latest_video_from_creator`.
+    """
+    s = s.strip().lower()
+    for prefix in ("el ", "la ", "the "):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    return " ".join(s.split())
+
+
 def _missing_key() -> ToolResult:
     return ToolResult(
         False,
@@ -60,19 +75,38 @@ def latest_video_from_creator(creator_name: str) -> ToolResult:
     if not channels:
         return ToolResult(False, None, f"No encontré el canal '{creator_name}'.", False)
 
-    top = channels[0]
-    others = channels[1:3]
-    top_title = top["snippet"]["title"]
-    if others and any(
-        c["snippet"]["title"].lower() != top_title.lower() for c in others
-    ):
-        names = ", ".join(c["snippet"]["title"] for c in [top, *others])
-        return ToolResult(
-            True,
-            {"candidates": [c["snippet"]["title"] for c in [top, *others]]},
-            f"Encontré varios canales: {names}. ¿Cuál?",
-            requires_confirmation=True,
-        )
+    # Short-circuit on an exact match: if the user's query normalizes to
+    # the same form as one of the candidates, take that one directly. Avoids
+    # the loop where the LLM keeps re-asking with the same exact name.
+    query_norm = _normalize_channel_name(creator_name)
+    exact = next(
+        (c for c in channels if _normalize_channel_name(c["snippet"]["title"]) == query_norm),
+        None,
+    )
+    if exact is not None:
+        top = exact
+        top_title = top["snippet"]["title"]
+        log.info("youtube_exact_match", channel=top_title, query=creator_name)
+    else:
+        top = channels[0]
+        others = channels[1:3]
+        top_title = top["snippet"]["title"]
+        if others and any(
+            c["snippet"]["title"].lower() != top_title.lower() for c in others
+        ):
+            names = ", ".join(c["snippet"]["title"] for c in [top, *others])
+            # Disambiguation is NOT a yes/no flow. Return success so the LLM
+            # speaks the options and the user picks one in their next turn;
+            # the LLM then re-calls this tool with a more specific name.
+            return ToolResult(
+                success=True,
+                data={"candidates": [c["snippet"]["title"] for c in [top, *others]]},
+                user_message=(
+                    f"Hay varios canales que coinciden: {names}. "
+                    "¿Cuál quieres? Dímelo con más detalle."
+                ),
+                requires_confirmation=False,
+            )
 
     channel_id = top["snippet"]["channelId"]
     vids = _api_get(
