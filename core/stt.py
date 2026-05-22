@@ -52,9 +52,21 @@ class Transcript:
 
 
 def _normalize_lang(raw: str | None) -> LangCode:
+    """Map Whisper's `language` field to "es" | "en" | "other".
+
+    Whisper `verbose_json` returns full language names ("spanish",
+    "english", "french", ...), not 2-letter ISO codes. We accept both
+    forms plus the common Spanish autonyms.
+    """
     if not raw:
         return "other"
-    head = raw.strip().lower()[:2]
+    s = raw.strip().lower()
+    if s in {"es", "spa", "spanish", "español", "espanol", "castellano"}:
+        return "es"
+    if s in {"en", "eng", "english"}:
+        return "en"
+    # Fall back to ISO 2-letter prefix only when not a known full name.
+    head = s[:2]
     if head == "es":
         return "es"
     if head == "en":
@@ -78,13 +90,19 @@ async def transcribe(audio_pcm: bytes) -> Transcript:
     file_obj = io.BytesIO(wav)
     file_obj.name = "speech.wav"
 
+    create_kwargs: dict[str, object] = {
+        "model": "whisper-1",
+        "file": file_obj,
+        "response_format": "verbose_json",
+    }
+    # Whisper's `prompt` biases the model toward listed proper nouns / slang.
+    # Skip entirely when empty - empty / irrelevant prompts hurt accuracy.
+    if settings.WHISPER_PROMPT:
+        create_kwargs["prompt"] = settings.WHISPER_PROMPT
+
     try:
         result = await asyncio.wait_for(
-            _get_client().audio.transcriptions.create(
-                model="whisper-1",
-                file=file_obj,
-                response_format="verbose_json",
-            ),
+            _get_client().audio.transcriptions.create(**create_kwargs),
             timeout=settings.API_TIMEOUT_S,
         )
     except Exception as exc:
