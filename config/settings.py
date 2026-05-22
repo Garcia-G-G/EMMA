@@ -123,5 +123,22 @@ class Settings(BaseSettings):
             return ""
         return v[:800]
 
+    # Long-term memory store. SQLite by default; the EMMA_HOME dir is
+    # created on first write. POSTGRES_DSN above remains the optional
+    # network backend; if it's set the long-term store will use it
+    # instead of SQLite (handled in memory/long_term.py).
+    MEMORY_DB_PATH: Path = Path.home() / ".emma" / "memory.db"
+
+    # Reflection: how many facts to extract per turn (cap, model may
+    # return fewer). The reflection step runs gpt-4o-mini on the last
+    # user+assistant pair plus a small window of history.
+    MEMORY_REFLECTION_MODEL: str = "gpt-4o-mini"
+    MEMORY_REFLECTION_MAX_FACTS_PER_TURN: int = 5
+
+    # Memory priming: how many of the highest-confidence / most-recent
+    # facts to inject into the system prompt each turn. Keep small so
+    # the prompt stays focused.
+    MEMORY_PRIMING_TOP_N: int = 15
+
 
 settings = Settings()

@@ -101,6 +101,15 @@ def main() -> int:
     except Exception as exc:
         log.warning("env_warm_cache_failed", error=str(exc))
 
+    # Bring up the long-term memory store (creates ~/.emma/memory.db on
+    # first launch). Idempotent.
+    try:
+        from memory import long_term as memory_lt
+
+        memory_lt.initialize()
+    except Exception as exc:
+        log.warning("memory_initialize_failed", error=str(exc))
+
     try:
         asyncio.run(orchestrator.run())
     except KeyboardInterrupt:
