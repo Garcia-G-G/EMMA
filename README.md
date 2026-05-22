@@ -77,17 +77,37 @@ uv run python -m emma --debug
 
 ## Wake word
 
-Emma listens for the custom phrase **"Hey Emma"**. The `.ppn` keyword file
-is generated per-user in the Picovoice console - it is not committed.
+Emma listens for the custom phrase **"Hey Emma"**, detected by a
+locally-loaded ONNX model produced via
+[openWakeWord](https://github.com/dscripka/openWakeWord). The model is
+trained once by the user via a Google Colab notebook - it does not ship
+with the repo.
 
-1. Sign in at https://console.picovoice.ai/
-2. Open *Porcupine -> Wake Word -> Train Wake Word*.
-3. Phrase: `Hey Emma`. Platform: **macOS (arm64)**. Train and download.
-4. Drop the file at `config/wake_words/hey_emma_mac.ppn`.
-5. Point `WAKE_WORD_PATH` in `.env` at it (absolute path or
-   `config/wake_words/hey_emma_mac.ppn`).
+### Train your "Hey Emma" model
 
-Regenerate the file whenever you move to a new platform - PPNs are
-platform-specific.
+1. Open the official custom-model training notebook:
+   `https://github.com/dscripka/openWakeWord/blob/main/notebooks/automatic_model_training.ipynb`
+2. Set the target wake word to `hey emma`. Lowercase, single space.
+3. Run all cells. The notebook will:
+   - Generate ~10k synthetic samples of the phrase via Piper TTS with varied voices.
+   - Generate ~10k negative samples (other speech, ambient noise).
+   - Train an ONNX model for ~50 epochs (~30-45 min on the free Colab GPU).
+4. Download the resulting `hey_emma.onnx` file.
+5. Place it at `config/wake_words/hey_emma.onnx` in this repo (the
+   folder is gitignored).
+6. In `.env`, set `WAKE_WORD_PATH=config/wake_words/hey_emma.onnx`.
+   Leave `WAKE_WORD_NAME=hey_emma` and `WAKE_WORD_THRESHOLD=0.5` unless
+   you have a reason to tune them.
+
+### Tuning notes
+
+- If you get false positives (Emma triggers when you weren't talking to
+  her), raise `WAKE_WORD_THRESHOLD` to 0.6 or 0.7.
+- If you get false negatives (you said "Hey Emma" and nothing
+  happened), lower it to 0.4. If that still misses, retrain with more
+  synthetic samples or with audio of your own voice mixed in
+  (advanced).
+- The `.onnx` is platform-independent. The same file works on Mac,
+  Linux, Windows.
 
 See `CLAUDE.md` for the full architecture and conventions.

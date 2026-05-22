@@ -1,8 +1,8 @@
 """Microphone capture, energy-based VAD, and playback via sounddevice.
 
 All audio in this module is 16 kHz mono signed-int16 PCM. Wake word
-(Porcupine) and Whisper both expect that format; ElevenLabs is requested
-at the same rate so playback can be a straight passthrough.
+(openWakeWord) and Whisper both expect that format; ElevenLabs is
+requested at the same rate so playback can be a straight passthrough.
 """
 from __future__ import annotations
 
@@ -54,17 +54,28 @@ async def mic_stream() -> AsyncIterator[bytes]:
 
 
 async def capture_until_silence() -> bytes:
-    """Open the mic, capture until ~`VAD_SILENCE_MS` of silence, return PCM."""
+    """Open the mic, capture until ~`VAD_SILENCE_MS` of silence, return PCM.
+
+    Returns empty bytes if no speech is detected within
+    ``VAD_SPEECH_START_S`` (so a stray wake-word false-positive doesn't
+    hold the mic open for the full ``VAD_MAX_UTTERANCE_S``).
+    """
     buf = bytearray()
     silent_ms = 0
     speech_started = False
-    deadline = time.monotonic() + settings.VAD_MAX_UTTERANCE_S
+    start_time = time.monotonic()
+    deadline = start_time + settings.VAD_MAX_UTTERANCE_S
+    speech_deadline = start_time + settings.VAD_SPEECH_START_S
 
     gen = mic_stream()
     try:
         async for frame in gen:
-            if time.monotonic() > deadline:
+            now = time.monotonic()
+            if now > deadline:
                 log.info("vad_timeout")
+                break
+            if not speech_started and now > speech_deadline:
+                log.info("vad_no_speech_started")
                 break
             buf.extend(frame)
             samples = np.frombuffer(frame, dtype=np.int16).astype(np.float64)
@@ -82,7 +93,13 @@ async def capture_until_silence() -> bytes:
 
 
 async def play_audio_stream(chunks: AsyncIterator[bytes]) -> None:
-    """Stream 16 kHz mono int16 PCM chunks straight to the output device."""
+    """Stream 16 kHz mono int16 PCM chunks straight to the output device.
+
+    Cancellation-aware: on barge-in, ``CancelledError`` triggers
+    ``stream.abort()`` which discards the buffered audio and silences
+    the speaker immediately (no 50 ms drain). The exception is
+    re-raised so the caller knows playback was interrupted.
+    """
     stream = sd.RawOutputStream(
         samplerate=SAMPLE_RATE,
         channels=1,
@@ -90,16 +107,105 @@ async def play_audio_stream(chunks: AsyncIterator[bytes]) -> None:
         blocksize=0,
     )
     stream.start()
+    interrupted = False
     try:
         async for chunk in chunks:
             if not chunk:
                 continue
             await asyncio.to_thread(stream.write, chunk)
+    except asyncio.CancelledError:
+        interrupted = True
+        try:
+            stream.abort()  # discard pending buffer, silence speaker now
+        except Exception:
+            pass
+        raise
     finally:
-        # Drain briefly so the tail of the utterance isn't cut off.
-        await asyncio.to_thread(time.sleep, 0.05)
-        stream.stop()
-        stream.close()
+        if not interrupted:
+            # Normal end: short drain so the tail isn't cut off.
+            await asyncio.to_thread(time.sleep, 0.05)
+        try:
+            stream.stop()
+        except Exception:
+            pass
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+
+async def listen_for_speech(
+    *,
+    rms_threshold: float,
+    consecutive_frames_required: int,
+    blanking_ms: int,
+) -> None:
+    """Return when the mic registers `consecutive_frames_required` frames
+    above `rms_threshold`, after ignoring the first `blanking_ms` of audio.
+
+    Intended to run concurrently with ``play_audio_stream`` so the user
+    can barge in over Emma's TTS. Opens its own ``RawInputStream`` that
+    coexists with the output stream (input + output on macOS PortAudio
+    is the default duplex case - no conflict).
+
+    Cancel-safe: the input stream is stopped and closed in ``finally``.
+    """
+    queue: asyncio.Queue[bytes] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def _cb(indata: object, frames: int, _t: object, status: object) -> None:
+        if status:
+            log.warning("input_status_listen", status=str(status))
+        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))  # type: ignore[arg-type]
+
+    stream = sd.RawInputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="int16",
+        blocksize=FRAME_SAMPLES,
+        callback=_cb,
+    )
+    stream.start()
+    started = time.monotonic()
+    consecutive = 0
+    blanked_high_rms_frames = 0
+    blanking_done = False
+    try:
+        while True:
+            frame = await queue.get()
+            elapsed_ms = (time.monotonic() - started) * 1000
+            samples = np.frombuffer(frame, dtype=np.int16).astype(np.float64)
+            rms = math.sqrt(float(np.mean(samples * samples))) if samples.size else 0.0
+
+            if elapsed_ms < blanking_ms:
+                if rms > rms_threshold:
+                    blanked_high_rms_frames += 1
+                continue
+
+            if not blanking_done:
+                if blanked_high_rms_frames > 0:
+                    log.debug(
+                        "barge_in_skipped_blanking",
+                        frames=blanked_high_rms_frames,
+                        blanking_ms=blanking_ms,
+                    )
+                blanking_done = True
+
+            if rms > rms_threshold:
+                consecutive += 1
+                if consecutive >= consecutive_frames_required:
+                    return
+            else:
+                consecutive = 0
+    finally:
+        try:
+            stream.stop()
+        except Exception:
+            pass
+        try:
+            stream.close()
+        except Exception:
+            pass
 
 
 def play_tone(freq_hz: float = 880.0, duration_ms: int = 150, volume: float = 0.18) -> None:
