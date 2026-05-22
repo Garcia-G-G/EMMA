@@ -30,6 +30,9 @@ from core.llm import Message, PendingConfirmation, converse
 from core.stt import transcribe
 from core.tts import say_fallback, speak
 from core.wake_word import listen_for_wake_word
+from memory import long_term as memory_lt
+from memory import reflection as memory_reflection
+from memory import short_term as memory_st
 from tools.registry import dispatch, get_tool
 
 log = structlog.get_logger("emma.orchestrator")
@@ -323,8 +326,19 @@ async def _one_turn(
         full_response: list[str] = []
         pending: list[PendingConfirmation] = []
 
+        # Phase-03 memory priming: cheap (SQLite top-N), bounded by
+        # MEMORY_PRIMING_TOP_N; falls through silently if the store is
+        # empty or unreachable.
+        try:
+            memory_priming = await memory_lt.priming_block()
+        except Exception as exc:
+            log.warning("memory_priming_failed", error=str(exc))
+            memory_priming = ""
+
         async def llm_with_marker() -> AsyncIterator[str]:
-            async for piece in converse(transcript, history, spoken_lang, pending):
+            async for piece in converse(
+                transcript, history, spoken_lang, pending, memory_priming=memory_priming
+            ):
                 if "llm_first_token" not in stages:
                     stages["llm_first_token"] = time.monotonic()
                     log.info(
@@ -386,6 +400,17 @@ async def _one_turn(
 
         for p in pending:
             await _handle_confirmation(p, spoken_lang, history)
+
+        # Append to the short-term session log + schedule a background
+        # reflection pass. Skip on barge-in (the user truncated us; no
+        # complete thought to extract durable facts from) and skip when
+        # we already spoke an apology for an STT failure.
+        if not barge_in and reply_text:
+            memory_st.append_turn(transcript.text, reply_text)
+            try:
+                memory_reflection.schedule_reflection(memory_st.last_turns(4))
+            except Exception as exc:
+                log.warning("reflection_schedule_failed", error=str(exc))
 
         cap = HISTORY_TURNS * 2
         if len(history) > cap:
