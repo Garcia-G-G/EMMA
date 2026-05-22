@@ -6,9 +6,22 @@ and surfaced via ``success=False``.
 
 Tools that take a ``confirmed: bool = False`` argument participate in the
 two-phase confirmation flow: the first call (without confirmation) sets
-up the action and returns ``requires_confirmation=True`` with a question
-in ``user_message``; the orchestrator replays with ``confirmed=True``
-after the user assents.
+up the action and returns ``requires_confirmation=True`` with a
+**binary yes/no question** in ``user_message``; the orchestrator replays
+with ``confirmed=True`` after the user assents.
+
+``requires_confirmation`` is for destructive / irreversible actions only
+(add-to-cart, send-message, delete, post-publicly, install-and-set-default).
+**Do not** use it for disambiguation, multi-choice, or any non-yes/no
+follow-up - those return ``success=True`` with the candidates in
+``user_message`` and let the LLM ask the next question naturally on the
+next user turn.
+
+Cancellation is opt-in. Tools that want a cleanup / fallback branch when
+the user declines should declare ``cancelled: bool = False`` in their
+signature. The orchestrator inspects the signature and only re-dispatches
+with ``cancelled=True`` to tools that opt in - other tools are simply
+not called on cancel.
 """
 from __future__ import annotations
 
@@ -80,6 +93,9 @@ def _docstring_summary(fn: ToolFunc) -> str:
     return "\n\n".join(paragraphs[:2])
 
 
+_INTERNAL_ARGS: frozenset[str] = frozenset({"confirmed", "cancelled"})
+
+
 def _function_to_parameters(fn: ToolFunc) -> dict[str, Any]:
     try:
         hints = typing.get_type_hints(fn)
@@ -89,8 +105,8 @@ def _function_to_parameters(fn: ToolFunc) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     required: list[str] = []
     for name, param in sig.parameters.items():
-        if name == "confirmed":
-            continue  # internal flag, not exposed to the LLM
+        if name in _INTERNAL_ARGS:
+            continue  # internal flags, not exposed to the LLM
         anno = hints.get(name, str)
         properties[name] = _py_type_to_schema(anno)
         if param.default is inspect.Parameter.empty:
