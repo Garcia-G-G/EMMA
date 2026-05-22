@@ -93,6 +93,14 @@ def main() -> int:
 
     orchestrator.preflight()
 
+    # Warm the environment detection cache (idempotent; uses 24h TTL).
+    try:
+        from actions import environment
+
+        environment.warm_cache()
+    except Exception as exc:
+        log.warning("env_warm_cache_failed", error=str(exc))
+
     try:
         asyncio.run(orchestrator.run())
     except KeyboardInterrupt:

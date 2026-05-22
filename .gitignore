@@ -14,5 +14,6 @@ dist/
 .env
 .emma/
 logs/
-*.ppn
+config/wake_words/*.onnx
 playwright-profile/
+tests/acceptance/run_*.md
