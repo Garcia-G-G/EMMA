@@ -140,5 +140,13 @@ class Settings(BaseSettings):
     # the prompt stays focused.
     MEMORY_PRIMING_TOP_N: int = 15
 
+    # Speech-to-text model. `gpt-4o-mini-transcribe` is the recommended
+    # default - dramatically more accurate than `whisper-1` on Spanish
+    # and Mexican-Spanish slang, while staying fast. `gpt-4o-transcribe`
+    # is the best-quality option (slower, more expensive). `whisper-1`
+    # is the legacy fallback - only one that supports verbose_json with
+    # automatic language detection.
+    STT_MODEL: str = "gpt-4o-mini-transcribe"
+
 
 settings = Settings()
