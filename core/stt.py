@@ -1,7 +1,17 @@
-"""Speech-to-text via OpenAI Whisper (whisper-1).
+"""Speech-to-text via the OpenAI audio.transcriptions API.
 
-We send a single utterance worth of audio per call. The API auto-detects
-language; we normalize to "es" | "en" | "other".
+The model is configurable via :data:`config.settings.STT_MODEL`. Three
+choices are wired:
+
+- ``gpt-4o-mini-transcribe`` (default) - fast, dramatically more
+  accurate than whisper-1 on Spanish and slang. Does not support
+  ``verbose_json``, so the API does not return a ``language`` field;
+  we leave language as ``"other"`` and let the orchestrator fall back
+  to the prior turn's language.
+- ``gpt-4o-transcribe`` - best quality, slower / more expensive. Same
+  limitation as the mini model.
+- ``whisper-1`` - legacy fallback. Only model that supports
+  ``verbose_json`` with automatic language detection.
 """
 from __future__ import annotations
 
@@ -90,13 +100,20 @@ async def transcribe(audio_pcm: bytes) -> Transcript:
     file_obj = io.BytesIO(wav)
     file_obj.name = "speech.wav"
 
+    model = settings.STT_MODEL
+    # Only `whisper-1` supports `verbose_json` (which carries the
+    # `language` field). The gpt-4o-* transcribe models accept `json`
+    # only; we get higher accuracy at the cost of language detection,
+    # which the orchestrator covers by propagating `last_lang`.
+    response_format = "verbose_json" if model == "whisper-1" else "json"
+
     create_kwargs: dict[str, object] = {
-        "model": "whisper-1",
+        "model": model,
         "file": file_obj,
-        "response_format": "verbose_json",
+        "response_format": response_format,
     }
-    # Whisper's `prompt` biases the model toward listed proper nouns / slang.
-    # Skip entirely when empty - empty / irrelevant prompts hurt accuracy.
+    # Bias the model toward listed proper nouns / slang. Same kwarg name
+    # on whisper-1 and the gpt-4o-* transcribe models.
     if settings.WHISPER_PROMPT:
         create_kwargs["prompt"] = settings.WHISPER_PROMPT
 
@@ -106,10 +123,13 @@ async def transcribe(audio_pcm: bytes) -> Transcript:
             timeout=settings.API_TIMEOUT_S,
         )
     except Exception as exc:
-        log.error("stt_failed", error=str(exc))
+        log.error("stt_failed", error=str(exc), model=model)
         return Transcript("", "other")
 
     text = _scrub(str(getattr(result, "text", "") or ""))
+    # gpt-4o-* transcribe responses don't include `language`; getattr
+    # returns None, which _normalize_lang maps to "other" - orchestrator
+    # then falls back to the prior turn's language.
     lang = _normalize_lang(getattr(result, "language", None))
-    log.debug("stt_result", text=text, language=lang)
+    log.debug("stt_result", text=text, language=lang, model=model)
     return Transcript(text, lang)
