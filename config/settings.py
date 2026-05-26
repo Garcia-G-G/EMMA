@@ -140,13 +140,20 @@ class Settings(BaseSettings):
     # the prompt stays focused.
     MEMORY_PRIMING_TOP_N: int = 15
 
-    # Speech-to-text model. `gpt-4o-mini-transcribe` is the recommended
-    # default - dramatically more accurate than `whisper-1` on Spanish
-    # and Mexican-Spanish slang, while staying fast. `gpt-4o-transcribe`
-    # is the best-quality option (slower, more expensive). `whisper-1`
-    # is the legacy fallback - only one that supports verbose_json with
-    # automatic language detection.
+    # Speech-to-text model. DEPRECATED post-Prompt-13 (Realtime API
+    # transcribes server-side). Kept only for any out-of-tree caller.
     STT_MODEL: str = "gpt-4o-mini-transcribe"
+
+    # ---- Realtime API (Prompt 13) -----------------------------------
+    # Audio-to-audio session model and voice. `marin` is multilingual
+    # and natively handles Spanish + English with appropriate prosody.
+    # Alternatives: `cedar`, `alloy`, `sage`.
+    REALTIME_MODEL: str = "gpt-realtime"
+    REALTIME_VOICE: str = "marin"
+    # Idle close: shut the Realtime WebSocket when no user/assistant
+    # activity has been observed for this many seconds. Wake word
+    # re-arms after each idle close.
+    IDLE_TIMEOUT_S: float = 30.0
 
 
 settings = Settings()

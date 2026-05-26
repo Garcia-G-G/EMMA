@@ -1,62 +1,51 @@
-"""Main loop: wake -> capture -> STT -> LLM (with tools) -> TTS -> playback.
+"""Main loop: wake word → Realtime session → idle close → repeat.
 
-Adds in phase 04:
-- ``turn_id`` UUID bound to structlog contextvars for every turn.
-- Polls ``dev_state.shutdown_requested`` between turns and exits cleanly.
-- ``_simulate_crash`` flag (set by ``--simulate-crash``) raises after the
-  first wake word so the crash handler runs through its real code path.
-- Falls back to ``tts.say_fallback`` when ElevenLabs produces no audio.
-- Exposes ``last_context()`` so the crash handler can include the
-  in-flight transcript and response text in its report.
+Phase 13 collapsed STT + LLM + TTS into a single ``core.realtime``
+WebSocket session, so the orchestrator's job shrinks dramatically:
+
+1. ``listen_for_wake_word()`` blocks until "Hey Mycroft".
+2. We open a Realtime session, prefix the system prompt with whatever
+   long-term memory has on Garcia, and run three coroutines in
+   parallel until idle:
+   - mic-to-session (24 kHz mono int16 → ``input_audio_buffer.append``)
+   - session-to-speakers (``response.audio.delta`` → output stream)
+   - event loop (function calls, transcripts, native barge-in)
+3. Idle (no user/assistant activity for ``IDLE_TIMEOUT_S``) → close
+   the session and loop back to wake-word listening.
+
+Phase 03 memory wiring lives here: the user-transcript handler
+appends to the short-term log, the assistant-transcript handler does
+too and fires the background reflection task. ``runtime.set_spoken_lang``
+is updated from a cheap es/en heuristic on the user transcript so
+``tools/preferences.py`` and ``tools/dev.py`` can keep speaking
+bilingual progress.
 """
 from __future__ import annotations
 
 import asyncio
-import inspect
-import re
 import signal
 import time
 import uuid
-from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Literal
 
 import structlog
 
 from config.settings import settings
-from core import dev_state, runtime
-from core.audio import capture_until_silence, listen_for_speech, play_audio_stream
-from core.llm import Message, PendingConfirmation, converse
-from core.stt import transcribe
-from core.tts import say_fallback, speak
+from core import dev_state, realtime, runtime
 from core.wake_word import listen_for_wake_word
 from memory import long_term as memory_lt
 from memory import reflection as memory_reflection
 from memory import short_term as memory_st
-from tools.registry import dispatch, get_tool
 
 log = structlog.get_logger("emma.orchestrator")
 
-HISTORY_TURNS = 10
 _shutdown = asyncio.Event()
 _simulate_crash = False
 
-# Surfaces in-flight context to the crash handler.
+# Exposed to the crash handler.
 _last_turn_id: str = ""
 _last_transcript: str = ""
 _last_response: str = ""
-
-_YES_WORDS = {
-    "sí", "si", "yes", "yeah", "yep", "yup", "claro", "ok", "okay",
-    "dale", "adelante", "sure", "confirmo", "correcto",
-}
-_NO_WORDS = {"no", "nope", "cancela", "cancelar", "cancel", "stop", "alto"}
-_YN_RE = re.compile(r"\b(" + "|".join(_YES_WORDS | _NO_WORDS) + r")\b", re.IGNORECASE)
-
-_OFFLINE_MSG = {
-    "es": "Estoy sin conexión a internet, no puedo pensar ni hablar bien ahorita.",
-    "en": "I'm offline right now, I can't think or speak properly.",
-}
 
 
 def enable_simulate_crash() -> None:
@@ -75,8 +64,8 @@ def last_context() -> dict[str, str]:
 
 
 def preflight() -> None:
-    """Wake-word validation is now done lazily in core.wake_word._get_model()
-    so it can accept either a custom .onnx path or a built-in model name."""
+    """Wake-word validation runs lazily in :func:`core.wake_word._get_model`
+    so it accepts either a custom .onnx path or a built-in model name."""
     return
 
 
@@ -89,183 +78,22 @@ def _install_signals() -> None:
             pass
 
 
-def _classify_yes_no(text: str) -> bool | None:
-    m = _YN_RE.search(text.lower())
-    if not m:
-        return None
-    return m.group(1).lower() in _YES_WORDS
-
-
-async def _await_yes_no() -> bool | None:
-    audio_pcm = await capture_until_silence()
-    if not audio_pcm:
-        return None
-    transcript = await transcribe(audio_pcm)
-    if not transcript.text.strip():
-        return None
-    return _classify_yes_no(transcript.text)
-
-
-async def _speak_text(text: str, spoken_lang: Literal["es", "en"]) -> bool:
-    """Speak `text` via ElevenLabs; returns True if any audio was produced."""
-    spoke = False
-
-    async def _one() -> AsyncIterator[str]:
-        yield text
-
-    async def _track() -> AsyncIterator[bytes]:
-        nonlocal spoke
-        async for chunk in speak(_one(), spoken_lang):
-            spoke = True
-            yield chunk
-
-    await play_audio_stream(_track())
-    return spoke
-
-
-async def _say_or_speak(text: str, spoken_lang: Literal["es", "en"]) -> None:
-    """Speak via ElevenLabs, falling back to `say` if no audio bytes flowed."""
-    if not text.strip():
-        return
-    spoke = await _speak_text(text, spoken_lang)
-    if not spoke:
-        log.warning("tts_fallback_to_say", chars=len(text))
-        say_fallback(text, spoken_lang)
-
-
-def _tool_accepts_cancelled(tool_name: str) -> bool:
-    """True when the tool's signature opts into cancellation handling."""
-    entry = get_tool(tool_name)
-    if entry is None:
-        return False
-    try:
-        sig = inspect.signature(entry.fn)
-    except (TypeError, ValueError):
-        return False
-    return "cancelled" in sig.parameters
-
-
-async def _handle_confirmation(
-    pending: PendingConfirmation,
-    spoken_lang: Literal["es", "en"],
-    history: list[Message],
-) -> None:
-    answer = await _await_yes_no()
-
-    if answer is None:
-        msg = "No te entendí, cancelo." if spoken_lang == "es" else "Didn't catch that, cancelling."
-        await _say_or_speak(msg, spoken_lang)
-        history.append(Message(role="assistant", content=msg))
-        log.info("confirmation_skipped_no_match", tool=pending.tool_name)
-        if _tool_accepts_cancelled(pending.tool_name):
-            result = await dispatch(pending.tool_name, {**pending.args, "cancelled": True})
-            if result.user_message and result.user_message != msg:
-                await _say_or_speak(result.user_message, spoken_lang)
-                history.append(Message(role="assistant", content=result.user_message))
-        else:
-            log.info("confirmation_tool_no_cancel_handler", tool=pending.tool_name)
-        return
-
-    if not answer:
-        msg = "OK, cancelado." if spoken_lang == "es" else "OK, cancelled."
-        await _say_or_speak(msg, spoken_lang)
-        history.append(Message(role="assistant", content=msg))
-        log.info("confirmation_declined", tool=pending.tool_name)
-        if _tool_accepts_cancelled(pending.tool_name):
-            result = await dispatch(pending.tool_name, {**pending.args, "cancelled": True})
-            if result.user_message and result.user_message != msg:
-                await _say_or_speak(result.user_message, spoken_lang)
-                history.append(Message(role="assistant", content=result.user_message))
-        else:
-            log.info("confirmation_tool_no_cancel_handler", tool=pending.tool_name)
-        return
-
-    log.info("confirmation_granted", tool=pending.tool_name)
-    result = await dispatch(pending.tool_name, {**pending.args, "confirmed": True})
-    await _say_or_speak(result.user_message, spoken_lang)
-    history.append(Message(role="assistant", content=result.user_message))
-
-
-async def _race_playback_with_barge_in(
-    play_gen: AsyncIterator[bytes],
-    stages: dict[str, float],
-    t_wake: float,
-) -> bool:
-    """Run playback concurrently with a mic-listener. Returns True if the
-    user barged in (interrupting Emma); False if playback finished
-    normally.
-    """
-    playback_task = asyncio.create_task(play_audio_stream(play_gen))
-    interrupt_task = asyncio.create_task(
-        listen_for_speech(
-            rms_threshold=settings.BARGE_IN_RMS,
-            consecutive_frames_required=settings.BARGE_IN_FRAMES,
-            blanking_ms=settings.BARGE_IN_BLANKING_MS,
+def _check_path() -> None:
+    """Early validation that the wake-word path looks plausible."""
+    wake_word_path = Path(settings.WAKE_WORD_PATH).expanduser()
+    if not wake_word_path.exists() and not any(
+        c in settings.WAKE_WORD_PATH for c in {"alexa", "hey_mycroft", "hey_jarvis"}
+    ):
+        # Lazy-load in core.wake_word will surface this; we just log up front.
+        log.warning(
+            "wake_word_path_missing",
+            path=str(wake_word_path),
+            hint="train .onnx via README's Colab or use a built-in name",
         )
-    )
-    log.info(
-        "barge_in_armed",
-        rms=settings.BARGE_IN_RMS,
-        frames=settings.BARGE_IN_FRAMES,
-        blanking_ms=settings.BARGE_IN_BLANKING_MS,
-    )
-    barge_in_start = time.monotonic()
-
-    try:
-        done, _pending_tasks = await asyncio.wait(
-            {playback_task, interrupt_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-    except asyncio.CancelledError:
-        for t in (playback_task, interrupt_task):
-            t.cancel()
-        raise
-
-    if interrupt_task in done:
-        # Barge-in fired.
-        elapsed_ms = int((time.monotonic() - barge_in_start) * 1000)
-        log.info("barge_in_detected", elapsed_ms=elapsed_ms)
-        try:
-            interrupt_task.result()
-        except Exception:
-            pass
-        playback_task.cancel()
-        try:
-            await playback_task
-        except (asyncio.CancelledError, Exception):
-            pass
-        try:
-            await play_gen.aclose()
-        except Exception:
-            pass
-        return True
-
-    # Playback finished cleanly. Tear down the listener.
-    interrupt_task.cancel()
-    try:
-        await interrupt_task
-    except (asyncio.CancelledError, Exception):
-        pass
-    # Surface any playback exception (other than cancel).
-    try:
-        playback_task.result()
-    except asyncio.CancelledError:
-        pass
-    return False
 
 
-async def _one_turn(
-    history: list[Message],
-    last_lang: Literal["es", "en"],
-    skip_wake: bool = False,
-) -> tuple[Literal["es", "en"], bool]:
-    """Run one full turn. Returns (spoken_lang, barge_in_pending).
-
-    When ``skip_wake`` is true, the wake-word listen is skipped - we
-    came here directly from a barge-in and the user is already
-    mid-utterance. When ``barge_in_pending`` is true, the caller should
-    skip the wake-word on the *next* call.
-    """
+async def _one_session() -> None:
+    """Wake → Realtime session → idle close. One iteration of the run loop."""
     global _last_turn_id, _last_transcript, _last_response
 
     turn_id = uuid.uuid4().hex[:8]
@@ -276,176 +104,148 @@ async def _one_turn(
 
     try:
         t_start = time.monotonic()
-        if skip_wake:
-            log.info("barge_in_continuation")
-            t_wake = t_start
-        else:
-            await listen_for_wake_word()
-            t_wake = time.monotonic()
-            log.info("wake", elapsed_ms=int((t_wake - t_start) * 1000))
+        await listen_for_wake_word()
+        t_wake = time.monotonic()
+        log.info("wake", elapsed_ms=int((t_wake - t_start) * 1000))
 
         if _simulate_crash:
             raise RuntimeError("test crash (--simulate-crash)")
 
-        audio_pcm = await capture_until_silence()
-        t_vad = time.monotonic()
-        log.info("vad_done", elapsed_ms=int((t_vad - t_wake) * 1000), bytes=len(audio_pcm))
-        if not audio_pcm:
-            return last_lang, False
-
-        transcript = await transcribe(audio_pcm)
-        t_stt = time.monotonic()
-        log.info("stt_done", elapsed_ms=int((t_stt - t_vad) * 1000), lang=transcript.language)
-        _last_transcript = transcript.text
-        if not transcript.text.strip():
-            # Distinguish "you didn't say anything" from "STT failed on real
-            # audio". 16000 bytes = ~500 ms of 16 kHz int16 mono - below that
-            # we treat as no real utterance (mic noise, false wake).
-            # Skip the apology when we're in a barge-in continuation: the
-            # first ~200 ms of speech were already lost between listen and
-            # capture streams, and what we have is often just the tail of
-            # the user's first syllable - not a real STT failure.
-            if len(audio_pcm) > 16000 and not skip_wake:
-                log.warning("stt_empty_after_audio", bytes=len(audio_pcm))
-                msg = (
-                    "Perdón, tuve un problema entendiéndote. Repítelo, por favor."
-                    if last_lang == "es"
-                    else "Sorry, I had trouble catching that. Could you say it again?"
-                )
-                await _say_or_speak(msg, last_lang)
-            elif skip_wake:
-                log.info("stt_empty_after_barge_in", bytes=len(audio_pcm))
-            return last_lang, False
-
-        spoken_lang: Literal["es", "en"] = (
-            last_lang if transcript.language == "other" else transcript.language
-        )
-        runtime.set_spoken_lang(spoken_lang)
-
-        stages: dict[str, float] = {}
-        full_response: list[str] = []
-        pending: list[PendingConfirmation] = []
-
-        # Phase-03 memory priming: cheap (SQLite top-N), bounded by
-        # MEMORY_PRIMING_TOP_N; falls through silently if the store is
-        # empty or unreachable.
+        # Phase 03 memory priming - top-N highest-confidence facts get
+        # injected into the Realtime session's persistent instructions.
         try:
-            memory_priming = await memory_lt.priming_block()
+            priming = await memory_lt.priming_block()
         except Exception as exc:
             log.warning("memory_priming_failed", error=str(exc))
-            memory_priming = ""
+            priming = ""
 
-        async def llm_with_marker() -> AsyncIterator[str]:
-            async for piece in converse(
-                transcript, history, spoken_lang, pending, memory_priming=memory_priming
-            ):
-                if "llm_first_token" not in stages:
-                    stages["llm_first_token"] = time.monotonic()
-                    log.info(
-                        "llm_first_token",
-                        elapsed_ms=int((stages["llm_first_token"] - t_stt) * 1000),
-                    )
-                full_response.append(piece)
-                yield piece
+        session = await realtime.connect(memory_priming=priming)
+        t_connected = time.monotonic()
+        log.info("realtime_connected_ms", elapsed_ms=int((t_connected - t_wake) * 1000))
 
-        async def tts_with_marker() -> AsyncIterator[bytes]:
-            async for chunk in speak(llm_with_marker(), spoken_lang):
-                if "tts_first_byte" not in stages:
-                    stages["tts_first_byte"] = time.monotonic()
-                    base = stages.get("llm_first_token", t_stt)
-                    log.info(
-                        "tts_first_byte",
-                        elapsed_ms=int((stages["tts_first_byte"] - base) * 1000),
-                    )
-                yield chunk
+        first_audio_logged = False
+        last_user: list[str] = []
+        last_assistant: list[str] = []
 
-        async def play_with_marker() -> AsyncIterator[bytes]:
-            async for chunk in tts_with_marker():
-                if "playback_start" not in stages:
-                    stages["playback_start"] = time.monotonic()
-                    log.info(
-                        "playback_start",
-                        since_wake_ms=int((stages["playback_start"] - t_wake) * 1000),
-                    )
-                yield chunk
+        async def on_user(text: str) -> None:
+            _set_last_transcript(text)
+            last_user.append(text)
+            # Update runtime spoken_lang so preferences / dev tools keep
+            # speaking bilingually.
+            lang = realtime.detect_es_en(text)
+            runtime.set_spoken_lang(lang)  # type: ignore[arg-type]
 
-        barge_in = False
-        play_gen = play_with_marker()
-        if settings.BARGE_IN_ENABLED:
-            barge_in = await _race_playback_with_barge_in(play_gen, stages, t_wake)
-        else:
-            await play_audio_stream(play_gen)
+        async def on_assistant(text: str) -> None:
+            _set_last_response(text)
+            last_assistant.append(text)
+            # Memory: append turn + fire-and-forget reflection.
+            if last_user:
+                user_text = " ".join(last_user)
+                memory_st.append_turn(user_text, text)
+                try:
+                    memory_reflection.schedule_reflection(memory_st.last_turns(4))
+                except Exception as exc:
+                    log.warning("reflection_schedule_failed", error=str(exc))
+                # Reset the per-turn accumulator so the next assistant
+                # transcript pairs with the next user transcript only.
+                last_user.clear()
 
-        reply_text = "".join(full_response).strip()
-        _last_response = reply_text
+        # Wrap the audio-out task so we can log time-to-first-byte.
+        async def play_with_first_audio_marker() -> None:
+            nonlocal first_audio_logged
+            # Peek the audio queue: the first non-empty chunk triggers the log.
+            original_get = session.audio_out_queue.get
 
-        if "tts_first_byte" not in stages and not barge_in:
-            # No audio bytes flowed and we weren't interrupted -> TTS/network
-            # is broken. Fall back to system `say`.
-            fallback_text = reply_text or _OFFLINE_MSG[spoken_lang]
-            log.warning("tts_silent_falling_back_to_say", offline=not reply_text)
-            say_fallback(fallback_text, spoken_lang)
+            async def get_and_mark() -> bytes:
+                chunk = await original_get()
+                nonlocal first_audio_logged
+                if chunk and not first_audio_logged:
+                    first_audio_logged = True
+                    elapsed_ms = int((time.monotonic() - t_wake) * 1000)
+                    log.info("wake_to_first_audio_ms", elapsed_ms=elapsed_ms)
+                return chunk
 
-        history.append(Message(role="user", content=transcript.text))
-        if barge_in:
-            # Drop the partial assistant reply: the LLM never finished a
-            # complete thought and feeding it back would confuse future turns.
-            log.info("barge_in_dropping_partial_reply", chars=len(reply_text))
-            # Also drop pending confirmations; user is starting a new request.
-            if pending:
-                log.info("barge_in_dropping_pending", count=len(pending))
-                pending.clear()
-        elif reply_text:
-            history.append(Message(role="assistant", content=reply_text))
+            session.audio_out_queue.get = get_and_mark  # type: ignore[assignment]
+            await realtime.play_session_audio(session)
 
-        for p in pending:
-            await _handle_confirmation(p, spoken_lang, history)
+        mic_task = asyncio.create_task(realtime.mic_to_session(session))
+        play_task = asyncio.create_task(play_with_first_audio_marker())
+        loop_task = asyncio.create_task(
+            realtime.run_event_loop(
+                session,
+                on_user_transcript=on_user,
+                on_assistant_transcript=on_assistant,
+            )
+        )
+        idle_task = asyncio.create_task(_idle_watcher(session))
 
-        # Append to the short-term session log + schedule a background
-        # reflection pass. Skip on barge-in (the user truncated us; no
-        # complete thought to extract durable facts from) and skip when
-        # we already spoke an apology for an STT failure.
-        if not barge_in and reply_text:
-            memory_st.append_turn(transcript.text, reply_text)
+        done, pending = await asyncio.wait(
+            {mic_task, play_task, loop_task, idle_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for t in pending:
+            t.cancel()
+        for t in pending:
             try:
-                memory_reflection.schedule_reflection(memory_st.last_turns(4))
-            except Exception as exc:
-                log.warning("reflection_schedule_failed", error=str(exc))
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        await session.close()
 
-        cap = HISTORY_TURNS * 2
-        if len(history) > cap:
-            del history[: len(history) - cap]
-        return spoken_lang, barge_in
+        session_ms = int((time.monotonic() - t_wake) * 1000)
+        log.info(
+            "realtime_session_close",
+            duration_ms=session_ms,
+            user_utterances=len(last_assistant),
+        )
     finally:
         structlog.contextvars.unbind_contextvars("turn_id")
 
 
+async def _idle_watcher(session: realtime.RealtimeSession) -> None:
+    """Close the session when no activity has been seen for IDLE_TIMEOUT_S."""
+    timeout = float(settings.IDLE_TIMEOUT_S)
+    while not session.closed:
+        await asyncio.sleep(min(2.0, timeout / 2))
+        if time.monotonic() - session.last_activity > timeout:
+            log.info("idle_close", since_activity_s=int(time.monotonic() - session.last_activity))
+            await session.close()
+            return
+
+
+def _set_last_transcript(text: str) -> None:
+    global _last_transcript
+    _last_transcript = text
+
+
+def _set_last_response(text: str) -> None:
+    global _last_response
+    _last_response = text
+
+
 async def run() -> None:
     _install_signals()
+    _check_path()
     log.info("Listening for wake word")
-    history: list[Message] = []
-    last_lang: Literal["es", "en"] = "en"
-    skip_wake = False
     while not _shutdown.is_set():
         try:
-            last_lang, barge_in = await _one_turn(history, last_lang, skip_wake=skip_wake)
-            skip_wake = barge_in
+            await _one_session()
         except asyncio.CancelledError:
             break
         except RuntimeError as exc:
             if "test crash" in str(exc):
-                raise  # let it bubble to the crash handler
-            log.error("turn_failed", error=str(exc))
+                raise  # bubble to crash handler
+            log.error("session_failed", error=str(exc))
             await asyncio.sleep(0.5)
-            skip_wake = False
         except Exception as exc:
-            log.error("turn_failed", error=str(exc))
+            log.error("session_failed", error=str(exc))
             await asyncio.sleep(0.5)
-            skip_wake = False
         if dev_state.shutdown_requested.is_set():
             log.info("dev_mode_exit")
             break
 
+    # Best-effort browser cleanup on shutdown.
     try:
         from tools.browser import shutdown_browser
 
