@@ -71,49 +71,29 @@ class Settings(BaseSettings):
     # Cap on sequential tool calls per turn to prevent runaway loops.
     MAX_TOOL_STEPS: int = 5
 
-    # ElevenLabs voice tuning. The defaults pick the modern flash model and
-    # a moderate latency mode, which produces noticeably more natural
-    # prosody than eleven_multilingual_v2 + LATENCY_MODE=3 at roughly the
-    # same time-to-first-byte.
-    #
-    # ELEVENLABS_MODEL_ID: prefer flash for snappy assistant feel; switch
-    # to "eleven_turbo_v2_5" for richer expression at a small latency cost.
+    # DEPRECATED — kept for env-file compat, no longer read by any
+    # live module after the Prompt-13 Pipecat migration. The Realtime
+    # API selects voice via `REALTIME_VOICE`; sentence-by-sentence
+    # ElevenLabs TTS is gone.
     ELEVENLABS_MODEL_ID: str = "eleven_flash_v2_5"
-    # ELEVENLABS_LATENCY_MODE: 0..4. 0 = best prosody, 4 = lowest latency.
-    # 1 trades ~80 ms TTFB for a clearly more natural cadence.
     ELEVENLABS_LATENCY_MODE: int = 1
-    # ELEVENLABS_OUTPUT_FORMAT: must match core.audio.SAMPLE_RATE. Changing
-    # this without also changing audio.py plays back at the wrong speed.
     ELEVENLABS_OUTPUT_FORMAT: str = "pcm_16000"
-    # TTS_FIRST_CHUNK_MIN_CHARS: how much text the synth needs before it can
-    # commit to opening intonation. Higher = more natural starts, slightly
-    # later first audio byte.
     TTS_FIRST_CHUNK_MIN_CHARS: int = 120
 
-    # Barge-in: speak over Emma to interrupt her. Off => strict half-duplex
-    # (no mic during playback, no interrupts possible).
+    # DEPRECATED — kept for env-file compat, no longer read. Barge-in
+    # is now native to OpenAI Realtime (server-side VAD +
+    # `input_audio_buffer.speech_started` events). The custom
+    # heuristic-based listener was deleted in the migration.
     BARGE_IN_ENABLED: bool = True
-    # Ignore mic for the first N ms of TTS playback. Echo-suppression
-    # heuristic: Emma's first words are loudest leaking into the mic.
     BARGE_IN_BLANKING_MS: int = 350
-    # RMS energy a 32 ms int16 frame must exceed to count as "speech"
-    # during playback. Higher than idle VAD because the room is louder
-    # (Emma is talking). Raise on false triggers, lower on misses.
     BARGE_IN_RMS: float = 1200.0
-    # Consecutive above-threshold frames required to commit to an interrupt.
-    # 6 frames ~= 192 ms of sustained speech at 32 ms/frame.
     BARGE_IN_FRAMES: int = 6
 
-    # Whisper bias prompt: comma-separated proper nouns / brands / slang
-    # Garcia actually says. Improves STT accuracy for those terms. Leave
-    # empty to disable - irrelevant prompts hurt accuracy. Truncated to
-    # 800 chars (≈ Whisper's 224-token hard cap).
+    # DEPRECATED — kept for env-file compat, no longer read. The
+    # Realtime model hears audio directly so we no longer need a
+    # separate Whisper bias prompt nor an "always stay in language X"
+    # policy.
     WHISPER_PROMPT: str = ""
-
-    # Language policy strictness. When True, Emma never code-switches
-    # inside a response unless the user explicitly asked for translation
-    # or cross-lingual phrasing. False reverts to the older permissive
-    # "Respond in <lang>" guidance.
     STRICT_LANGUAGE_POLICY: bool = True
 
     @field_validator("WHISPER_PROMPT")
@@ -140,8 +120,8 @@ class Settings(BaseSettings):
     # the prompt stays focused.
     MEMORY_PRIMING_TOP_N: int = 15
 
-    # Speech-to-text model. DEPRECATED post-Prompt-13 (Realtime API
-    # transcribes server-side). Kept only for any out-of-tree caller.
+    # DEPRECATED — kept for env-file compat, no longer read. The
+    # Realtime API transcribes server-side; out-of-band STT is gone.
     STT_MODEL: str = "gpt-4o-mini-transcribe"
 
     # ---- Realtime API (Prompt 13) -----------------------------------
@@ -154,6 +134,12 @@ class Settings(BaseSettings):
     # activity has been observed for this many seconds. Wake word
     # re-arms after each idle close.
     IDLE_TIMEOUT_S: float = 30.0
+
+    # Pipecat-pipeline session ceiling (Prompt 13 / Path A). Used as
+    # PipelineTask.idle_timeout_secs. Pipecat will cancel the pipeline
+    # if no BotSpeakingFrame / UserSpeakingFrame has fired for this
+    # long; the orchestrator then loops back to wake-word listening.
+    SESSION_MAX_S: int = 120
 
 
 settings = Settings()

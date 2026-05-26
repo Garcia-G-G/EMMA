@@ -166,14 +166,14 @@ class _LiveSession:
     """
 
     def __init__(self) -> None:
+        # Post Prompt-13 (Pipecat) migration: core.llm / core.stt are
+        # gone. Live mode is disabled and raises NotImplementedError
+        # below; we only keep the constructor surface so the class can
+        # still be instantiated for compat with old import paths.
         from core import runtime
-        from core.llm import Message
-        from core.stt import Transcript
         from tools import registry
 
         self._runtime = runtime
-        self._Message = Message
-        self._Transcript = Transcript
         self._registry = registry
         self._original_dispatch = registry.dispatch
         self.history: list[Any] = []
@@ -199,17 +199,15 @@ class _LiveSession:
             return result
 
         self._registry.dispatch = wrapped
-        # Patch the import binding in core.llm too.
-        import core.llm
-
-        self._llm_module = core.llm
-        self._llm_original = core.llm.dispatch
-        core.llm.dispatch = wrapped
+        # core.llm no longer exists post Prompt-13 migration; the old
+        # patch of `core.llm.dispatch` was for the now-removed converse()
+        # tool loop. Pipecat's OpenAIRealtimeLLMService routes function
+        # calls through its own registered handlers — the runner has no
+        # equivalent patch surface today (live mode is disabled).
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self._registry.dispatch = self._original_dispatch
-        self._llm_module.dispatch = self._llm_original
 
     async def utter(self, text: str, language: str) -> TurnResult:
         spoken_lang = language if language in ("es", "en") else "es"
