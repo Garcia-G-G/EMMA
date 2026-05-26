@@ -111,7 +111,7 @@ def main() -> int:
         log.warning("memory_initialize_failed", error=str(exc))
 
     try:
-        asyncio.run(orchestrator.run())
+        asyncio.run(orchestrator.main_loop())
     except KeyboardInterrupt:
         log.info("interrupted")
         return 0
