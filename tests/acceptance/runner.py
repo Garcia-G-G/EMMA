@@ -214,49 +214,17 @@ class _LiveSession:
     async def utter(self, text: str, language: str) -> TurnResult:
         spoken_lang = language if language in ("es", "en") else "es"
         self._runtime.set_spoken_lang(spoken_lang)  # type: ignore[arg-type]
-        transcript = self._Transcript(text=text, language=language)  # type: ignore[arg-type]
 
-        from core.llm import converse, PendingConfirmation
-
-        pending: list[PendingConfirmation] = []
-        chunks: list[str] = []
-        before = self.recorded[:]
-        start = time.monotonic()
-        try:
-            async for piece in converse(transcript, self.history, spoken_lang, pending):  # type: ignore[arg-type]
-                chunks.append(piece)
-        except Exception as exc:
-            return TurnResult(
-                spoken_text="".join(chunks),
-                tool_calls=[c for c in self.recorded if c not in before],
-                latency_ms=int((time.monotonic() - start) * 1000),
-                error=f"{type(exc).__name__}: {exc}",
-            )
-        latency = int((time.monotonic() - start) * 1000)
-        new_calls = [c for c in self.recorded if c not in before]
-
-        if pending:
-            self.last_pending = list(pending)
-            # Emma's orchestrator would now capture a yes/no. In live test
-            # mode we don't simulate that here; the follow-up scenario
-            # exercises the confirmation path explicitly.
-            self.history.append(self._Message(role="user", content=text))
-            return TurnResult(
-                spoken_text="".join(chunks),
-                tool_calls=new_calls,
-                latency_ms=latency,
-                pending_confirmation=pending[0],
-            )
-
-        self.history.append(self._Message(role="user", content=text))
-        reply = "".join(chunks).strip()
-        if reply:
-            self.history.append(self._Message(role="assistant", content=reply))
-
-        return TurnResult(
-            spoken_text="".join(chunks),
-            tool_calls=new_calls,
-            latency_ms=latency,
+        # Prompt 13 retired ``core.llm.converse`` in favor of a Realtime
+        # WebSocket session. The acceptance runner's live mode used to
+        # drive that function directly with a synthetic Transcript; a
+        # Realtime-aware live harness is its own piece of work and
+        # belongs in a later prompt. Mock mode still exercises the
+        # scenarios + runner machinery end-to-end and is the CI path.
+        raise NotImplementedError(
+            "Live acceptance mode is disabled post Realtime-API migration "
+            "(Prompt 13). Run with --mock-external. A Realtime-aware live "
+            "harness will land in a follow-up prompt."
         )
 
 
