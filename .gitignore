@@ -15,5 +15,7 @@ dist/
 .emma/
 logs/
 config/wake_words/*.onnx
+!config/wake_words/.gitkeep
 playwright-profile/
 tests/acceptance/run_*.md
+_planning/
