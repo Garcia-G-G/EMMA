@@ -128,24 +128,40 @@ def _build_instructions(memory_priming: str = "") -> str:
 
 
 def _build_session_config(memory_priming: str = "") -> dict[str, Any]:
+    """Build the ``session.update`` payload for the GA Realtime API.
+
+    GA-shape differences vs the pre-GA spec in Prompt 13:
+    - ``session.type`` ("realtime") is now mandatory.
+    - ``modalities`` -> ``output_modalities`` (audio-only by default).
+    - ``voice`` / ``input_audio_format`` / ``output_audio_format`` /
+      ``input_audio_transcription`` / ``turn_detection`` collapsed into
+      a nested ``audio.{input, output}`` block.
+    """
     return {
         "type": "session.update",
         "session": {
-            "modalities": ["audio", "text"],
+            "type": "realtime",
+            "model": settings.REALTIME_MODEL,
+            "output_modalities": ["audio"],
             "instructions": _build_instructions(memory_priming),
-            "voice": settings.REALTIME_VOICE,
-            "input_audio_format": "pcm16",
-            "output_audio_format": "pcm16",
-            "input_audio_transcription": {"model": "whisper-1"},
-            "turn_detection": {
-                "type": "server_vad",
-                "threshold": 0.5,
-                "prefix_padding_ms": 300,
-                "silence_duration_ms": settings.VAD_SILENCE_MS,
+            "audio": {
+                "input": {
+                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE_HZ},
+                    "transcription": {"model": "whisper-1"},
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.5,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": settings.VAD_SILENCE_MS,
+                    },
+                },
+                "output": {
+                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE_HZ},
+                    "voice": settings.REALTIME_VOICE,
+                },
             },
             "tools": _adapt_tool_specs(openai_tool_specs()),
             "tool_choice": "auto",
-            "temperature": 0.7,
         },
     }
 

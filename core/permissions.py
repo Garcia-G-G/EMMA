@@ -37,22 +37,49 @@ def _open_settings(pane: Pane) -> None:
 
 
 def check_microphone() -> bool:
-    """Probe the default input device. Returns True if accessible."""
-    try:
-        import sounddevice as sd
+    """Probe the default input device. Returns True if accessible.
 
-        # Construct without start to avoid pulling in samples; opening alone is
-        # enough to trigger or surface the TCC prompt.
-        stream = sd.RawInputStream(
-            samplerate=16000, channels=1, dtype="int16", blocksize=512
+    Runs the open/start/stop/close cycle in a worker thread with a hard
+    timeout - on macOS, after a hard kill of the previous Emma process,
+    CoreAudio's HAL can hold an internal mutex that makes ``stream.stop``
+    or ``stream.close`` block indefinitely. We treat that as a transient
+    "probe inconclusive, continue boot" rather than a denial; Realtime
+    will retry the mic when the session actually opens.
+    """
+    import threading
+
+    result: dict[str, object] = {"ok": False, "error": None}
+
+    def _probe() -> None:
+        try:
+            import sounddevice as sd
+
+            stream = sd.RawInputStream(
+                samplerate=16000, channels=1, dtype="int16", blocksize=512
+            )
+            stream.start()
+            stream.stop()
+            stream.close()
+            result["ok"] = True
+        except Exception as exc:
+            result["error"] = str(exc)
+
+    t = threading.Thread(target=_probe, daemon=True)
+    t.start()
+    t.join(timeout=3.0)
+    if t.is_alive():
+        log.warning(
+            "mic_probe_timeout",
+            hint="coreaudio mutex; previous SIGKILL may have left HAL state stale",
         )
-        stream.start()
-        stream.stop()
-        stream.close()
+        # Optimistic: assume permission is granted (we can't tell while
+        # the HAL is locked) and let the Realtime mic stream surface a
+        # real error if there is one.
         return True
-    except Exception as exc:
-        log.warning("mic_probe_failed", error=str(exc))
+    if not result["ok"]:
+        log.warning("mic_probe_failed", error=str(result.get("error")))
         return False
+    return True
 
 
 def check_accessibility() -> bool:
