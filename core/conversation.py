@@ -39,6 +39,7 @@ from pipecat.services.openai.realtime.events import (
     AudioConfiguration,
     AudioInput,
     AudioOutput,
+    InputAudioNoiseReduction,
     InputAudioTranscription,
     PCMAudioFormat,
     SessionProperties,
@@ -50,13 +51,37 @@ from pipecat.transports.local.audio import (
     LocalAudioTransportParams,
 )
 
+from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    BotStoppedSpeakingFrame,
+    Frame,
+)
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
 from config.settings import settings
+from core.echo_gate import EchoGateFilter
 from tools.registry import dispatch, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
 
 # Native sample rate of the Realtime model.
 SAMPLE_RATE_HZ = 24000
+
+
+class EchoGateProcessor(FrameProcessor):
+    """Watches BotStarted/StoppedSpeakingFrames and toggles the echo gate."""
+
+    def __init__(self, gate: EchoGateFilter):
+        super().__init__()
+        self._gate = gate
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, BotStartedSpeakingFrame):
+            self._gate.set_bot_speaking(True)
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            self._gate.set_bot_speaking(False)
+        await self.push_frame(frame, direction)
 
 
 def _adapt_tool_specs_for_realtime(chat_specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -84,19 +109,60 @@ def _adapt_tool_specs_for_realtime(chat_specs: list[dict[str, Any]]) -> list[dic
 
 
 def _build_instructions() -> str:
-    """System prompt for the Realtime session.
-
-    Much shorter than the pre-Pipecat pipeline's instructions: the model
-    hears Garcia's voice directly, so the multi-paragraph LANGUAGE
-    POLICY isn't needed - the model holds the conversation in whatever
-    language he speaks.
-    """
+    """System prompt for the Realtime session."""
     return (
-        "You are Emma, a warm bilingual voice assistant for Garcia. "
-        "You hear his voice directly - match the language he speaks naturally "
-        "and stay in that language for the whole turn. Be concise; this is a "
-        "spoken conversation, not a written one. Prefer tools when one fits. "
-        "After a tool runs, briefly confirm what happened."
+        "# Role\n"
+        "You are Emma, Garcia's personal AI assistant on his Mac. "
+        "You are like Jarvis — sharp, warm, capable. You control his "
+        "apps, music, browser, files, and system through tools.\n\n"
+
+        "# Personality\n"
+        "- Confident, calm, slightly witty. Never flustered.\n"
+        "- Talk to Garcia like a trusted colleague, not a customer.\n"
+        "- Be direct. No filler, no hedging, no apologies.\n\n"
+
+        "# Language\n"
+        "- Garcia speaks Mexican Spanish (Monterrey) and English.\n"
+        "- ALWAYS reply in the SAME language Garcia just spoke.\n"
+        "- NEVER switch mid-response. NEVER use any other language.\n"
+        "- Spanish: use 'tú', Mexican colloquialisms are fine.\n"
+        "- If unsure, default to Spanish.\n\n"
+
+        "# Response Length\n"
+        "- 1 sentence for confirmations: 'Listo.', 'Done.'\n"
+        "- 1–2 sentences for answers.\n"
+        "- 3 sentences MAX for explanations. Never monologue.\n\n"
+
+        "# Variety\n"
+        "- NEVER start two consecutive responses the same way.\n"
+        "- VARY confirmations: 'Listo', 'Ya', 'Hecho', 'Done', "
+        "'On it', 'Got it'. Rotate.\n\n"
+
+        "# Preambles (before tool calls)\n"
+        "- For FAST tools (time, volume, open app): say NOTHING "
+        "before calling. Just call the tool silently, then speak "
+        "the result.\n"
+        "- For SLOW tools (web search, browser): ONE short preamble "
+        "only. 'Déjame ver.' or 'Checking.' — then stay silent "
+        "until the result arrives.\n"
+        "- NEVER say 'un momento', 'estoy verificando', 'let me "
+        "check that for you', or any filler while waiting.\n"
+        "- NEVER narrate what you're about to do. Just do it.\n\n"
+
+        "# Tool Results\n"
+        "- Speak the result in ONE sentence after the tool returns.\n"
+        "- If a tool fails: say what went wrong briefly, suggest "
+        "an alternative.\n"
+        "- run_command: use ONE simple command. Never chain with "
+        "&& or write inline scripts. Call multiple times if needed.\n\n"
+
+        "# Forbidden\n"
+        "- No filler: 'Great question!', 'Absolutely!', 'Of course!'\n"
+        "- No closers: '¿Algo más?', 'Anything else?'\n"
+        "- No self-description unless asked.\n"
+        "- No languages other than Spanish and English.\n"
+        "- No lists unless requested.\n"
+        "- No repeating the same information.\n"
     )
 
 
@@ -131,16 +197,18 @@ def _build_session_properties() -> SessionProperties:
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
                 transcription=InputAudioTranscription(model="whisper-1"),
+                noise_reduction=InputAudioNoiseReduction(type="near_field"),
                 turn_detection=TurnDetection(
                     type="server_vad",
-                    threshold=0.5,
+                    threshold=0.6,
                     prefix_padding_ms=300,
-                    silence_duration_ms=settings.VAD_SILENCE_MS,
+                    silence_duration_ms=700,
                 ),
             ),
             output=AudioOutput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
                 voice=settings.REALTIME_VOICE,
+                speed=1.0,
             ),
         ),
         tools=_adapt_tool_specs_for_realtime(openai_tool_specs()),
@@ -156,15 +224,20 @@ def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
     mic + speaker streams when the pipeline starts and closes them on
     cancel / idle-timeout.
     """
+    echo_gate = EchoGateFilter(tail_ms=300, barge_in_rms=800.0)
+
     transport = LocalAudioTransport(
         LocalAudioTransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
             audio_in_sample_rate=SAMPLE_RATE_HZ,
             audio_out_sample_rate=SAMPLE_RATE_HZ,
+            audio_in_filter=echo_gate,
             vad_analyzer=SileroVADAnalyzer(),
         )
     )
+
+    gate_proc = EchoGateProcessor(echo_gate)
 
     llm = OpenAIRealtimeLLMService(
         api_key=settings.OPENAI_API_KEY,
@@ -172,16 +245,13 @@ def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
         session_properties=_build_session_properties(),
     )
 
-    # Register the same async handler for every registered tool. Pipecat
-    # 1.2.1 supports a None-name catch-all but iterating gives clearer
-    # log lines per tool.
     for spec in openai_tool_specs():
         fn = spec.get("function", spec)
         name = fn.get("name")
         if name:
             llm.register_function(name, _on_function_call)
 
-    pipeline = Pipeline([transport.input(), llm, transport.output()])
+    pipeline = Pipeline([transport.input(), llm, gate_proc, transport.output()])
     task = PipelineTask(
         pipeline,
         params=PipelineParams(

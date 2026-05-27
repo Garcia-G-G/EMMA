@@ -62,6 +62,10 @@ async def _one_session() -> None:
         await listen_for_wake_word()
         t_wake = time.monotonic()
         log.info("wake_detected", elapsed_ms=int((t_wake - t_start) * 1000))
+        # Let the ack tone fully decay before Pipecat opens the mic.
+        # Without this, the beep leaks into the Realtime session's VAD
+        # and fires spurious speech_started events (self-interruption loop).
+        await asyncio.sleep(0.4)
         if _simulate_crash:
             raise RuntimeError("test crash (--simulate-crash)")
         try:

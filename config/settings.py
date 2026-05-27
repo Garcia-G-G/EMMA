@@ -125,11 +125,11 @@ class Settings(BaseSettings):
     STT_MODEL: str = "gpt-4o-mini-transcribe"
 
     # ---- Realtime API (Prompt 13) -----------------------------------
-    # Audio-to-audio session model and voice. `marin` is multilingual
-    # and natively handles Spanish + English with appropriate prosody.
-    # Alternatives: `cedar`, `alloy`, `sage`.
-    REALTIME_MODEL: str = "gpt-realtime"
-    REALTIME_VOICE: str = "marin"
+    # Audio-to-audio session model and voice. `coral` is a warm female
+    # voice with natural prosody in both Spanish and English.
+    # Alternatives: `shimmer`, `sage`, `alloy` (female), `ash`, `cedar` (male).
+    REALTIME_MODEL: str = "gpt-realtime-2"
+    REALTIME_VOICE: str = "coral"
     # Idle close: shut the Realtime WebSocket when no user/assistant
     # activity has been observed for this many seconds. Wake word
     # re-arms after each idle close.

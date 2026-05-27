@@ -24,7 +24,7 @@ import sounddevice as sd
 import structlog
 
 from config.settings import settings
-from core.audio import play_tone
+from core.audio import play_wake_chime
 
 log = structlog.get_logger("emma.wake_word")
 
@@ -57,7 +57,7 @@ async def _get_model() -> Any:
 
         if raw in BUILTIN_NAMES:
             wakeword_arg = raw
-            framework = "onyx"
+            framework = "onnx"
             source_label = f"<built-in: {raw}>"
         else:
             path = Path(raw).expanduser()
@@ -153,4 +153,4 @@ async def listen_for_wake_word() -> None:
         _reset_model(model)
         # Note: we intentionally do NOT free `_model` - keep it warm.
 
-    play_tone()
+    play_wake_chime()

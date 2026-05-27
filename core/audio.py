@@ -209,12 +209,29 @@ async def listen_for_speech(
 
 
 def play_tone(freq_hz: float = 880.0, duration_ms: int = 150, volume: float = 0.18) -> None:
-    """Play a short non-blocking sine pip used as wake acknowledgment."""
+    """Play a short non-blocking sine pip."""
     n = int(SAMPLE_RATE * duration_ms / 1000)
     t = np.arange(n) / SAMPLE_RATE
     fade = np.minimum(np.linspace(0.0, 1.0, n), np.linspace(1.0, 0.0, n))
     waveform = (np.sin(2 * np.pi * freq_hz * t) * fade * volume * 32767).astype(np.int16)
     sd.play(waveform, SAMPLE_RATE, blocking=False)
+
+
+def play_wake_chime() -> None:
+    """Two-tone rising chime for wake acknowledgment. Feels premium."""
+    vol = 0.15
+    r = SAMPLE_RATE
+    n1 = int(r * 0.08)
+    n2 = int(r * 0.12)
+    gap = np.zeros(int(r * 0.03), dtype=np.int16)
+    t1 = np.arange(n1) / r
+    t2 = np.arange(n2) / r
+    fade1 = np.minimum(np.linspace(0, 1, n1), np.linspace(1, 0, n1))
+    fade2 = np.minimum(np.linspace(0, 1, n2), np.linspace(1, 0, n2))
+    tone1 = (np.sin(2 * np.pi * 587.33 * t1) * fade1 * vol * 32767).astype(np.int16)
+    tone2 = (np.sin(2 * np.pi * 880.0 * t2) * fade2 * vol * 32767).astype(np.int16)
+    waveform = np.concatenate([tone1, gap, tone2])
+    sd.play(waveform, r, blocking=False)
 
 
 def pcm_to_wav_bytes(pcm: bytes) -> bytes:
