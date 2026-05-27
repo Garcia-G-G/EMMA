@@ -12,6 +12,9 @@ Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. Sh
 # Run Emma (debug mode, console logging)
 .venv/bin/python -m emma --debug
 
+# Real-time dashboard (localhost:3200, WebSocket on 3201)
+.venv/bin/python dashboard/server.py
+
 # Run tests
 .venv/bin/python -m pytest tests/ -v
 
@@ -53,7 +56,7 @@ The orchestrator (`core/orchestrator.py`) runs an infinite loop: wait for wake w
 
 ### Key modules
 
-**`core/conversation.py`** — Builds the Pipecat pipeline: `LocalAudioTransport.input → OpenAIRealtimeLLMService → EchoGateProcessor → LocalAudioTransport.output`. Constructs session properties (voice, VAD, tools, system prompt with memory priming). Registers all tool functions with the LLM service.
+**`core/conversation.py`** — Builds the Pipecat pipeline: `LocalAudioTransport.input → OpenAIRealtimeLLMService → LLMAssistantAggregator → EchoGateProcessor → LocalAudioTransport.output`. The `LLMAssistantAggregator` is critical — it captures `FunctionCallResultFrame`s and pushes updated context back upstream to the LLM, which triggers tool-result audio responses. An `LLMContext` frame is queued at session start to initialize the function-call pipeline. Constructs session properties (voice, VAD, tools, system prompt with memory priming). Registers all tool functions with the LLM service.
 
 **`core/orchestrator.py`** — Wake → session → loop. Signal handling, crash delegation, dev-mode exit.
 
