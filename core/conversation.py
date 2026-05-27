@@ -25,15 +25,22 @@ package source:
   :class:`pipecat.services.llm_service.FunctionCallParams` arg and
   report their result via ``await params.result_callback(payload)``.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    BotStoppedSpeakingFrame,
+    Frame,
+)
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.openai.realtime.events import (
     AudioConfiguration,
@@ -50,13 +57,6 @@ from pipecat.transports.local.audio import (
     LocalAudioTransport,
     LocalAudioTransportParams,
 )
-
-from pipecat.frames.frames import (
-    BotStartedSpeakingFrame,
-    BotStoppedSpeakingFrame,
-    Frame,
-)
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from config.settings import settings
 from core.echo_gate import EchoGateFilter
@@ -115,29 +115,24 @@ def _build_instructions() -> str:
         "You are Emma, Garcia's personal AI assistant on his Mac. "
         "You are like Jarvis — sharp, warm, capable. You control his "
         "apps, music, browser, files, and system through tools.\n\n"
-
         "# Personality\n"
         "- Confident, calm, slightly witty. Never flustered.\n"
         "- Talk to Garcia like a trusted colleague, not a customer.\n"
         "- Be direct. No filler, no hedging, no apologies.\n\n"
-
         "# Language\n"
         "- Garcia speaks Mexican Spanish (Monterrey) and English.\n"
         "- ALWAYS reply in the SAME language Garcia just spoke.\n"
         "- NEVER switch mid-response. NEVER use any other language.\n"
         "- Spanish: use 'tú', Mexican colloquialisms are fine.\n"
         "- If unsure, default to Spanish.\n\n"
-
         "# Response Length\n"
         "- 1 sentence for confirmations: 'Listo.', 'Done.'\n"
-        "- 1–2 sentences for answers.\n"
+        "- 1-2 sentences for answers.\n"
         "- 3 sentences MAX for explanations. Never monologue.\n\n"
-
         "# Variety\n"
         "- NEVER start two consecutive responses the same way.\n"
         "- VARY confirmations: 'Listo', 'Ya', 'Hecho', 'Done', "
         "'On it', 'Got it'. Rotate.\n\n"
-
         "# Preambles (before tool calls)\n"
         "- For FAST tools (time, volume, open app): say NOTHING "
         "before calling. Just call the tool silently, then speak "
@@ -148,14 +143,12 @@ def _build_instructions() -> str:
         "- NEVER say 'un momento', 'estoy verificando', 'let me "
         "check that for you', or any filler while waiting.\n"
         "- NEVER narrate what you're about to do. Just do it.\n\n"
-
         "# Tool Results\n"
         "- Speak the result in ONE sentence after the tool returns.\n"
         "- If a tool fails: say what went wrong briefly, suggest "
         "an alternative.\n"
         "- run_command: use ONE simple command. Never chain with "
         "&& or write inline scripts. Call multiple times if needed.\n\n"
-
         "# Forbidden\n"
         "- No filler: 'Great question!', 'Absolutely!', 'Of course!'\n"
         "- No closers: '¿Algo más?', 'Anything else?'\n"
@@ -271,7 +264,7 @@ async def run_session() -> None:
     pipeline starts the mic + speaker streams; OpenAI Realtime serves
     audio in/out + function calls; the runner blocks here until idle.
     """
-    pipeline, task, _transport = build_pipeline()
+    _pipeline, task, _transport = build_pipeline()
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:

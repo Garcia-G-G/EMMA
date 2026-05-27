@@ -11,6 +11,7 @@ This module:
 2. Exposes ``describe_capabilities`` as a voice-callable tool that
    reads the file back and speaks a short summary.
 """
+
 from __future__ import annotations
 
 import datetime as dt
@@ -43,7 +44,7 @@ def regenerate_capabilities_md() -> None:
     # De-duplicate aliases: only emit each canonical name once.
     seen: set[str] = set()
     rows: list[tuple[str, str]] = []
-    for name, entry in sorted(registry.items()):
+    for _name, entry in sorted(registry.items()):
         if entry.name in seen:
             continue
         seen.add(entry.name)

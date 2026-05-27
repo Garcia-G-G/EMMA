@@ -1,4 +1,5 @@
 """YouTube Data API v3 search and open-in-browser helpers."""
+
 from __future__ import annotations
 
 import httpx
@@ -23,7 +24,7 @@ def _normalize_channel_name(s: str) -> str:
     s = s.strip().lower()
     for prefix in ("el ", "la ", "the "):
         if s.startswith(prefix):
-            s = s[len(prefix):]
+            s = s[len(prefix) :]
             break
     return " ".join(s.split())
 
@@ -91,9 +92,7 @@ def latest_video_from_creator(creator_name: str) -> ToolResult:
         top = channels[0]
         others = channels[1:3]
         top_title = top["snippet"]["title"]
-        if others and any(
-            c["snippet"]["title"].lower() != top_title.lower() for c in others
-        ):
+        if others and any(c["snippet"]["title"].lower() != top_title.lower() for c in others):
             names = ", ".join(c["snippet"]["title"] for c in [top, *others])
             # Disambiguation is NOT a yes/no flow. Return success so the LLM
             # speaks the options and the user picks one in their next turn;

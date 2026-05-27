@@ -4,6 +4,7 @@ Sets up rotated JSON logging, runs permission and wake-word preflights,
 wraps the orchestrator in a top-level crash handler, and exits cleanly
 when the dev tool requests it.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,9 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def _setup_logging(debug: bool) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    level = logging.DEBUG if debug else getattr(
-        logging, settings.LOG_LEVEL.upper(), logging.INFO
-    )
+    level = logging.DEBUG if debug else getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 
     handlers: list[logging.Handler] = []
     file_handler = logging.handlers.TimedRotatingFileHandler(

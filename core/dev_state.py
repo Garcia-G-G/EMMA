@@ -5,6 +5,7 @@ orchestrator polls between turns and exits cleanly (exit 0) so launchd's
 ``KeepAlive.SuccessfulExit = false`` policy leaves Emma stopped until
 the user manually resumes via ``launchctl enable && kickstart``.
 """
+
 from __future__ import annotations
 
 import asyncio

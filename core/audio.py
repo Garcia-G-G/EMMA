@@ -4,9 +4,11 @@ All audio in this module is 16 kHz mono signed-int16 PCM. Wake word
 (openWakeWord) and Whisper both expect that format; ElevenLabs is
 requested at the same rate so playback can be a straight passthrough.
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import math
 import time
@@ -115,23 +117,16 @@ async def play_audio_stream(chunks: AsyncIterator[bytes]) -> None:
             await asyncio.to_thread(stream.write, chunk)
     except asyncio.CancelledError:
         interrupted = True
-        try:
-            stream.abort()  # discard pending buffer, silence speaker now
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            stream.abort()
         raise
     finally:
         if not interrupted:
-            # Normal end: short drain so the tail isn't cut off.
             await asyncio.to_thread(time.sleep, 0.05)
-        try:
+        with contextlib.suppress(Exception):
             stream.stop()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             stream.close()
-        except Exception:
-            pass
 
 
 async def listen_for_speech(
@@ -198,14 +193,10 @@ async def listen_for_speech(
             else:
                 consecutive = 0
     finally:
-        try:
+        with contextlib.suppress(Exception):
             stream.stop()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             stream.close()
-        except Exception:
-            pass
 
 
 def play_tone(freq_hz: float = 880.0, duration_ms: int = 150, volume: float = 0.18) -> None:

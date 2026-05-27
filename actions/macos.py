@@ -5,6 +5,7 @@ for display brightness. The brightness binary is documented in the
 project README as a prerequisite - it avoids pulling pyobjc/IOKit just
 for one knob. If the binary is missing, the tool surfaces a clean error.
 """
+
 from __future__ import annotations
 
 import shlex

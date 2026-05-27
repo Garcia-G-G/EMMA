@@ -15,6 +15,7 @@ real API keys in ``.env``. Several scenarios are marked
 ``live_blocked_by`` so the runner reports them as SKIP with a clear
 reason rather than FAIL.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,7 +23,6 @@ import asyncio
 import datetime as dt
 import json
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,6 +34,7 @@ REPORT_DIR = Path(__file__).parent
 
 
 # ---------- data shapes -------------------------------------------------
+
 
 @dataclass
 class ToolCallRecord:
@@ -67,6 +68,7 @@ class ScenarioOutcome:
 
 # ---------- scenario loader --------------------------------------------
 
+
 def load_scenarios() -> list[dict[str, Any]]:
     text = SCENARIOS_PATH.read_text()
     # Strip any leading `#` YAML comments so json.loads can parse the
@@ -77,6 +79,7 @@ def load_scenarios() -> list[dict[str, Any]]:
 
 
 # ---------- assertions --------------------------------------------------
+
 
 def _args_contain(actual: dict[str, Any], expected: dict[str, Any]) -> bool:
     for k, v in expected.items():
@@ -114,9 +117,8 @@ def check_scenario(scenario: dict[str, Any], result: TurnResult) -> tuple[bool, 
             )
 
     pattern = scenario.get("expected_spoken_pattern")
-    if pattern:
-        if not re.search(pattern, result.spoken_text, re.IGNORECASE | re.DOTALL):
-            issues.append(f"spoken text did not match /{pattern}/i")
+    if pattern and not re.search(pattern, result.spoken_text, re.IGNORECASE | re.DOTALL):
+        issues.append(f"spoken text did not match /{pattern}/i")
 
     budget = scenario.get("max_latency_ms")
     if budget and result.latency_ms > budget:
@@ -126,6 +128,7 @@ def check_scenario(scenario: dict[str, Any], result: TurnResult) -> tuple[bool, 
 
 
 # ---------- mock mode ---------------------------------------------------
+
 
 def synthesize_mock_turn(scenario: dict[str, Any]) -> TurnResult:
     """Build a passing TurnResult by copying expected_actions + mock text."""
@@ -158,6 +161,7 @@ async def run_mock(scenario: dict[str, Any]) -> TurnResult:
 
 # ---------- live mode ---------------------------------------------------
 
+
 class _LiveSession:
     """Drives a real ``converse()`` run with tool-call capture.
 
@@ -180,7 +184,7 @@ class _LiveSession:
         self.recorded: list[ToolCallRecord] = []
         self.last_pending: list[Any] = []
 
-    def __enter__(self) -> "_LiveSession":
+    def __enter__(self) -> _LiveSession:
         original = self._original_dispatch
         recorded = self.recorded
 
@@ -276,9 +280,7 @@ async def _live_in(session: _LiveSession, scenario: dict[str, Any]) -> TurnResul
     primary = await session.utter(scenario["utterance"], scenario.get("language", "es"))
     followup = scenario.get("followup")
     if followup:
-        secondary = await session.utter(
-            followup["utterance"], followup.get("language", "es")
-        )
+        secondary = await session.utter(followup["utterance"], followup.get("language", "es"))
         primary.spoken_text += "\n" + secondary.spoken_text
         primary.tool_calls.extend(secondary.tool_calls)
         primary.latency_ms += secondary.latency_ms
@@ -286,6 +288,7 @@ async def _live_in(session: _LiveSession, scenario: dict[str, Any]) -> TurnResul
 
 
 # ---------- live phase / environment probes -----------------------------
+
 
 def _phase_available(n: int) -> bool:
     """Rough check that a phase's surface exists. Conservative."""
@@ -310,6 +313,7 @@ def _should_skip_live(scenario: dict[str, Any]) -> str | None:
 
 
 # ---------- report ------------------------------------------------------
+
 
 def _summary_row(o: ScenarioOutcome) -> str:
     icon = {"PASS": "✓", "FAIL": "✗", "SKIP": "·"}.get(o.status, "?")
@@ -366,6 +370,7 @@ def render_report(mode: str, outcomes: list[ScenarioOutcome]) -> str:
 
 # ---------- orchestration ----------------------------------------------
 
+
 async def _run_all_mock(scenarios: list[dict[str, Any]]) -> list[ScenarioOutcome]:
     outcomes: list[ScenarioOutcome] = []
     for s in scenarios:
@@ -382,9 +387,7 @@ async def _run_all_live(scenarios: list[dict[str, Any]]) -> list[ScenarioOutcome
         for s in scenarios:
             skip = _should_skip_live(s)
             if skip:
-                outcomes.append(
-                    ScenarioOutcome(s, TurnResult(), False, [skip], "SKIP")
-                )
+                outcomes.append(ScenarioOutcome(s, TurnResult(), False, [skip], "SKIP"))
                 continue
             try:
                 result = await _live_in(session, s)
@@ -419,9 +422,7 @@ def main() -> int:
 
     scenarios = load_scenarios()
     mode = "mock" if args.mock_external else "live"
-    outcomes = asyncio.run(
-        _run_all_mock(scenarios) if mode == "mock" else _run_all_live(scenarios)
-    )
+    outcomes = asyncio.run(_run_all_mock(scenarios) if mode == "mock" else _run_all_live(scenarios))
 
     out_path = (
         Path(args.output)

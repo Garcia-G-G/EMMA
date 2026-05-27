@@ -23,6 +23,7 @@ signature. The orchestrator inspects the signature and only re-dispatches
 with ``cancelled=True`` to tools that opt in - other tools are simply
 not called on cancel.
 """
+
 from __future__ import annotations
 
 import inspect

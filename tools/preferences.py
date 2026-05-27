@@ -4,19 +4,17 @@ The shortlists in :mod:`actions.environment` are the contract: any app
 that is not in the shortlist for a category is refused with a list of
 the supported options.
 """
+
 from __future__ import annotations
 
 import asyncio
-from typing import Literal
 
 import structlog
 
-from actions import environment
 from actions.environment import (
     BROWSER_SHORTLIST,
     SHORTLISTS,
     Category,
-    DetectionResult,
     default_browser_bundle,
     detect_preferred,
     install_cask,
@@ -39,23 +37,32 @@ def _normalize_app(category: Category, raw: str) -> str | None:
     aliases = {
         "ide": {
             "cursor": "cursor",
-            "vscode": "code", "visualstudiocode": "code", "code": "code",
+            "vscode": "code",
+            "visualstudiocode": "code",
+            "code": "code",
             "zed": "zed",
-            "sublime": "subl", "sublimetext": "subl", "subl": "subl",
+            "sublime": "subl",
+            "sublimetext": "subl",
+            "subl": "subl",
         },
         "terminal": {
-            "iterm": "iterm", "iterm2": "iterm",
+            "iterm": "iterm",
+            "iterm2": "iterm",
             "warp": "warp",
             "ghostty": "ghostty",
-            "terminal": "terminal", "terminalapp": "terminal",
+            "terminal": "terminal",
+            "terminalapp": "terminal",
         },
         "music": {
             "spotify": "spotify",
-            "music": "music", "applemusic": "music",
+            "music": "music",
+            "applemusic": "music",
         },
         "browser": {
-            "brave": "brave", "bravebrowser": "brave",
-            "chrome": "chrome", "googlechrome": "chrome",
+            "brave": "brave",
+            "bravebrowser": "brave",
+            "chrome": "chrome",
+            "googlechrome": "chrome",
             "firefox": "firefox",
             "arc": "arc",
             "safari": "safari",
@@ -82,7 +89,8 @@ def set_preferred_app(category: str, app_name: str) -> ToolResult:
     cat = category.lower().strip()
     if cat not in SHORTLISTS:
         return ToolResult(
-            False, None,
+            False,
+            None,
             f"No reconozco la categoría '{category}'. Las categorías son: ide, terminal, music, browser.",
             False,
         )
@@ -90,13 +98,15 @@ def set_preferred_app(category: str, app_name: str) -> ToolResult:
     if key is None:
         options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
         return ToolResult(
-            False, None,
+            False,
+            None,
             f"No soporto {app_name} todavía. Las opciones para {cat} son: {options}.",
             False,
         )
     set_preference(cat, key)  # type: ignore[arg-type]
     return ToolResult(
-        True, {"category": cat, "app": key},
+        True,
+        {"category": cat, "app": key},
         f"Listo. Voy a usar {app_name} para {cat} de ahora en adelante.",
         False,
     )
@@ -114,14 +124,16 @@ def get_preferred_app(category: str) -> ToolResult:
     cat = category.lower().strip()
     if cat not in SHORTLISTS:
         return ToolResult(
-            False, None,
+            False,
+            None,
             f"No reconozco la categoría '{category}'.",
             False,
         )
     result = detect_preferred(cat)  # type: ignore[arg-type]
     if result.app_name is None:
         return ToolResult(
-            True, {"category": cat, "app": None},
+            True,
+            {"category": cat, "app": None},
             f"No tengo ninguna app de {cat} configurada.",
             False,
         )
@@ -157,7 +169,8 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
     if key is None:
         options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
         return ToolResult(
-            False, None,
+            False,
+            None,
             f"No soporto {name} como navegador. Las opciones son: {options}.",
             False,
         )
@@ -174,12 +187,14 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
     if needs_install and not confirmed:
         if not cask:
             return ToolResult(
-                False, None,
+                False,
+                None,
                 f"{name} no está instalado y no tengo un cask para instalarlo.",
                 False,
             )
         return ToolResult(
-            True, {"pending": "install_then_set_default", "browser": key},
+            True,
+            {"pending": "install_then_set_default", "browser": key},
             f"{name} no está instalado. ¿Lo instalo y lo dejo como default?",
             requires_confirmation=True,
         )
@@ -197,12 +212,14 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
     current = default_browser_bundle()
     if current == bundle:
         return ToolResult(
-            True, {"bundle": bundle},
+            True,
+            {"bundle": bundle},
             f"Listo, {name} ya es tu navegador por defecto.",
             False,
         )
     return ToolResult(
-        False, {"current": current, "expected": bundle},
+        False,
+        {"current": current, "expected": bundle},
         (
             f"macOS te va a preguntar si confirmas el cambio. "
             f"Dale click a 'Use {name}'. Si no aparece, abre {name} y mira el banner superior."

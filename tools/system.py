@@ -1,4 +1,5 @@
 """System control: apps, volume, brightness, sleep, screen lock, clock."""
+
 from __future__ import annotations
 
 import datetime as dt

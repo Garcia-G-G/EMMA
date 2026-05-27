@@ -10,8 +10,10 @@ On an unhandled exception we:
 
 Always exits 1 so launchd's ``KeepAlive.Crashed = true`` restarts us.
 """
+
 from __future__ import annotations
 
+import contextlib
 import json
 import platform
 import shlex
@@ -19,7 +21,7 @@ import subprocess
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +70,7 @@ def _tail_log(n: int = LOG_TAIL_LINES) -> str:
 
 
 def _format_report(exc: BaseException, context: dict[str, Any]) -> str:
-    ts = datetime.now(timezone.utc).astimezone()
+    ts = datetime.now(UTC).astimezone()
     tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     return f"""# Emma crash report
 
@@ -114,24 +116,19 @@ def _write_report(exc: BaseException, context: dict[str, Any]) -> Path:
 def _open_terminal(report: Path, repo_root: Path) -> None:
     cmd = f"cd {shlex.quote(str(repo_root))} && clear && cat {shlex.quote(str(report))}"
     script = (
-        f'tell application "Terminal" to activate\n'
-        f'tell application "Terminal" to do script "{cmd}"'
+        f'tell application "Terminal" to activate\ntell application "Terminal" to do script "{cmd}"'
     )
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(["osascript", "-e", script], check=False, timeout=5)
-    except Exception:
-        pass
 
 
 def _say_failure() -> None:
-    try:
+    with contextlib.suppress(Exception):
         subprocess.Popen(
             ["say", "-v", "Mónica", "Tuve un error, dejé los detalles en una terminal."],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    except Exception:
-        pass
 
 
 def handle_crash(

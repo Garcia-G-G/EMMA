@@ -14,13 +14,13 @@ but quiet echo from the speakers is silenced.
 After the bot stops speaking, a short tail period continues the gate
 to let residual echo decay.
 """
+
 from __future__ import annotations
 
 import math
 import time
 
 import numpy as np
-
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame
 
