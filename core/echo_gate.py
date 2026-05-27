@@ -21,8 +21,11 @@ import math
 import time
 
 import numpy as np
+import structlog
 from pipecat.audio.filters.base_audio_filter import BaseAudioFilter
 from pipecat.frames.frames import FilterControlFrame
+
+log = structlog.get_logger("emma.echo_gate")
 
 
 class EchoGateFilter(BaseAudioFilter):
@@ -34,6 +37,7 @@ class EchoGateFilter(BaseAudioFilter):
         self._bot_speaking = False
         self._bot_stopped_at: float = 0.0
         self._sample_rate = 24000
+        self._gate_logged = False
 
     async def start(self, sample_rate: int):
         self._sample_rate = sample_rate
@@ -45,16 +49,27 @@ class EchoGateFilter(BaseAudioFilter):
         pass
 
     def set_bot_speaking(self, speaking: bool):
-        if speaking:
+        if speaking and not self._bot_speaking:
             self._bot_speaking = True
-        else:
+            self._gate_logged = False
+            log.debug("echo_gate_on")
+        elif not speaking and self._bot_speaking:
             self._bot_speaking = False
             self._bot_stopped_at = time.monotonic()
+            log.debug("echo_gate_tail_start", tail_ms=int(self._tail_s * 1000))
 
     def _is_gating(self) -> bool:
         if self._bot_speaking:
             return True
-        return time.monotonic() - self._bot_stopped_at < self._tail_s
+        if self._bot_stopped_at == 0.0:
+            return False
+        elapsed = time.monotonic() - self._bot_stopped_at
+        if elapsed < self._tail_s:
+            return True
+        if not self._gate_logged:
+            self._gate_logged = True
+            log.debug("echo_gate_off", elapsed_ms=int(elapsed * 1000))
+        return False
 
     async def filter(self, audio: bytes) -> bytes:
         if not self._is_gating():
@@ -64,5 +79,6 @@ class EchoGateFilter(BaseAudioFilter):
             return b"\x00" * len(audio)
         rms = math.sqrt(float(np.mean(samples * samples)))
         if rms >= self._barge_in_rms:
+            log.debug("echo_gate_barge_in", rms=int(rms))
             return audio
         return b"\x00" * len(audio)

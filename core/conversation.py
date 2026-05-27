@@ -36,10 +36,13 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     Frame,
+    LLMContextFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.processors.aggregators.llm_response_universal import LLMAssistantAggregator
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.openai.realtime.events import (
@@ -203,9 +206,9 @@ async def _build_session_properties() -> SessionProperties:
                 noise_reduction=InputAudioNoiseReduction(type="near_field"),
                 turn_detection=TurnDetection(
                     type="server_vad",
-                    threshold=0.6,
+                    threshold=0.7,
                     prefix_padding_ms=300,
-                    silence_duration_ms=700,
+                    silence_duration_ms=800,
                 ),
             ),
             output=AudioOutput(
@@ -227,7 +230,7 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
     mic + speaker streams when the pipeline starts and closes them on
     cancel / idle-timeout.
     """
-    echo_gate = EchoGateFilter(tail_ms=300, barge_in_rms=800.0)
+    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=3000.0)
 
     transport = LocalAudioTransport(
         LocalAudioTransportParams(
@@ -255,7 +258,10 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
         if name:
             llm.register_function(name, _on_function_call)
 
-    pipeline = Pipeline([transport.input(), llm, gate_proc, transport.output()])
+    context = LLMContext(messages=[])
+    assistant_aggregator = LLMAssistantAggregator(context)
+
+    pipeline = Pipeline([transport.input(), llm, assistant_aggregator, gate_proc, transport.output()])
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
@@ -265,7 +271,7 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
         idle_timeout_secs=float(settings.SESSION_MAX_S),
         cancel_on_idle_timeout=True,
     )
-    return pipeline, task, transport
+    return pipeline, task, transport, context
 
 
 async def run_session() -> None:
@@ -275,10 +281,11 @@ async def run_session() -> None:
     pipeline starts the mic + speaker streams; OpenAI Realtime serves
     audio in/out + function calls; the runner blocks here until idle.
     """
-    _pipeline, task, _transport = await build_pipeline()
+    _pipeline, task, _transport, context = await build_pipeline()
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:
+        await task.queue_frame(LLMContextFrame(context=context))
         await runner.run(task)
     finally:
         log.info("conversation_end")
