@@ -107,7 +107,9 @@ def play_track(query: str) -> ToolResult:
             return ToolResult(
                 False,
                 None,
-                "Abre Spotify en algún dispositivo y vuelve a intentarlo.",
+                "Spotify no tiene ningún dispositivo activo. "
+                "Dile al usuario que abra Spotify primero. "
+                "NO reintentes este tool — no va a funcionar hasta que el usuario abra Spotify manualmente.",
                 False,
             )
         title = track["name"]
