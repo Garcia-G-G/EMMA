@@ -60,6 +60,7 @@ from pipecat.transports.local.audio import (
 
 from config.settings import settings
 from core.echo_gate import EchoGateFilter
+from memory.long_term import priming_block
 from tools.registry import dispatch, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
@@ -108,9 +109,9 @@ def _adapt_tool_specs_for_realtime(chat_specs: list[dict[str, Any]]) -> list[dic
     return out
 
 
-def _build_instructions() -> str:
-    """System prompt for the Realtime session."""
-    return (
+async def _build_instructions() -> str:
+    """System prompt for the Realtime session, with memory priming."""
+    base = (
         "# Role\n"
         "You are Emma, Garcia's personal AI assistant on his Mac. "
         "You are like Jarvis — sharp, warm, capable. You control his "
@@ -157,6 +158,14 @@ def _build_instructions() -> str:
         "- No lists unless requested.\n"
         "- No repeating the same information.\n"
     )
+    try:
+        memory = await priming_block()
+    except Exception as exc:
+        log.warning("memory_priming_failed", error=str(exc))
+        memory = ""
+    if memory:
+        base += f"\n# Memory\n{memory}\n"
+    return base
 
 
 async def _on_function_call(params: FunctionCallParams) -> None:
@@ -180,12 +189,13 @@ async def _on_function_call(params: FunctionCallParams) -> None:
     await params.result_callback(payload)
 
 
-def _build_session_properties() -> SessionProperties:
+async def _build_session_properties() -> SessionProperties:
+    instructions = await _build_instructions()
     return SessionProperties(
         type="realtime",
         model=settings.REALTIME_MODEL,
         output_modalities=["audio"],
-        instructions=_build_instructions(),
+        instructions=instructions,
         audio=AudioConfiguration(
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
@@ -209,7 +219,7 @@ def _build_session_properties() -> SessionProperties:
     )
 
 
-def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
+async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
     """Wire transport + Realtime LLM + tool handlers into a Pipecat pipeline.
 
     Returns the constructed (pipeline, task, transport) triple so the
@@ -232,10 +242,11 @@ def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
 
     gate_proc = EchoGateProcessor(echo_gate)
 
+    session_props = await _build_session_properties()
     llm = OpenAIRealtimeLLMService(
         api_key=settings.OPENAI_API_KEY,
         model=settings.REALTIME_MODEL,
-        session_properties=_build_session_properties(),
+        session_properties=session_props,
     )
 
     for spec in openai_tool_specs():
@@ -264,7 +275,7 @@ async def run_session() -> None:
     pipeline starts the mic + speaker streams; OpenAI Realtime serves
     audio in/out + function calls; the runner blocks here until idle.
     """
-    _pipeline, task, _transport = build_pipeline()
+    _pipeline, task, _transport = await build_pipeline()
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:

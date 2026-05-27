@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from core.conversation import _adapt_tool_specs_for_realtime, _build_instructions
 
 
@@ -26,13 +28,18 @@ def test_adapt_tool_specs_flattens() -> None:
 
 
 def test_adapt_tool_specs_passthrough() -> None:
-    flat_spec = {"type": "function", "name": "already_flat", "description": "ok", "parameters": {}}
+    flat_spec = {
+        "type": "function",
+        "name": "already_flat",
+        "description": "ok",
+        "parameters": {},
+    }
     result = _adapt_tool_specs_for_realtime([flat_spec])
     assert result == [flat_spec]
 
 
 def test_build_instructions_has_sections() -> None:
-    instructions = _build_instructions()
+    instructions = asyncio.get_event_loop().run_until_complete(_build_instructions())
     assert "# Role" in instructions
     assert "# Personality" in instructions
     assert "# Language" in instructions
