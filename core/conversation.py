@@ -37,6 +37,8 @@ from pipecat.frames.frames import (
     BotStoppedSpeakingFrame,
     Frame,
     LLMContextFrame,
+    LLMTextFrame,
+    TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -64,6 +66,8 @@ from pipecat.transports.local.audio import (
 from config.settings import settings
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
+from memory.reflection import schedule_reflection
+from memory.short_term import append_turn, last_turns
 from tools.registry import dispatch, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
@@ -85,6 +89,38 @@ class EchoGateProcessor(FrameProcessor):
             self._gate.set_bot_speaking(True)
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._gate.set_bot_speaking(False)
+        await self.push_frame(frame, direction)
+
+
+class TranscriptCollector(FrameProcessor):
+    """Captures user + assistant transcripts for memory reflection.
+
+    Collects TranscriptionFrames (user speech, pushed upstream by the
+    Realtime LLM) and LLMTextFrames (assistant text, pushed downstream).
+    When the bot stops speaking, the collected turn is appended to
+    short-term memory and reflection is scheduled in the background.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._user_text = ""
+        self._assistant_text = ""
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TranscriptionFrame) and frame.text:
+            self._user_text += frame.text + " "
+        elif isinstance(frame, LLMTextFrame) and frame.text:
+            self._assistant_text += frame.text
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            user = self._user_text.strip()
+            assistant = self._assistant_text.strip()
+            if user or assistant:
+                append_turn(user, assistant)
+                schedule_reflection(last_turns(4))
+                log.debug("transcript_captured", user=user[:80], assistant=assistant[:80])
+            self._user_text = ""
+            self._assistant_text = ""
         await self.push_frame(frame, direction)
 
 
@@ -262,8 +298,16 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
 
     context = LLMContext(messages=[])
     assistant_aggregator = LLMAssistantAggregator(context)
+    transcript_collector = TranscriptCollector()
 
-    pipeline = Pipeline([transport.input(), llm, assistant_aggregator, gate_proc, transport.output()])
+    pipeline = Pipeline([
+        transport.input(),
+        llm,
+        assistant_aggregator,
+        transcript_collector,
+        gate_proc,
+        transport.output(),
+    ])
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
