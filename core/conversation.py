@@ -248,8 +248,10 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
     session_props = await _build_session_properties()
     llm = OpenAIRealtimeLLMService(
         api_key=settings.OPENAI_API_KEY,
-        model=settings.REALTIME_MODEL,
-        session_properties=session_props,
+        settings=OpenAIRealtimeLLMService.Settings(
+            model=settings.REALTIME_MODEL,
+            session_properties=session_props,
+        ),
     )
 
     for spec in openai_tool_specs():
