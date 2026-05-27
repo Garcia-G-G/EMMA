@@ -222,7 +222,7 @@ def play_wake_chime() -> None:
     tone1 = (np.sin(2 * np.pi * 587.33 * t1) * fade1 * vol * 32767).astype(np.int16)
     tone2 = (np.sin(2 * np.pi * 880.0 * t2) * fade2 * vol * 32767).astype(np.int16)
     waveform = np.concatenate([tone1, gap, tone2])
-    sd.play(waveform, r, blocking=False)
+    sd.play(waveform, r, blocking=True)
 
 
 def pcm_to_wav_bytes(pcm: bytes) -> bytes:

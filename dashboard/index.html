@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMMA Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a25;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text2: #8888a0;
+    --accent: #6c5ce7;
+    --green: #00b894;
+    --red: #e17055;
+    --orange: #fdcb6e;
+    --blue: #74b9ff;
+    --font: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    animation: pulse 2s infinite;
+  }
+  .status-dot.online { background: var(--green); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .status-label { color: var(--text2); font-size: 12px; }
+  .git-info { margin-left: auto; color: var(--text2); font-size: 11px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .card .label { color: var(--text2); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .card .value { font-size: 22px; font-weight: 700; }
+  .card .sub { color: var(--text2); font-size: 10px; margin-top: 2px; }
+  .card .value.green { color: var(--green); }
+  .card .value.red { color: var(--red); }
+  .card .value.orange { color: var(--orange); }
+  .card .value.blue { color: var(--blue); }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header .count {
+    background: var(--border);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+  .panel-body {
+    padding: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  /* Log stream */
+  #log-stream {
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .log-line {
+    padding: 2px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+  }
+  .log-line:nth-child(even) { background: rgba(255,255,255,0.02); }
+  .log-line .ts { color: var(--text2); }
+  .log-line.wake { border-left: 2px solid var(--green); }
+  .log-line.speech { border-left: 2px solid var(--blue); }
+  .log-line.response { border-left: 2px solid var(--accent); }
+  .log-line.tool { border-left: 2px solid var(--orange); }
+  .log-line.error { border-left: 2px solid var(--red); color: var(--red); }
+  .log-line.echo { border-left: 2px solid var(--text2); }
+
+  /* Issues */
+  .issue {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border-left: 3px solid var(--border);
+  }
+  .issue.critical { border-left-color: var(--red); }
+  .issue.high { border-left-color: var(--orange); }
+  .issue.medium { border-left-color: var(--blue); }
+  .issue.low { border-left-color: var(--text2); }
+  .issue .issue-head { display: flex; gap: 8px; align-items: center; margin-bottom: 3px; }
+  .issue .issue-id { color: var(--text2); font-size: 10px; }
+  .issue .issue-title { font-weight: 600; font-size: 12px; }
+  .issue .issue-status {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .issue .issue-status.investigating { background: rgba(225,112,85,0.2); color: var(--red); }
+  .issue .issue-status.tuning { background: rgba(253,203,110,0.2); color: var(--orange); }
+  .issue .issue-status.open { background: rgba(116,185,255,0.2); color: var(--blue); }
+  .issue .issue-status.partial { background: rgba(0,184,148,0.2); color: var(--green); }
+  .issue .issue-detail { color: var(--text2); font-size: 11px; margin-top: 4px; }
+
+  /* Memory */
+  .fact {
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    background: var(--surface2);
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .fact .fact-kind {
+    display: inline-block;
+    font-size: 9px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: rgba(108,92,231,0.2);
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  .fact .fact-conf {
+    float: right;
+    color: var(--text2);
+    font-size: 10px;
+  }
+
+  /* Tool calls */
+  .tool-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px;
+    border-radius: 4px;
+    background: rgba(253,203,110,0.15);
+    color: var(--orange);
+    font-size: 11px;
+  }
+
+  .full-width { grid-column: 1 / -1; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty { color: var(--text2); font-style: italic; padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="status-dot" id="status-dot"></div>
+  <h1>EMMA</h1>
+  <span class="status-label" id="status-label">connecting...</span>
+  <span class="git-info" id="git-info"></span>
+</header>
+
+<div class="grid" id="metrics">
+  <div class="card"><div class="label">Status</div><div class="value" id="m-status">--</div><div class="sub" id="m-pid"></div></div>
+  <div class="card"><div class="label">Wake Detections</div><div class="value blue" id="m-wakes">0</div><div class="sub">sessions started</div></div>
+  <div class="card"><div class="label">Speech Events</div><div class="value green" id="m-speech">0</div><div class="sub" id="m-speech-sub">started / stopped</div></div>
+  <div class="card"><div class="label">Responses</div><div class="value" id="m-responses" style="color:var(--accent)">0</div><div class="sub" id="m-audio-out">audio events: 0</div></div>
+  <div class="card"><div class="label">Tool Calls</div><div class="value orange" id="m-tools">0</div><div class="sub" id="m-tools-sub">this session</div></div>
+  <div class="card"><div class="label">Est. Cost</div><div class="value" id="m-cost">$0.00</div><div class="sub" id="m-cost-sub">tokens in/out</div></div>
+  <div class="card"><div class="label">Errors</div><div class="value" id="m-errors">0</div><div class="sub">in current log</div></div>
+  <div class="card"><div class="label">Memory Facts</div><div class="value blue" id="m-memory">0</div><div class="sub">long-term store</div></div>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <div class="panel-header">Live Event Stream <span class="count" id="log-count">0</span></div>
+    <div class="panel-body" id="log-stream"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">Known Issues <span class="count" id="issue-count">0</span></div>
+    <div class="panel-body" id="issues"></div>
+  </div>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <div class="panel-header">Memory (Long-term Facts) <span class="count" id="fact-count">0</span></div>
+    <div class="panel-body" id="memory"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">Tool Calls This Session</div>
+    <div class="panel-body" id="tool-calls"></div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.hostname}:${parseInt(location.port)+1}`;
+let ws;
+let logCount = 0;
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    document.getElementById('status-label').textContent = 'dashboard connected';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('status-label').textContent = 'reconnecting...';
+    setTimeout(connect, 2000);
+  };
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'state') updateState(msg.data);
+    if (msg.type === 'log') appendLog(msg.line);
+  };
+}
+
+function updateState(s) {
+  // Status
+  const dot = document.getElementById('status-dot');
+  const mStatus = document.getElementById('m-status');
+  const mPid = document.getElementById('m-pid');
+  if (s.emma.running) {
+    dot.classList.add('online');
+    mStatus.textContent = 'ONLINE';
+    mStatus.className = 'value green';
+    mPid.textContent = `PID ${s.emma.pid}`;
+  } else {
+    dot.classList.remove('online');
+    mStatus.textContent = 'OFFLINE';
+    mStatus.className = 'value red';
+    mPid.textContent = '';
+  }
+
+  // Git
+  document.getElementById('git-info').textContent = `${s.git.branch} · ${s.git.commit}`;
+
+  // Metrics
+  document.getElementById('m-wakes').textContent = s.stats.wake_count;
+  document.getElementById('m-speech').textContent = s.stats.speech_started;
+  document.getElementById('m-speech-sub').textContent = `${s.stats.speech_started} started / ${s.stats.speech_stopped} stopped`;
+  document.getElementById('m-responses').textContent = s.stats.responses;
+  document.getElementById('m-audio-out').textContent = `audio events: ${s.stats.audio_out_events}`;
+  document.getElementById('m-tools').textContent = s.stats.tool_calls.length;
+  document.getElementById('m-errors').textContent = s.stats.errors.length;
+  document.getElementById('m-errors').className = s.stats.errors.length > 0 ? 'value red' : 'value green';
+  document.getElementById('m-memory').textContent = s.memory.length;
+
+  // Cost
+  document.getElementById('m-cost').textContent = `$${s.cost.total_usd.toFixed(4)}`;
+  document.getElementById('m-cost-sub').textContent = `~${s.cost.tokens_in} in / ${s.cost.tokens_out} out`;
+
+  // Issues
+  const issueEl = document.getElementById('issues');
+  issueEl.innerHTML = '';
+  document.getElementById('issue-count').textContent = s.issues.length;
+  s.issues.forEach(i => {
+    issueEl.innerHTML += `<div class="issue ${i.severity}">
+      <div class="issue-head">
+        <span class="issue-id">${i.id}</span>
+        <span class="issue-title">${i.title}</span>
+        <span class="issue-status ${i.status}">${i.status}</span>
+      </div>
+      <div class="issue-detail">${i.detail}</div>
+    </div>`;
+  });
+
+  // Memory
+  const memEl = document.getElementById('memory');
+  memEl.innerHTML = '';
+  document.getElementById('fact-count').textContent = s.memory.length;
+  if (s.memory.length === 0) {
+    memEl.innerHTML = '<div class="empty">No facts stored yet</div>';
+  }
+  s.memory.forEach(f => {
+    memEl.innerHTML += `<div class="fact">
+      <span class="fact-kind">${f.kind}</span>
+      ${f.content}
+      <span class="fact-conf">${(f.confidence*100).toFixed(0)}%</span>
+    </div>`;
+  });
+
+  // Tool calls
+  const toolEl = document.getElementById('tool-calls');
+  if (s.stats.tool_calls.length === 0) {
+    toolEl.innerHTML = '<div class="empty">No tool calls yet</div>';
+  } else {
+    toolEl.innerHTML = s.stats.tool_calls.map(t => `<span class="tool-tag">${t}</span>`).join('');
+  }
+}
+
+function appendLog(line) {
+  const el = document.getElementById('log-stream');
+  const div = document.createElement('div');
+  div.className = 'log-line';
+
+  // Classify
+  if (line.includes('wake_detected')) div.classList.add('wake');
+  else if (line.includes('speech_started') || line.includes('speech_stopped')) div.classList.add('speech');
+  else if (line.includes('response.') || line.includes('output_audio')) div.classList.add('response');
+  else if (line.includes('fn_call') || line.includes('output_item')) div.classList.add('tool');
+  else if (line.includes('error') || line.includes('ERROR')) div.classList.add('error');
+  else if (line.includes('echo_gate')) div.classList.add('echo');
+
+  // Extract timestamp
+  const tsMatch = line.match(/"timestamp":\s*"([^"]+)"/);
+  const time = tsMatch ? tsMatch[1].split('T')[1]?.substring(0,8) : '';
+
+  // Simplify the display
+  let display = line;
+  if (line.includes('"type":')) {
+    const typeMatch = line.match(/"type":\s*"([^"]+)"/);
+    if (typeMatch) display = typeMatch[1];
+  } else if (line.includes('"event":')) {
+    const evMatch = line.match(/"event":\s*"([^"]+)"/);
+    if (evMatch) {
+      display = evMatch[1];
+      const extra = [];
+      const nameM = line.match(/"name":\s*"([^"]+)"/);
+      if (nameM) extra.push(nameM[1]);
+      const argsM = line.match(/"args":\s*(\{[^}]*\})/);
+      if (argsM) extra.push(argsM[1]);
+      if (extra.length) display += ' ' + extra.join(' ');
+    }
+  } else if (line.includes('broadcasting')) {
+    display = 'broadcasting interruption';
+  }
+
+  div.innerHTML = `<span class="ts">${time}</span> ${display}`;
+  el.appendChild(div);
+  logCount++;
+  document.getElementById('log-count').textContent = logCount;
+
+  // Auto-scroll
+  el.scrollTop = el.scrollHeight;
+
+  // Cap at 200 lines
+  while (el.children.length > 200) el.removeChild(el.firstChild);
+}
+
+connect();
+</script>
+</body>
+</html>
