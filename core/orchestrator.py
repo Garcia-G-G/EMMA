@@ -4,7 +4,10 @@ Pipecat owns the streaming pipeline (mic → OpenAIRealtimeLLMService →
 speaker, server-side VAD, native barge-in, function-call dispatch),
 so the orchestrator's job collapses to wake → run_session → loop.
 
-Memory wiring (short_term/reflection) is deferred to Prompt 14.
+Memory priming is wired into the session system prompt (reads from
+long-term store on each session start). Reflection (automatic fact
+extraction from transcripts) requires Pipecat transcript event
+hooks — not yet implemented.
 """
 
 from __future__ import annotations
