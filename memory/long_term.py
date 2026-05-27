@@ -15,14 +15,15 @@ generation. A Postgres backend can be added when
 ``settings.POSTGRES_DSN`` is set; today the SQLite path is the only
 one wired up.
 """
+
 from __future__ import annotations
 
 import asyncio
 import sqlite3
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import structlog
 
@@ -78,6 +79,7 @@ def _row_to_fact(row: sqlite3.Row) -> Fact:
 
 
 # ---------- sync core (the actual SQL) -----------------------------------
+
 
 def _remember_sync(content: str, kind: str, confidence: float, source: str) -> int:
     now = time.time()
@@ -152,8 +154,10 @@ def _count_sync() -> int:
 
 # ---------- async wrappers (for the orchestrator + tool layer) ----------
 
-async def remember(content: str, *, kind: str = "general",
-                   confidence: float = 0.7, source: str = "explicit") -> int:
+
+async def remember(
+    content: str, *, kind: str = "general", confidence: float = 0.7, source: str = "explicit"
+) -> int:
     return await asyncio.to_thread(_remember_sync, content, kind, confidence, source)
 
 
@@ -171,6 +175,7 @@ async def count() -> int:
 
 # ---------- system-prompt priming ---------------------------------------
 
+
 async def priming_block(top_n: int | None = None) -> str:
     """Return a short block of known facts to inject into the system prompt.
 
@@ -182,10 +187,7 @@ async def priming_block(top_n: int | None = None) -> str:
     if not facts:
         return ""
     lines = [f"- {f.content}" for f in facts]
-    return (
-        "WHAT YOU ALREADY KNOW ABOUT GARCIA (long-term memory):\n"
-        + "\n".join(lines)
-    )
+    return "WHAT YOU ALREADY KNOW ABOUT GARCIA (long-term memory):\n" + "\n".join(lines)
 
 
 def initialize() -> None:
@@ -200,11 +202,11 @@ def initialize() -> None:
 def known_kinds() -> Iterable[str]:
     """Suggested ``kind`` taxonomy. Soft - any string is accepted."""
     return (
-        "name",         # the user's name, family, friends
-        "preference",   # likes / dislikes
-        "habit",        # recurring pattern
-        "fact",         # a specific datum (address, allergy, birthday)
-        "language",     # language preference
-        "tool_use",     # how they like Emma to use tools
-        "general",      # catch-all
+        "name",  # the user's name, family, friends
+        "preference",  # likes / dislikes
+        "habit",  # recurring pattern
+        "fact",  # a specific datum (address, allergy, birthday)
+        "language",  # language preference
+        "tool_use",  # how they like Emma to use tools
+        "general",  # catch-all
     )

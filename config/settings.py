@@ -3,6 +3,7 @@
 Validates on import - importing this module without a complete `.env`
 will raise a pydantic ValidationError.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

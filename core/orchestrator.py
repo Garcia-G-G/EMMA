@@ -6,9 +6,11 @@ so the orchestrator's job collapses to wake → run_session → loop.
 
 Memory wiring (short_term/reflection) is deferred to Prompt 14.
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 import time
 import uuid
@@ -45,10 +47,8 @@ def preflight() -> None:
 def _install_signals() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, _shutdown.set)
-        except NotImplementedError:
-            pass
 
 
 async def _one_session() -> None:
@@ -73,7 +73,7 @@ async def _one_session() -> None:
                 conversation.run_session(),
                 timeout=float(settings.SESSION_MAX_S) + 30.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.info("session_timeout")
         log.info("session_close", duration_s=int(time.monotonic() - t_wake))
     finally:

@@ -2,6 +2,7 @@
 
 Speakable via the ``describe_my_health`` tool in ``tools/dev.py``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,9 +22,7 @@ log = structlog.get_logger("emma.tools.diagnostics")
 async def _ping_openai() -> dict[str, Any]:
     try:
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        await asyncio.wait_for(
-            client.models.retrieve("gpt-4o"), timeout=settings.API_TIMEOUT_S
-        )
+        await asyncio.wait_for(client.models.retrieve("gpt-4o"), timeout=settings.API_TIMEOUT_S)
         return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:160]}
@@ -48,13 +47,15 @@ async def _ping_postgres() -> dict[str, Any]:
     try:
         import psycopg
 
-        async with await asyncio.wait_for(
-            psycopg.AsyncConnection.connect(settings.POSTGRES_DSN),
-            timeout=5.0,
-        ) as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("SELECT 1")
-                await cur.fetchone()
+        async with (
+            await asyncio.wait_for(
+                psycopg.AsyncConnection.connect(settings.POSTGRES_DSN),
+                timeout=5.0,
+            ) as conn,
+            conn.cursor() as cur,
+        ):
+            await cur.execute("SELECT 1")
+            await cur.fetchone()
         return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:160]}

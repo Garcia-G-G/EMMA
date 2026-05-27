@@ -15,6 +15,7 @@ overrides have no TTL and beat detection.
 # TODO(phase-03): mirror preferences into long-term memory once that
 #   substrate exists. JSON is the local source of truth until then.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,34 +42,50 @@ CACHE_PATH = settings.EMMA_HOME / "environment_cache.json"
 # Shortlists are the contract. Order = preference. Do not extend without
 # updating the phase-06 spec first.
 IDE_SHORTLIST: list[dict[str, Any]] = [
-    {"key": "cursor", "binary": "cursor", "apps": ["Cursor"], "bundle": "com.todesktop.230313mzl4w4u92"},
-    {"key": "code",   "binary": "code",   "apps": ["Visual Studio Code"], "bundle": "com.microsoft.VSCode"},
-    {"key": "zed",    "binary": "zed",    "apps": ["Zed"], "bundle": "dev.zed.Zed"},
-    {"key": "subl",   "binary": "subl",   "apps": ["Sublime Text"], "bundle": "com.sublimetext.4"},
+    {
+        "key": "cursor",
+        "binary": "cursor",
+        "apps": ["Cursor"],
+        "bundle": "com.todesktop.230313mzl4w4u92",
+    },
+    {
+        "key": "code",
+        "binary": "code",
+        "apps": ["Visual Studio Code"],
+        "bundle": "com.microsoft.VSCode",
+    },
+    {"key": "zed", "binary": "zed", "apps": ["Zed"], "bundle": "dev.zed.Zed"},
+    {"key": "subl", "binary": "subl", "apps": ["Sublime Text"], "bundle": "com.sublimetext.4"},
 ]
 
 TERMINAL_SHORTLIST: list[dict[str, Any]] = [
-    {"key": "iterm",    "apps": ["iTerm"], "bundle": "com.googlecode.iterm2"},
-    {"key": "warp",     "apps": ["Warp"], "bundle": "dev.warp.Warp-Stable"},
-    {"key": "ghostty",  "apps": ["Ghostty"], "bundle": "com.mitchellh.ghostty"},
+    {"key": "iterm", "apps": ["iTerm"], "bundle": "com.googlecode.iterm2"},
+    {"key": "warp", "apps": ["Warp"], "bundle": "dev.warp.Warp-Stable"},
+    {"key": "ghostty", "apps": ["Ghostty"], "bundle": "com.mitchellh.ghostty"},
     {"key": "terminal", "apps": ["Terminal"], "bundle": "com.apple.Terminal"},  # always present
 ]
 
 MUSIC_SHORTLIST: list[dict[str, Any]] = [
     {"key": "spotify", "apps": ["Spotify"], "bundle": "com.spotify.client"},
-    {"key": "music",   "apps": ["Music"], "bundle": "com.apple.Music"},  # always present
+    {"key": "music", "apps": ["Music"], "bundle": "com.apple.Music"},  # always present
 ]
 
 BROWSER_SHORTLIST: list[dict[str, Any]] = [
-    {"key": "brave",   "apps": ["Brave Browser"], "bundle": "com.brave.Browser",
-     "cask": "brave-browser"},
-    {"key": "chrome",  "apps": ["Google Chrome"], "bundle": "com.google.Chrome",
-     "cask": "google-chrome"},
-    {"key": "firefox", "apps": ["Firefox"], "bundle": "org.mozilla.firefox",
-     "cask": "firefox"},
-    {"key": "arc",     "apps": ["Arc"], "bundle": "company.thebrowser.Browser",
-     "cask": "arc"},
-    {"key": "safari",  "apps": ["Safari"], "bundle": "com.apple.Safari"},  # always present
+    {
+        "key": "brave",
+        "apps": ["Brave Browser"],
+        "bundle": "com.brave.Browser",
+        "cask": "brave-browser",
+    },
+    {
+        "key": "chrome",
+        "apps": ["Google Chrome"],
+        "bundle": "com.google.Chrome",
+        "cask": "google-chrome",
+    },
+    {"key": "firefox", "apps": ["Firefox"], "bundle": "org.mozilla.firefox", "cask": "firefox"},
+    {"key": "arc", "apps": ["Arc"], "bundle": "company.thebrowser.Browser", "cask": "arc"},
+    {"key": "safari", "apps": ["Safari"], "bundle": "com.apple.Safari"},  # always present
 ]
 
 SHORTLISTS: dict[Category, list[dict[str, Any]]] = {
@@ -79,17 +96,33 @@ SHORTLISTS: dict[Category, list[dict[str, Any]]] = {
 }
 
 INSTALL_RECOMMENDATIONS: dict[Category, dict[str, str]] = {
-    "ide":      {"key": "code",    "cask": "visual-studio-code", "human": "VS Code"},
-    "terminal": {"key": "ghostty", "cask": "ghostty",            "human": "Ghostty"},
-    "music":    {"key": "spotify", "cask": "spotify",            "human": "Spotify"},
+    "ide": {"key": "code", "cask": "visual-studio-code", "human": "VS Code"},
+    "terminal": {"key": "ghostty", "cask": "ghostty", "human": "Ghostty"},
+    "music": {"key": "spotify", "cask": "spotify", "human": "Spotify"},
 }
 
 # Extensions duti rewrites when an IDE is installed. The UTI line covers
 # Python scripts; the per-extension calls cover the rest.
 DUTI_EXTENSIONS: list[str] = [
-    ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".rb",
-    ".json", ".yaml", ".yml", ".toml", ".md", ".txt",
-    ".sh", ".html", ".css", ".sql", ".env",
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".rb",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".md",
+    ".txt",
+    ".sh",
+    ".html",
+    ".css",
+    ".sql",
+    ".env",
 ]
 DUTI_UTIS: list[str] = ["public.python-script"]
 
@@ -104,6 +137,7 @@ class DetectionResult:
 
 
 # ---------- cache I/O ----------------------------------------------------
+
 
 def _load_state() -> dict[str, Any]:
     if not CACHE_PATH.exists():
@@ -131,9 +165,14 @@ def _fresh(state: dict[str, Any]) -> bool:
 
 # ---------- low-level probes --------------------------------------------
 
+
 def _app_installed(app_names: list[str]) -> bool:
-    roots = ("/Applications", str(Path.home() / "Applications"),
-             "/System/Applications", "/System/Applications/Utilities")
+    roots = (
+        "/Applications",
+        str(Path.home() / "Applications"),
+        "/System/Applications",
+        "/System/Applications/Utilities",
+    )
     for root in roots:
         for app in app_names:
             if (Path(root) / f"{app}.app").exists():
@@ -170,6 +209,7 @@ def _detect_category(category: Category) -> tuple[str | None, str | None, str | 
 
 
 # ---------- public detection API -----------------------------------------
+
 
 def detect_preferred(category: Category, *, force_refresh: bool = False) -> DetectionResult:
     """Resolve the active app for ``category``.
@@ -230,6 +270,7 @@ def warm_cache() -> None:
 
 # ---------- preference + decline tracking --------------------------------
 
+
 def get_preference(category: Category) -> str | None:
     return _load_state().get("preferences", {}).get(category)
 
@@ -253,6 +294,7 @@ def decline_count(category: Category) -> int:
 
 
 # ---------- Homebrew + duti ----------------------------------------------
+
 
 def have_brew() -> bool:
     return shutil.which("brew") is not None
@@ -314,9 +356,7 @@ async def install_cask(cask: str, spoken_lang: str = "es") -> tuple[bool, str]:
 async def install_brew_package(name: str, spoken_lang: str = "es") -> tuple[bool, str]:
     if not have_brew():
         return False, "brew is not installed"
-    code, out = await _run_with_progress(
-        ["brew", "install", name], spoken_lang=spoken_lang
-    )
+    code, out = await _run_with_progress(["brew", "install", name], spoken_lang=spoken_lang)
     return code == 0, out
 
 
@@ -339,19 +379,22 @@ def set_ide_default(bundle_id: str) -> dict[str, Any]:
     for ext in DUTI_EXTENSIONS:
         proc = subprocess.run(
             ["duti", "-s", bundle_id, ext, "all"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         results[ext] = proc.returncode
     for uti in DUTI_UTIS:
         proc = subprocess.run(
             ["duti", "-s", bundle_id, uti, "all"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         results[uti] = proc.returncode
     # Verify via -d on python-script
     verify = subprocess.run(
         ["duti", "-d", "public.python-script"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return {
         "ok": all(rc == 0 for rc in results.values()) and bundle_id in verify.stdout,
@@ -373,6 +416,7 @@ def smoke_launch(app_name: str) -> bool:
 
 # ---------- D-bis: browser default (system dialog unavoidable) -----------
 
+
 def default_browser_bundle() -> str | None:
     """Read the current default browser bundle id from LaunchServices."""
     try:
@@ -383,7 +427,9 @@ def default_browser_bundle() -> str | None:
                 "com.apple.LaunchServices/com.apple.launchservices.secure",
                 "LSHandlers",
             ],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
     except Exception:
         return None

@@ -10,15 +10,15 @@ silently falls back to Finder.
 Resuming from dev mode stays manual: the banner Emma opens prints the
 exact ``launchctl`` command.
 """
+
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
 
 import structlog
 
@@ -118,14 +118,12 @@ def _open_dev_terminal(banner_path: Path) -> None:
 
 def _shutdown_service() -> None:
     uid = os.getuid()
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(
             ["launchctl", "disable", f"gui/{uid}/com.garcia.emma"],
             check=False,
             timeout=5,
         )
-    except Exception:
-        pass
     dev_state.shutdown_requested.set()
 
 
@@ -217,10 +215,8 @@ def _offer_install_ide(spoken_lang: str) -> ToolResult:
 
 
 def _guide_brew_install(spoken_lang: str) -> ToolResult:
-    try:
+    with contextlib.suppress(macos.AppleScriptError):
         macos.open_url("https://brew.sh/")
-    except macos.AppleScriptError:
-        pass
     if spoken_lang == "es":
         msg = (
             "Necesito Homebrew primero. Te abrí brew punto sh; instálalo con el "

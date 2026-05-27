@@ -9,6 +9,7 @@ Implicit memory (the reflection step) writes to the same store
 behind the scenes; explicit writes via these tools simply bump
 confidence to 1.0 and tag source="explicit".
 """
+
 from __future__ import annotations
 
 import structlog
@@ -82,7 +83,11 @@ async def recall_facts(query: str = "") -> ToolResult:
     msg = f"Esto es lo que tengo anotado ({summary_n}): {lines}."
     return ToolResult(
         True,
-        {"facts": [{"content": f.content, "kind": f.kind, "confidence": f.confidence} for f in facts]},
+        {
+            "facts": [
+                {"content": f.content, "kind": f.kind, "confidence": f.confidence} for f in facts
+            ]
+        },
         msg,
         False,
     )

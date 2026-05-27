@@ -14,6 +14,7 @@ clean failure and the AppleScript-driven Apple Music path takes over.
 #   None because Apple Music ships with macOS, so the existing two-tier
 #   fallback already covers all realistic configurations.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -102,7 +103,7 @@ def play_track(query: str) -> ToolResult:
         uri = track["uri"]
         try:
             sp.start_playback(uris=[uri])
-        except Exception as exc:
+        except Exception:
             return ToolResult(
                 False,
                 None,
@@ -145,7 +146,9 @@ def play_playlist(name: str) -> ToolResult:
         return ToolResult(False, None, f"Spotify falló: {exc}", False)
 
 
-def _spotify_transport(method: str, ok_msg: str, fallback_script: str, fallback_msg: str) -> ToolResult:
+def _spotify_transport(
+    method: str, ok_msg: str, fallback_script: str, fallback_msg: str
+) -> ToolResult:
     sp = _spotify()
     if sp is None:
         return _apple_music(fallback_script, fallback_msg)

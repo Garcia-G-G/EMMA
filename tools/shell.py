@@ -4,9 +4,10 @@ Gives Emma the ability to run arbitrary shell commands on the Mac,
 making her genuinely Jarvis-level: file operations, launching programs
 with arguments, checking system info, running scripts, etc.
 """
+
 from __future__ import annotations
 
-import shlex
+import re
 import subprocess
 
 import structlog
@@ -16,15 +17,16 @@ from tools.base import ToolResult, tool
 log = structlog.get_logger("emma.tools.shell")
 
 _BLOCKED_PATTERNS = [
-    "rm -rf /",
-    "rm -rf ~",
-    "mkfs",
-    "dd if=",
-    ":(){",
-    "fork bomb",
-    "> /dev/sda",
-    "chmod -R 777 /",
+    r"rm\s+(-[a-z]*r[a-z]*\s+(-[a-z]*f[a-z]*\s+)?|-[a-z]*f[a-z]*\s+(-[a-z]*r[a-z]*\s+)?)[\"']?(/|~)",
+    r"mkfs",
+    r"dd\s+if=",
+    r":\(\)\s*\{",
+    r">\s*/dev/sd",
+    r"chmod\s+(-[a-z]*R[a-z]*\s+)?777\s+/",
+    r"curl\b.*\|\s*(ba)?sh",
+    r"wget\b.*\|\s*(ba)?sh",
 ]
+_BLOCKED_RE = [re.compile(p, re.IGNORECASE) for p in _BLOCKED_PATTERNS]
 
 
 @tool()
@@ -46,12 +48,12 @@ def run_command(command: str) -> ToolResult:
     - run_command("networksetup -getairportnetwork en0")
     - run_command("top -l 1 | head -10")
     """
-    cmd_lower = command.lower()
-    for pattern in _BLOCKED_PATTERNS:
-        if pattern in cmd_lower:
+    for pattern in _BLOCKED_RE:
+        if pattern.search(command):
             return ToolResult(
-                False, None,
-                "That command looks dangerous — I won't run it.",
+                False,
+                None,
+                "That command looks dangerous - I won't run it.",
                 False,
             )
 

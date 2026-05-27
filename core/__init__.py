@@ -1,1 +1,1 @@
-"""Core orchestration: wake word, STT, LLM, TTS, audio I/O."""
+"""Core orchestration: wake word, Realtime API session, audio I/O."""

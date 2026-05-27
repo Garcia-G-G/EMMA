@@ -9,10 +9,11 @@ The orchestrator already keeps a 10-turn rolling history in
 ``core.orchestrator._one_turn``; this module is a *separate* log
 focused on the reflection input. It does not affect the LLM context.
 """
+
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import structlog
 

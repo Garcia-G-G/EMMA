@@ -1,4 +1,5 @@
 """Tool discovery, lookup, OpenAI function specs, and dispatch."""
+
 from __future__ import annotations
 
 import importlib
@@ -48,7 +49,7 @@ def list_tools() -> list[str]:
     # De-duplicate aliases so the LLM only sees canonical names.
     seen: set[str] = set()
     out: list[str] = []
-    for name, entry in get_registry().items():
+    for _name, entry in get_registry().items():
         if entry.name in seen:
             continue
         seen.add(entry.name)

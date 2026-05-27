@@ -5,8 +5,10 @@ we probe by attempting the underlying operation and catching the
 specific failure. On denial we ``say`` a short instruction and open the
 relevant System Settings pane.
 """
+
 from __future__ import annotations
 
+import contextlib
 import subprocess
 from typing import Literal
 
@@ -30,10 +32,8 @@ def _say(text: str) -> None:
 
 def _open_settings(pane: Pane) -> None:
     url = f"x-apple.systempreferences:com.apple.preference.security?Privacy_{pane}"
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(["open", url], check=False, timeout=3)
-    except Exception:
-        pass
 
 
 def check_microphone() -> bool:
@@ -54,9 +54,7 @@ def check_microphone() -> bool:
         try:
             import sounddevice as sd
 
-            stream = sd.RawInputStream(
-                samplerate=16000, channels=1, dtype="int16", blocksize=512
-            )
+            stream = sd.RawInputStream(samplerate=16000, channels=1, dtype="int16", blocksize=512)
             stream.start()
             stream.stop()
             stream.close()

@@ -20,9 +20,11 @@ action type, not by who the user prefers.
 #   then, any non-Amazon intent surfaces a clean "not yet available"
 #   error so the LLM falls back to lower-level tools or asks the user.
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from typing import Any
 
@@ -166,9 +168,7 @@ async def browser_do(intent: str, confirmed: bool = False) -> ToolResult:
             await page.wait_for_selector(
                 'div[data-component-type="s-search-result"]', timeout=15000
             )
-            await page.locator(
-                'div[data-component-type="s-search-result"] h2 a'
-            ).first.click()
+            await page.locator('div[data-component-type="s-search-result"] h2 a').first.click()
             await page.wait_for_load_state("domcontentloaded", timeout=15000)
             title = (await page.title()).strip()
         except Exception as exc:
@@ -202,14 +202,10 @@ async def shutdown_browser() -> None:
     """Close the persistent context on graceful shutdown."""
     global _context, _playwright
     if _context is not None:
-        try:
+        with contextlib.suppress(Exception):
             await _context.close()
-        except Exception:
-            pass
         _context = None
     if _playwright is not None:
-        try:
+        with contextlib.suppress(Exception):
             await _playwright.stop()
-        except Exception:
-            pass
         _playwright = None

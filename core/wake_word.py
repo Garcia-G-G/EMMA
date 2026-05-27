@@ -13,6 +13,7 @@ callback delivers exactly that, runs ``predict``, and signals the
 awaiting coroutine via ``loop.call_soon_threadsafe`` when the
 configured wake-word's score crosses the threshold.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,20 +50,24 @@ async def _get_model() -> Any:
                 f"openwakeword failed to import ({exc}). Run `uv sync` and retry."
             ) from exc
 
-        BUILTIN_NAMES = {
-            "alexa", "hey_mycroft", "hey_jarvis",
-            "hey_rhasspy", "weather", "timer",
+        builtin_names = {
+            "alexa",
+            "hey_mycroft",
+            "hey_jarvis",
+            "hey_rhasspy",
+            "weather",
+            "timer",
         }
         raw = settings.WAKE_WORD_PATH
 
-        if raw in BUILTIN_NAMES:
+        if raw in builtin_names:
             wakeword_arg = raw
             framework = "onnx"
             source_label = f"<built-in: {raw}>"
         else:
             path = Path(raw).expanduser()
             if not path.exists():
-                builtins = ", ".join(sorted(BUILTIN_NAMES))
+                builtins = ", ".join(sorted(builtin_names))
                 raise SystemExit(
                     f"Wake word '{raw}' is neither a file nor a built-in. "
                     f"Either set WAKE_WORD_PATH to one of: {builtins}, "
@@ -91,6 +96,7 @@ async def _get_model() -> Any:
             name=settings.WAKE_WORD_NAME,
         )
         return _model
+
 
 def _reset_model(model: Any) -> None:
     """Clear openWakeWord's retained activation state.

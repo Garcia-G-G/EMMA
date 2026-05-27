@@ -4,6 +4,7 @@ Search backend: Brave when ``BRAVE_API_KEY`` is set, Tavily as a fallback
 if only that key is configured. Page summaries use trafilatura to pull
 the main content, then GPT-4o-mini for a three-sentence rewrite.
 """
+
 from __future__ import annotations
 
 from typing import Any
