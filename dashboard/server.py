@@ -3,16 +3,15 @@
 Run: .venv/bin/python dashboard/server.py
 Open: http://localhost:3200
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 import sqlite3
 import subprocess
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import websockets
@@ -27,7 +26,7 @@ DASHBOARD_DIR = Path(__file__).resolve().parent
 PORT = 3200
 
 # OpenAI Realtime pricing (per million tokens, May 2026)
-PRICE_AUDIO_IN = 40.00   # cached input
+PRICE_AUDIO_IN = 40.00  # cached input
 PRICE_AUDIO_OUT = 80.00
 PRICE_TEXT_IN = 2.50
 PRICE_TEXT_OUT = 10.00
@@ -125,24 +124,48 @@ def _memory_facts() -> list[dict]:
 
 def _known_issues() -> list[dict]:
     return [
-        {"id": "AUDIO-01", "severity": "critical", "status": "investigating",
-         "title": "No audio output with coral voice",
-         "detail": "Model generates responses but no response.output_audio.delta events. Worked with ash voice."},
-        {"id": "ECHO-01", "severity": "high", "status": "tuning",
-         "title": "Echo self-interruption on MacBook speakers",
-         "detail": "Mic picks up speaker output, VAD fires speech_started, cancels response. Echo gate tuned: tail=600ms, barge_in_rms=1500."},
-        {"id": "WAKE-01", "severity": "medium", "status": "open",
-         "title": "Wake chime leaks into session",
-         "detail": "Despite 0.8s delay, residual chime audio triggers false speech_started on session open."},
-        {"id": "MEM-01", "severity": "medium", "status": "partial",
-         "title": "Reflection not wired to Pipecat",
-         "detail": "Explicit remember_fact works. Auto-learning from transcripts needs Pipecat transcript event hooks."},
-        {"id": "YT-01", "severity": "low", "status": "open",
-         "title": "YouTube disambiguation loop",
-         "detail": "Exact creator name match added but needs live validation."},
-        {"id": "WAKE-02", "severity": "low", "status": "open",
-         "title": "Custom 'Hey Emma' wake word not trained",
-         "detail": "Using built-in hey_jarvis. Colab training not done yet."},
+        {
+            "id": "AUDIO-01",
+            "severity": "critical",
+            "status": "fixed",
+            "title": "No audio output (coral or ash)",
+            "detail": "Root cause: LLMContext frame never pushed + LLMAssistantAggregator missing. Fixed both. Audio works on coral and ash.",
+        },
+        {
+            "id": "ECHO-01",
+            "severity": "high",
+            "status": "fixed",
+            "title": "Echo self-interruption on MacBook speakers",
+            "detail": "Echo gate tuned: tail=600ms, barge_in_rms=3000 (echo peaks ~1900). VAD threshold 0.7.",
+        },
+        {
+            "id": "WAKE-01",
+            "severity": "low",
+            "status": "mitigated",
+            "title": "Wake chime leaks into session",
+            "detail": "Chime now blocking + 0.8s delay. First speech_started is benign (interrupts nothing). Model recovers.",
+        },
+        {
+            "id": "MEM-01",
+            "severity": "medium",
+            "status": "partial",
+            "title": "Reflection not wired to Pipecat",
+            "detail": "Explicit remember_fact works. Priming wired into system prompt. Auto-learning needs transcript event hooks.",
+        },
+        {
+            "id": "YT-01",
+            "severity": "low",
+            "status": "open",
+            "title": "YouTube disambiguation loop",
+            "detail": "Exact creator name match added but needs live validation.",
+        },
+        {
+            "id": "WAKE-02",
+            "severity": "low",
+            "status": "open",
+            "title": "Custom 'Hey Emma' wake word not trained",
+            "detail": "Using built-in hey_jarvis. Colab training not done yet.",
+        },
     ]
 
 
@@ -160,11 +183,15 @@ def _git_info() -> dict:
     try:
         branch = subprocess.check_output(
             ["git", "-C", str(REPO_ROOT), "branch", "--show-current"],
-            text=True, timeout=3, stderr=subprocess.DEVNULL
+            text=True,
+            timeout=3,
+            stderr=subprocess.DEVNULL,
         ).strip()
         commit = subprocess.check_output(
             ["git", "-C", str(REPO_ROOT), "log", "-1", "--oneline"],
-            text=True, timeout=3, stderr=subprocess.DEVNULL
+            text=True,
+            timeout=3,
+            stderr=subprocess.DEVNULL,
         ).strip()
         return {"branch": branch, "commit": commit}
     except Exception:
@@ -176,7 +203,7 @@ def build_state() -> dict:
     stats = _parse_log_events()
     cost = _estimate_cost(stats)
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "emma": emma,
         "stats": stats,
         "cost": cost,
@@ -192,7 +219,9 @@ async def tail_log(ws):
     if not EMMA_LOG.exists():
         EMMA_LOG.touch()
     proc = await asyncio.create_subprocess_exec(
-        "tail", "-f", str(EMMA_LOG),
+        "tail",
+        "-f",
+        str(EMMA_LOG),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
     )
@@ -205,14 +234,30 @@ async def tail_log(ws):
             if not decoded:
                 continue
             # Filter to important events only
-            if any(k in decoded for k in (
-                "wake_detected", "conversation_start", "conversation_end",
-                "speech_started", "speech_stopped", "response.done",
-                "response.created", "output_audio", "fn_call",
-                "echo_gate", "error", "ERROR", "warning", "WARNING",
-                "session_timeout", "session_close", "output_item",
-                "broadcasting", "committed",
-            )):
+            if any(
+                k in decoded
+                for k in (
+                    "wake_detected",
+                    "conversation_start",
+                    "conversation_end",
+                    "speech_started",
+                    "speech_stopped",
+                    "response.done",
+                    "response.created",
+                    "output_audio",
+                    "fn_call",
+                    "echo_gate",
+                    "error",
+                    "ERROR",
+                    "warning",
+                    "WARNING",
+                    "session_timeout",
+                    "session_close",
+                    "output_item",
+                    "broadcasting",
+                    "committed",
+                )
+            ):
                 await ws.send(json.dumps({"type": "log", "line": decoded}))
     except websockets.ConnectionClosed:
         pass
