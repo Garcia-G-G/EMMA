@@ -8,6 +8,7 @@ for one knob. If the binary is missing, the tool surfaces a clean error.
 
 from __future__ import annotations
 
+import asyncio
 import shlex
 import shutil
 import subprocess
@@ -41,6 +42,36 @@ def run_applescript(script: str) -> str:
 
 def osascript_jxa(script: str) -> str:
     return _run(["osascript", "-l", "JavaScript", "-e", script])
+
+
+async def osascript(script: str, timeout_s: float = 8.0) -> str:
+    """Run an AppleScript via ``osascript -e``, returning stdout.
+
+    Async (non-blocking) counterpart to :func:`run_applescript`; the
+    AppleScript-driven tools (Calendar/Mail/Notes/...) use this so they
+    never block the Pipecat event loop. Raises :class:`AppleScriptError`
+    on a non-zero exit or timeout.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "/usr/bin/osascript",
+        "-e",
+        script,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+    except TimeoutError:
+        proc.kill()
+        raise AppleScriptError(f"osascript timed out after {timeout_s}s") from None
+    if proc.returncode != 0:
+        raise AppleScriptError(stderr.decode("utf-8", errors="replace").strip())
+    return stdout.decode("utf-8", errors="replace").strip()
+
+
+def esc_applescript(s: str) -> str:
+    """Escape a Python string for safe embedding in an AppleScript string literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def open_url(url: str) -> None:
