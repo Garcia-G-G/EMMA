@@ -133,3 +133,20 @@ When adding a tool or feature that needs a new permission:
 Permissions covered today: Microphone, Automation (Calendar, Mail, Messages,
 Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility, Full Disk
 Access.
+
+## Security convention (mandatory)
+
+Emma stores data in three trust tiers:
+
+- **Public** — `self/capabilities.md`, version info. Plaintext on disk.
+- **Personal** — preferences, profile facts, schedule patterns. `~/.emma/memory.db`. Cold-disk protection relies on FileVault.
+- **Secret** — passwords, API keys, account numbers, government IDs, credit cards. **macOS Keychain only** (`com.garcia.emma` service). `memory.db` may carry a `vault_ref` label but never the value.
+
+When adding a tool or feature:
+1. Classify each datum it stores into one of the three tiers.
+2. Secrets MUST route through `core/secrets.py`. No exceptions.
+3. New PII patterns get added to `core/redaction.py` AND covered by tests.
+4. New credential env vars get added to the migration list in `core/secrets.py:bootstrap_from_env` (`_CRED_SUFFIXES`) and `config/settings.py:_CREDENTIAL_FIELDS`.
+5. Anything sent to OpenAI must be filterable; the priming block excludes `vault_ref IS NOT NULL`.
+
+The architectural rule: **no secret-tier value ever lands in `memory.db`, in logs, or in the system prompt.** See `SECURITY.md` for the full threat model.

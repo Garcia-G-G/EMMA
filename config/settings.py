@@ -8,8 +8,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Credentials that bootstrap_from_env migrates to Keychain. After migration
+# the .env value is blanked, and Settings fills it back from Keychain.
+_CREDENTIAL_FIELDS = (
+    "OPENAI_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "YOUTUBE_API_KEY",
+    "SPOTIFY_CLIENT_ID",
+    "SPOTIFY_CLIENT_SECRET",
+    "POSTGRES_DSN",
+    "BRAVE_API_KEY",
+    "TAVILY_API_KEY",
+)
 
 
 class Settings(BaseSettings):
@@ -40,6 +53,11 @@ class Settings(BaseSettings):
     WAKE_WORD_THRESHOLD: float = 0.5
     LOG_LEVEL: str = "INFO"
     EMMA_HOME: Path = Path.home() / ".emma"
+
+    # macOS Keychain service holding Secret-tier values + migrated credentials.
+    # Parameterizable for future multi-user; core/secrets.py reads the same
+    # name from the EMMA_KEYCHAIN_SERVICE environment variable.
+    EMMA_KEYCHAIN_SERVICE: str = "com.garcia.emma"
 
     # IANA tz name (e.g. "America/Mexico_City"). None -> system local.
     TIMEZONE: str | None = None
@@ -103,6 +121,26 @@ class Settings(BaseSettings):
         if not v:
             return ""
         return v[:800]
+
+    @model_validator(mode="after")
+    def _fill_credentials_from_keychain(self) -> Settings:
+        """Fill blank credentials from Keychain (post .env migration).
+
+        Dormant by default: if OPENAI_API_KEY is present (the normal,
+        un-migrated state) this returns immediately and never shells out to
+        the `security` CLI. Only once .env has been migrated (canonical
+        credential blank) do we read the Secret tier from Keychain.
+        """
+        if self.OPENAI_API_KEY:
+            return self
+        from core.secrets import retrieve_sync
+
+        for name in _CREDENTIAL_FIELDS:
+            if not getattr(self, name, None):
+                val = retrieve_sync(name)
+                if val:
+                    object.__setattr__(self, name, val)
+        return self
 
     # Long-term memory store. SQLite by default; the EMMA_HOME dir is
     # created on first write. POSTGRES_DSN above remains the optional

@@ -89,6 +89,17 @@ else
     echo "    cd ${EMMA_ROOT} && uv run python -m emma.permissions bootstrap"
 fi
 
+# 7.6 Provision Keychain entries: master sentinel + .env credential migration
+step "Provisioning Keychain"
+if [ -t 0 ] && [ -t 1 ]; then
+    ( cd "${EMMA_ROOT}" && uv run python -m emma.security bootstrap ) || \
+        warn "Keychain bootstrap exited non-zero."
+    ok "Keychain provisioned"
+else
+    warn "Non-interactive shell; skipping Keychain bootstrap. Run manually:"
+    echo "    cd ${EMMA_ROOT} && uv run python -m emma.security bootstrap"
+fi
+
 # 8. Install plist with paths substituted
 step "Installing LaunchAgent"
 mkdir -p "${HOME_DIR}/Library/LaunchAgents" "${LOG_DIR}"
