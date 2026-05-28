@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+import uuid
+from typing import Any, Literal
 
 import structlog
 from openai import AsyncOpenAI
 
 from config.settings import settings
+from core import redaction, secrets
 from memory import long_term, short_term
 
 log = structlog.get_logger("emma.memory.reflection")
@@ -123,25 +125,77 @@ async def reflect_once(window: list[short_term.Turn]) -> list[dict[str, Any]]:
     return cleaned
 
 
+_SENSITIVITY_PROMPT = """Classify the following fact as either "personal" or "secret".
+A fact is "secret" if it contains a password, an account number, a government
+ID, a credit card, a private cryptographic key, or any other value whose
+disclosure would harm the person.
+A fact is "personal" if it describes preferences, habits, names, locations,
+non-sensitive relationships.
+Output a single word: personal or secret."""
+
+
+async def _classify_sensitivity(fact: str) -> Literal["personal", "secret"]:
+    """Route a candidate fact to the Personal or Secret tier.
+
+    Deterministic first: if a redaction pattern fires (card/CURP/RFC/SSN/
+    IBAN/phone/API-key), it's secret. Otherwise ask gpt-4o-mini for the
+    unstructured cases ("my password is ..."). Defaults to personal on LLM
+    failure — the redaction net already catches pattern-based secrets.
+    """
+    if redaction.redact(fact) != fact:
+        return "secret"
+    try:
+        completion = await asyncio.wait_for(
+            _get_client().chat.completions.create(
+                model=settings.MEMORY_REFLECTION_MODEL,
+                messages=[
+                    {"role": "system", "content": _SENSITIVITY_PROMPT},
+                    {"role": "user", "content": fact},
+                ],
+                temperature=0,
+            ),
+            timeout=settings.API_TIMEOUT_S,
+        )
+        answer = (completion.choices[0].message.content or "").strip().lower()
+        return "secret" if "secret" in answer else "personal"
+    except Exception as exc:
+        log.warning("sensitivity_classify_failed", error=str(exc))
+        return "personal"
+
+
 async def reflect_async(window: list[short_term.Turn]) -> None:
-    """Fire-and-forget entrypoint: extract facts and write them to long-term."""
+    """Fire-and-forget entrypoint: extract facts, classify, route, persist.
+
+    Personal facts go to long-term memory; secret-classified facts have their
+    value stored in Keychain and only a placeholder + vault_ref written to the
+    DB. Fact content is never logged (it may be a secret).
+    """
     facts = await reflect_once(window)
     if not facts:
         return
-    written = 0
+    personal = 0
+    secret = 0
     for f in facts:
+        value = f["content"]
         try:
-            await long_term.remember(
-                f["content"],
-                kind=f["kind"],
-                confidence=f["confidence"],
-                source="reflection",
-            )
-            written += 1
+            tier = await _classify_sensitivity(value)
+            if tier == "secret":
+                label = f"fact_{uuid.uuid4().hex[:8]}"
+                await secrets.store(label, value, kind="secret_fact")
+                await long_term.remember(
+                    "secret", kind=f["kind"], confidence=f["confidence"],
+                    source="reflection", vault_ref=label,
+                )
+                secret += 1
+            else:
+                await long_term.remember(
+                    value, kind=f["kind"], confidence=f["confidence"], source="reflection"
+                )
+                personal += 1
         except Exception as exc:
-            log.warning("reflection_write_failed", error=str(exc), content=f.get("content"))
-    if written:
-        log.info("reflection_committed", count=written)
+            log.warning("reflection_write_failed", error=str(exc), content="<hidden>")
+    if personal or secret:
+        log.info("reflection_committed", personal=personal, secret=secret)
 
 
 def schedule_reflection(window: list[short_term.Turn]) -> asyncio.Task[None] | None:

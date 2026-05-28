@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS facts (
     source         TEXT NOT NULL DEFAULT 'explicit',
     created_at     REAL NOT NULL,
     last_seen_at   REAL NOT NULL,
-    times_observed INTEGER NOT NULL DEFAULT 1
+    times_observed INTEGER NOT NULL DEFAULT 1,
+    vault_ref      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_facts_kind ON facts(kind);
 CREATE INDEX IF NOT EXISTS idx_facts_conf ON facts(confidence DESC);
@@ -77,19 +78,22 @@ class Fact:
     created_at: float
     last_seen_at: float
     times_observed: int = 1
+    vault_ref: str | None = None  # Keychain label when the value is Secret-tier
 
 
-def _ensure_times_observed(conn: sqlite3.Connection) -> None:
-    """Add the times_observed column to a pre-semantic-era facts table.
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """Add columns to a pre-existing facts table that lacks them.
 
-    ``CREATE TABLE IF NOT EXISTS`` won't alter an existing table, so DBs
-    created before this column existed need a one-time ALTER. Idempotent.
+    ``CREATE TABLE IF NOT EXISTS`` won't alter an existing table, so older
+    DBs need one-time ALTERs. Idempotent.
     """
     cols = {r[1] for r in conn.execute("PRAGMA table_info(facts)").fetchall()}
     if "times_observed" not in cols:
         conn.execute(
             "ALTER TABLE facts ADD COLUMN times_observed INTEGER NOT NULL DEFAULT 1"
         )
+    if "vault_ref" not in cols:
+        conn.execute("ALTER TABLE facts ADD COLUMN vault_ref TEXT")
 
 
 def _connect() -> sqlite3.Connection:
@@ -103,7 +107,7 @@ def _connect() -> sqlite3.Connection:
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
     conn.executescript(_SCHEMA)
-    _ensure_times_observed(conn)
+    _ensure_columns(conn)
     return conn
 
 
@@ -123,6 +127,7 @@ def _row_to_fact(row: sqlite3.Row) -> Fact:
         created_at=row["created_at"],
         last_seen_at=row["last_seen_at"],
         times_observed=row["times_observed"] if "times_observed" in keys else 1,
+        vault_ref=row["vault_ref"] if "vault_ref" in keys else None,
     )
 
 
@@ -159,33 +164,43 @@ def _remember_sync(content: str, kind: str, confidence: float, source: str) -> i
 
 
 def _remember_with_vec_sync(
-    content: str, kind: str, confidence: float, source: str, vec: list[float]
+    content: str,
+    kind: str,
+    confidence: float,
+    source: str,
+    vec: list[float],
+    vault_ref: str | None = None,
 ) -> int:
     """Semantic upsert: bump the nearest fact if cosine sim >= _DEDUP_MIN_SIM,
     else insert a new fact + its embedding. `vec` is pre-computed by the
     async caller (embedding is a network call; SQL stays in this thread).
+
+    Secret-tier facts (``vault_ref`` set) skip dedup entirely: their content
+    is a near-identical placeholder, so cosine dedup would wrongly merge two
+    different secrets into one row.
     """
     now = time.time()
     qv = _serialize(vec)
     with _connect() as conn:
-        nearest = conn.execute(
-            "SELECT rowid, distance FROM facts_vec "
-            "WHERE embedding MATCH ? ORDER BY distance LIMIT 1",
-            (qv,),
-        ).fetchone()
-        if nearest is not None and (1.0 - float(nearest["distance"])) >= _DEDUP_MIN_SIM:
-            rid = int(nearest["rowid"])
-            conn.execute(
-                "UPDATE facts SET times_observed = times_observed + 1, "
-                "confidence = MIN(confidence + 0.05, 1.0), last_seen_at = ?, source = ? "
-                "WHERE id = ?",
-                (now, source, rid),
-            )
-            return rid
+        if vault_ref is None:
+            nearest = conn.execute(
+                "SELECT rowid, distance FROM facts_vec "
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT 1",
+                (qv,),
+            ).fetchone()
+            if nearest is not None and (1.0 - float(nearest["distance"])) >= _DEDUP_MIN_SIM:
+                rid = int(nearest["rowid"])
+                conn.execute(
+                    "UPDATE facts SET times_observed = times_observed + 1, "
+                    "confidence = MIN(confidence + 0.05, 1.0), last_seen_at = ?, source = ? "
+                    "WHERE id = ?",
+                    (now, source, rid),
+                )
+                return rid
         cur = conn.execute(
             "INSERT INTO facts (content, kind, confidence, source, created_at, "
-            "last_seen_at, times_observed) VALUES (?, ?, ?, ?, ?, ?, 1)",
-            (content, kind, confidence, source, now, now),
+            "last_seen_at, times_observed, vault_ref) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+            (content, kind, confidence, source, now, now, vault_ref),
         )
         rid = int(cur.lastrowid)
         conn.execute("INSERT INTO facts_vec(rowid, embedding) VALUES (?, ?)", (rid, qv))
@@ -198,7 +213,7 @@ def _recall_sync(query: str | None, limit: int) -> list[Fact]:
             rows = conn.execute(
                 """
                 SELECT * FROM facts
-                WHERE content LIKE ? OR kind LIKE ?
+                WHERE vault_ref IS NULL AND (content LIKE ? OR kind LIKE ?)
                 ORDER BY confidence DESC, last_seen_at DESC
                 LIMIT ?
                 """,
@@ -208,6 +223,7 @@ def _recall_sync(query: str | None, limit: int) -> list[Fact]:
             rows = conn.execute(
                 """
                 SELECT * FROM facts
+                WHERE vault_ref IS NULL
                 ORDER BY confidence DESC, last_seen_at DESC
                 LIMIT ?
                 """,
@@ -234,7 +250,7 @@ def _recall_vec_sync(query_vec: bytes, limit: int) -> list[Fact]:
             if sim < _RECALL_MIN_SIM:
                 continue
             frow = conn.execute(
-                "SELECT * FROM facts WHERE id = ?", (row["rowid"],)
+                "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL", (row["rowid"],)
             ).fetchone()
             if frow is not None:
                 out.append(_row_to_fact(frow))
@@ -263,19 +279,31 @@ def _count_sync() -> int:
 
 
 async def remember(
-    content: str, *, kind: str = "general", confidence: float = 0.7, source: str = "explicit"
+    content: str,
+    *,
+    kind: str = "general",
+    confidence: float = 0.7,
+    source: str = "explicit",
+    vault_ref: str | None = None,
 ) -> int:
     """Store a fact, deduplicating semantically (cosine >= _DEDUP_MIN_SIM).
 
     Embeds the content (async), then upserts: a near-duplicate bumps the
     existing fact's confidence/observation count instead of inserting a row.
+
+    If ``vault_ref`` is set, the fact is Secret-tier: the value lives in
+    Keychain under that label, and we store ONLY a placeholder as content —
+    so the secret never lands in ``memory.db``, never gets embedded (which
+    would ship it to the embedding API), and never reaches the priming block.
     """
+    if vault_ref:
+        content = f"(stored as secret: {vault_ref})"
     content = content.strip()
     if not content:
         return -1
     vec = await embeddings.embed(content)
     return await asyncio.to_thread(
-        _remember_with_vec_sync, content, kind, confidence, source, vec
+        _remember_with_vec_sync, content, kind, confidence, source, vec, vault_ref
     )
 
 
