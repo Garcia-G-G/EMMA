@@ -116,3 +116,20 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 - **Self-awareness**: `tools/self_tool.py` regenerates `self/capabilities.md` from the live tool registry at startup. The `describe_capabilities` tool reads this file.
 - **Crash reports**: Written to `~/Library/Logs/Emma/crashes/`. Rate-limited Terminal auto-open (3 per 60s). The `say` command (not the Realtime API) speaks the failure.
 - **Service lifecycle**: Runs as a launchd agent (`com.garcia.emma`). Dev mode disables the agent and opens a Terminal with resume instructions. Exit 0 = stay stopped; exit 1 = launchd restarts.
+
+## Permissions convention (mandatory)
+
+Every TCC permission Emma needs is requested **upfront at install time** via
+`python -m emma.permissions bootstrap` (installer step 7.5, before the
+LaunchAgent loads). No permission may surface as a surprise pop-up during use.
+
+When adding a tool or feature that needs a new permission:
+1. Add the app/pane to the bootstrap list in `core/permissions.py`
+   (`_AUTOMATION_APPS` or `_MANUAL_PANES`).
+2. Add or extend the corresponding probe function (`check_*`).
+3. Verify the install script re-runs cleanly end-to-end.
+4. Document the new permission in the prompt that adds the feature.
+
+Permissions covered today: Microphone, Automation (Calendar, Mail, Messages,
+Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility, Full Disk
+Access.
