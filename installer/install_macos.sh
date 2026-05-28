@@ -77,6 +77,18 @@ if ! ( cd "${EMMA_ROOT}" && uv run python -c "from config.settings import settin
 fi
 ok ".env validated"
 
+# 7.5 Pre-request macOS permissions (must run BEFORE the LaunchAgent so dialogs
+# appear under the install-time Terminal session, not in the background daemon).
+step "Requesting macOS permissions"
+if [ -t 0 ] && [ -t 1 ]; then
+    ( cd "${EMMA_ROOT}" && uv run python -m emma.permissions bootstrap ) || \
+        warn "Permission bootstrap exited non-zero (some dialogs may need manual approval)."
+    ok "Permission bootstrap finished"
+else
+    warn "Non-interactive shell; skipping permission bootstrap. Run manually:"
+    echo "    cd ${EMMA_ROOT} && uv run python -m emma.permissions bootstrap"
+fi
+
 # 8. Install plist with paths substituted
 step "Installing LaunchAgent"
 mkdir -p "${HOME_DIR}/Library/LaunchAgents" "${LOG_DIR}"

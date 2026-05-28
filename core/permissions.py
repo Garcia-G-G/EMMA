@@ -8,6 +8,7 @@ relevant System Settings pane.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import subprocess
 from typing import Literal
@@ -137,3 +138,103 @@ def preflight() -> bool:
         # First-run prompt; not fatal.
 
     return proceed
+
+
+# === Bootstrap (install-time) =================================================
+
+# Apps the AppleScript tools control. Must stay in sync with tools/*.
+# The first 7 come from tools/{calendar,mail,messages,notes,reminders,safari,
+# finder}_tool.py; "Music" is controlled by tools/music.py and "Terminal" by
+# tools/dev.py (dev-mode resume window) — both surfaced in the pre-flight audit.
+_AUTOMATION_APPS = (
+    "Calendar",
+    "Mail",
+    "Messages",
+    "Notes",
+    "Reminders",
+    "Safari",
+    "Finder",
+    "Music",
+    "Terminal",
+)
+
+# Permissions Apple does not let us trigger programmatically.
+# We open the Settings pane and speak instructions.
+_MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
+    ("Accessibility", "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas."),
+    ("AllFiles", "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas."),
+)
+
+
+async def _ping_automation(app: str) -> tuple[str, bool]:
+    """Trigger the Automation permission dialog for `app` via a minimal AppleScript.
+
+    macOS does not expose the user's choice; we treat a clean execution as
+    'dialog shown, user responded somehow.' Returns (app, executed_without_error).
+    """
+    script = f'tell application "{app}" to count windows'
+    proc = await asyncio.create_subprocess_exec(
+        "/usr/bin/osascript",
+        "-e",
+        script,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout=5.0)
+    except TimeoutError:
+        proc.kill()
+        return (app, False)
+    return (app, proc.returncode == 0)
+
+
+async def _ping_microphone() -> bool:
+    """Trigger the Microphone permission dialog with a short capture probe."""
+    return check_microphone()  # reuse the existing probe
+
+
+async def bootstrap() -> dict:
+    """Interactive install-time permission walkthrough.
+
+    Prints headers, speaks one-line context in Spanish, triggers each system
+    dialog (or opens Settings for manual panes). Returns a dict of
+    {permission: status} for the final report.
+    """
+    results: dict[str, str] = {}
+
+    print("\n=== Permisos de macOS ===")
+    print("Voy a abrir cada diálogo de permisos. Dale Allow a cada uno.\n")
+
+    # 1. Microphone
+    print("→ Micrófono")
+    _say("Primero, micrófono. Dale Allow.")
+    mic_ok = await _ping_microphone()
+    results["Microphone"] = "granted" if mic_ok else "denied_or_pending"
+    await asyncio.sleep(2)
+
+    # 2. Automation (one prompt per app)
+    for app in _AUTOMATION_APPS:
+        print(f"→ Automation: {app}")
+        _say(f"Permiso para controlar {app}. Dale Allow.")
+        await _ping_automation(app)
+        results[f"Automation:{app}"] = "dialog_shown"
+        await asyncio.sleep(2)
+
+    # 3. Manual panes (Accessibility, Full Disk Access)
+    for pane, instruction in _MANUAL_PANES:
+        print(f"→ Manual: {pane}")
+        _say(instruction)
+        _open_settings(pane)
+        results[pane] = "settings_opened"
+        await asyncio.sleep(4)  # give the user time to interact
+
+    # Recap
+    print("\n=== Resumen ===")
+    for k, v in results.items():
+        print(f"  {k}: {v}")
+    print(
+        "\nSi te perdiste algún diálogo, abre Configuración del Sistema → "
+        "Privacidad y Seguridad y autoriza manualmente.\n"
+    )
+    _say("Listo, permisos pedidos.")
+    return results
