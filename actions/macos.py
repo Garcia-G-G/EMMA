@@ -44,13 +44,19 @@ def osascript_jxa(script: str) -> str:
     return _run(["osascript", "-l", "JavaScript", "-e", script])
 
 
-async def osascript(script: str, timeout_s: float = 8.0) -> str:
+async def osascript(script: str, timeout_s: float = 15.0) -> str:
     """Run an AppleScript via ``osascript -e``, returning stdout.
 
     Async (non-blocking) counterpart to :func:`run_applescript`; the
     AppleScript-driven tools (Calendar/Mail/Notes/...) use this so they
     never block the Pipecat event loop. Raises :class:`AppleScriptError`
     on a non-zero exit or timeout.
+
+    On timeout the error message carries the ``app_dialog_blocked`` marker:
+    the usual cause is a destructive op (delete an event/note) triggering a
+    macOS confirmation dialog that blocks osascript. Callers check for that
+    marker and tell the user to authorize on screen instead of showing a
+    generic failure. The app name isn't knowable at this layer.
     """
     proc = await asyncio.create_subprocess_exec(
         "/usr/bin/osascript",
@@ -63,7 +69,10 @@ async def osascript(script: str, timeout_s: float = 8.0) -> str:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
     except TimeoutError:
         proc.kill()
-        raise AppleScriptError(f"osascript timed out after {timeout_s}s") from None
+        raise AppleScriptError(
+            f"app_dialog_blocked: osascript timed out after {timeout_s}s "
+            "(an app likely opened a confirmation dialog)"
+        ) from None
     if proc.returncode != 0:
         raise AppleScriptError(stderr.decode("utf-8", errors="replace").strip())
     return stdout.decode("utf-8", errors="replace").strip()

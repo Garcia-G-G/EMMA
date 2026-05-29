@@ -167,3 +167,48 @@ async def create_event(
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude crear el evento: {exc}", False)
     return ToolResult(True, {"title": title}, f"Listo, creé '{title}'.", False)
+
+
+@tool(destructive=True)
+async def delete_event(title: str, date: str = "", confirmed: bool = False) -> ToolResult:
+    """Borra evento(s) del calendario cuyo título es `title`. Pide confirmación.
+
+    `date` es opcional y solo se usa para la pregunta de confirmación.
+    """
+    if not confirmed:
+        when = f" del {date}" if date else ""
+        return ToolResult(
+            True,
+            {"title": title, "date": date},
+            f"¿Borro el evento '{title}'{when}?",
+            True,
+        )
+    t = macos.esc_applescript(title)
+    script = (
+        'tell application "Calendar"\n'
+        "set deletedCount to 0\n"
+        "repeat with cal in calendars\n"
+        f'  repeat with ev in (every event of cal whose summary is "{t}")\n'
+        "    delete ev\n"
+        "    set deletedCount to deletedCount + 1\n"
+        "  end repeat\n"
+        "end repeat\n"
+        "return deletedCount\n"
+        "end tell"
+    )
+    try:
+        out = await macos.osascript(script, timeout_s=15.0)
+    except macos.AppleScriptError as exc:
+        msg = str(exc)
+        if "app_dialog_blocked" in msg:
+            return ToolResult(
+                False, None, "macOS me pidió confirmar en pantalla. Autorízalo y dime otra vez.", False
+            )
+        return ToolResult(False, None, f"No pude borrar el evento: {msg}", False)
+    try:
+        n = int((out or "0").strip())
+    except ValueError:
+        n = 0
+    if n == 0:
+        return ToolResult(True, {"deleted": 0}, f"No encontré ningún evento '{title}'.", False)
+    return ToolResult(True, {"deleted": n}, f"Listo, borré '{title}'.", False)
