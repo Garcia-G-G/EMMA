@@ -77,12 +77,12 @@ def _missing_creds_result() -> ToolResult:
     )
 
 
-def _apple_music(script: str, ok_msg: str) -> ToolResult:
+def _apple_music(script: str, ok_msg: str, *, ends_session: bool = False) -> ToolResult:
     try:
         macos.run_applescript(script)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"Música no respondió: {exc}", False)
-    return ToolResult(True, None, ok_msg, False)
+    return ToolResult(True, None, ok_msg, False, ends_session=ends_session)
 
 
 @tool()
@@ -93,6 +93,7 @@ def play_track(query: str) -> ToolResult:
         return _apple_music(
             f'tell application "Music" to (play (first track of (search library 1 for "{query}")))',
             f"Reproduciendo {query} en Música.",
+            ends_session=True,
         )
     try:
         results = sp.search(q=query, type="track", limit=1)
@@ -119,6 +120,7 @@ def play_track(query: str) -> ToolResult:
             {"uri": uri, "title": title, "artist": artist},
             f"Reproduciendo {title} de {artist}.",
             False,
+            ends_session=True,
         )
     except Exception as exc:
         log.error("spotify_play_failed", error=str(exc))
@@ -133,6 +135,7 @@ def play_playlist(name: str) -> ToolResult:
         return _apple_music(
             f'tell application "Music" to play playlist "{name}"',
             f"Reproduciendo la lista {name} en Música.",
+            ends_session=True,
         )
     try:
         results = sp.current_user_playlists(limit=50)
@@ -143,27 +146,30 @@ def play_playlist(name: str) -> ToolResult:
         if match is None:
             return ToolResult(False, None, f"No tengo una lista llamada '{name}'.", False)
         sp.start_playback(context_uri=match["uri"])
-        return ToolResult(True, {"uri": match["uri"]}, f"Reproduciendo {match['name']}.", False)
+        return ToolResult(
+            True, {"uri": match["uri"]}, f"Reproduciendo {match['name']}.", False, ends_session=True
+        )
     except Exception as exc:
         return ToolResult(False, None, f"Spotify falló: {exc}", False)
 
 
 def _spotify_transport(
-    method: str, ok_msg: str, fallback_script: str, fallback_msg: str
+    method: str, ok_msg: str, fallback_script: str, fallback_msg: str, *, ends_session: bool = False
 ) -> ToolResult:
     sp = _spotify()
     if sp is None:
-        return _apple_music(fallback_script, fallback_msg)
+        return _apple_music(fallback_script, fallback_msg, ends_session=ends_session)
     try:
         getattr(sp, method)()
     except Exception as exc:
         return ToolResult(False, None, f"Spotify falló: {exc}", False)
-    return ToolResult(True, None, ok_msg, False)
+    return ToolResult(True, None, ok_msg, False, ends_session=ends_session)
 
 
 @tool()
 def pause() -> ToolResult:
     """Pause whatever is playing."""
+    # pause stops the audio, so the mic no longer fights it — keep listening.
     return _spotify_transport(
         "pause_playback", "Pausado.", 'tell application "Music" to pause', "Pausado."
     )
@@ -173,7 +179,7 @@ def pause() -> ToolResult:
 def resume() -> ToolResult:
     """Resume playback."""
     return _spotify_transport(
-        "start_playback", "Listo.", 'tell application "Music" to play', "Listo."
+        "start_playback", "Listo.", 'tell application "Music" to play', "Listo.", ends_session=True
     )
 
 
@@ -185,6 +191,7 @@ def next_track() -> ToolResult:
         "Siguiente.",
         'tell application "Music" to next track',
         "Siguiente.",
+        ends_session=True,
     )
 
 
@@ -196,6 +203,7 @@ def previous_track() -> ToolResult:
         "Anterior.",
         'tell application "Music" to previous track',
         "Anterior.",
+        ends_session=True,
     )
 
 
