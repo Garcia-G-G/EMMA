@@ -249,6 +249,16 @@ async def _build_instructions() -> str:
         "an alternative.\n"
         "- run_command: use ONE simple command. Never chain with "
         "&& or write inline scripts. Call multiple times if needed.\n\n"
+        "# Defaults & apps\n"
+        "- You CAN set and change Garcia's preferred app per category "
+        "(editor/ide, terminal, music, browser) and read it back. When he asks "
+        "to set or change a default ('usa VS Code', 'hazme default Chrome', "
+        "'prefiero Zed'), just do it with your tools — never refuse.\n"
+        "- Only ever pick or open an app Garcia actually has installed. If you "
+        "are not sure what he has, check with your tools FIRST. Never assume an "
+        "app is present — e.g. don't open Firefox if he only has Chrome.\n"
+        "- If he wants an app he doesn't have, say so and offer to install it; "
+        "don't silently fail.\n\n"
         "# Forbidden\n"
         "- No filler: 'Great question!', 'Absolutely!', 'Of course!'\n"
         "- No closers: '¿Algo más?', 'Anything else?'\n"
@@ -329,7 +339,12 @@ async def build_pipeline() -> tuple[
     cancel / idle-timeout. The auth_watcher lets run_session detect a
     terminal auth error and exit non-zero instead of reconnecting.
     """
-    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=4000.0)
+    # barge_in_rms must sit ABOVE Emma's own speaker echo or she self-interrupts
+    # after ~1 word. Measured echo on this MacBook ranged 4000-12600 RMS
+    # (median ~5400); anything at/below that let the echo through to the Realtime
+    # VAD. 18000 suppresses the echo while still letting a deliberate, close,
+    # louder human voice barge in.
+    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=18000.0)
 
     transport = LocalAudioTransport(
         LocalAudioTransportParams(

@@ -249,7 +249,10 @@ async def _install_ide_and_set_defaults(spoken_lang: str) -> tuple[bool, str]:
 
     smoke_launch(rec["human"])
 
-    entry = next(e for e in environment.IDE_SHORTLIST if e["key"] == rec["key"])
+    entry = next((e for e in environment.IDE_SHORTLIST if e["key"] == rec["key"]), None)
+    if entry is None:
+        log.error("ide_shortlist_missing_key", key=rec["key"])
+        return False, "No encontré el editor recomendado en la lista."
     duti_result = set_ide_default(entry["bundle"])
     log.info("duti_set_ide_default", **duti_result)
 
