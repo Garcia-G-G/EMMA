@@ -13,6 +13,7 @@ hooks — not yet implemented.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import uuid
 from datetime import UTC, datetime
@@ -20,7 +21,7 @@ from datetime import UTC, datetime
 import structlog
 
 from config.settings import settings
-from core import conversation, dev_state, events_bus
+from core import background, conversation, dev_state, events_bus
 from core.wake_word import listen_for_wake_word
 
 log = structlog.get_logger("emma.orchestrator")
@@ -108,6 +109,9 @@ async def main_loop() -> None:
     propagates so ``__main__`` can exit non-zero. Only ordinary
     ``RuntimeError``/``Exception`` per-session faults are caught and retried.
     """
+    # Touch the background-task registry once: loads ~/.emma/tasks.jsonl and
+    # marks any in-flight rows from a previous run as "aborted" on disk.
+    background.registry()
     log.info("waiting_for_wake")
     try:
         while not _shutdown.is_set():
@@ -125,6 +129,11 @@ async def main_loop() -> None:
                 log.info("dev_mode_exit")
                 break
     finally:
+        # Cancel any in-flight background tasks so Python exits without
+        # "pending task" warnings (their detached subprocesses outlive us if
+        # started with start_new_session — by design).
+        with contextlib.suppress(Exception):
+            await background.registry().cancel_all()
         try:
             from tools.browser import shutdown_browser
 

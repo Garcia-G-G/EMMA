@@ -150,3 +150,24 @@ When adding a tool or feature:
 5. Anything sent to OpenAI must be filterable; the priming block excludes `vault_ref IS NOT NULL`.
 
 The architectural rule: **no secret-tier value ever lands in `memory.db`, in logs, or in the system prompt.** See `SECURITY.md` for the full threat model.
+
+## Background tasks convention (mandatory)
+
+Any tool that may take more than ~3 seconds, or that fires a subprocess Garcia
+might want to walk away from, MUST be a background task — not a synchronous tool
+call. The pattern:
+
+1. Tool dispatches to `core/background.py:registry().start(...)` and returns
+   immediately with a user-facing "te aviso cuando termine" message.
+2. `core/background.py` owns the asyncio.Task, captures last 8KB of output,
+   persists to `~/.emma/tasks.jsonl`, fires `events_bus.publish("task_started")`
+   and `events_bus.publish("task_completed")`, plus a macOS notification on
+   completion.
+3. Voice queries (list_my_tasks / task_status / wait_for_my_task / cancel_my_task)
+   read from the same registry.
+
+When adding a new "do thing X" tool:
+- Synchronous + fast (< 3s): regular `@tool()` function.
+- Long-running or potentially blocking: register the work via
+  `background.registry().start(...)` and return an "I started it" ToolResult.
+- Destructive long-running: combine `destructive=True` + the background pattern.
