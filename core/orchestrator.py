@@ -35,6 +35,18 @@ def enable_simulate_crash() -> None:
     _simulate_crash = True
 
 
+def request_shutdown() -> None:
+    """Ask the main loop to stop after the current session.
+
+    Called by emma.__main__'s SIGINT/SIGTERM handler IN ADDITION to cancelling
+    the orchestrator task. Cancellation alone is not enough: while a Pipecat
+    session is active, ``runner.run`` swallows the CancelledError and returns
+    normally (the same path as an idle timeout), so the loop would otherwise
+    spin back to wake-word listening. This flag makes it exit instead.
+    """
+    _shutdown.set()
+
+
 def last_context() -> dict[str, str]:
     """Snapshot used by the crash handler. Transcripts wire in Prompt 14."""
     return {"turn_id": _last_turn_id, "last_transcript": "", "response_text": ""}

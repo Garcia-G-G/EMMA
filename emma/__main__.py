@@ -113,6 +113,10 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
 
     def _shutdown(sig: int) -> None:
         log.info("signal_received", sig=signal.Signals(sig).name)
+        # Set the flag first so the loop exits even if Pipecat swallows the
+        # cancel during an active session; cancel makes idle wake-listening
+        # unwind immediately.
+        orchestrator.request_shutdown()
         orchestrator_task.cancel()
 
     loop = asyncio.get_running_loop()
