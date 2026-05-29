@@ -12,6 +12,9 @@ dist/
 .vscode/
 .idea/
 .env
+.env.*
+!.env.example
+*.bak
 .emma/
 logs/
 config/wake_words/*.onnx
