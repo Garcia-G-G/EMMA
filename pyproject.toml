@@ -27,6 +27,8 @@ dependencies = [
     "pipecat-ai[openai,silero]>=1.2.1",
     "pyaudio>=0.2.14",
     "sqlite-vec>=0.1.9",
+    "pyobjc-framework-cocoa>=12.1",
+    "pyobjc-framework-webkit>=12.1",
 ]
 
 [dependency-groups]

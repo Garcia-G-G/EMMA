@@ -25,6 +25,8 @@
         <string>@EMMA_ROOT@</string>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>EMMA_DASHBOARD</key>
+        <string>true</string>
     </dict>
 
     <key>RunAtLoad</key>

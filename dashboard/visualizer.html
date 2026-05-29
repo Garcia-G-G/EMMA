@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma · Core</title>
+<style>
+html, body { margin: 0; padding: 0; background: #03070d; color: #5cf2ff; font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace; overflow: hidden; height: 100%; }
+body.idle { cursor: none; }
+.jb-stage { position: fixed; inset: 0; background: #03070d; overflow: hidden; }
+#jb-host, #jb-host canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
+.vignette { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px rgba(0,0,0,0.9); z-index: 2; }
+.scan { position: absolute; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(92,242,255,0.45), transparent); animation: scan 11s linear infinite; pointer-events: none; z-index: 3; }
+@keyframes scan { from { top: -2%; } to { top: 102%; } }
+.label { position: absolute; font-size: 9.5px; letter-spacing: 0.22em; opacity: 0.7; z-index: 4; text-shadow: 0 0 8px rgba(92,242,255,0.35); text-transform: uppercase; }
+.label .accent { color: #b8fffa; }
+.label .small { display: block; opacity: 0.45; margin-top: 3px; font-size: 8.5px; letter-spacing: 0.2em; }
+.l-tl { top: 22px; left: 22px; }
+.l-tr { top: 22px; right: 22px; text-align: right; }
+.l-bl { bottom: 64px; left: 22px; }
+.status-block { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); text-align: center; z-index: 4; text-shadow: 0 0 12px rgba(92,242,255,0.5); }
+.status-block .state { font-size: 12px; letter-spacing: 0.5em; color: #ffffff; opacity: 0.95; }
+.status-block .meta { font-size: 9.5px; letter-spacing: 0.28em; color: #5cf2ff; opacity: 0.55; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="jb-stage">
+  <div id="jb-host"></div>
+  <div class="vignette"></div>
+  <div class="scan"></div>
+  <div class="label l-tl"><span class="accent">EMMA</span> CORE<div class="small">v 2.0 · realtime</div></div>
+  <div class="label l-tr"><span class="accent">LAT</span> <span id="lat">— —</span><div class="small">vad <span id="vad">0.75</span></div></div>
+  <div class="label l-bl"><span class="accent">LAST TOOL</span><div class="small" id="last-tool">— —</div></div>
+  <div class="status-block">
+    <div class="state" id="state">WAITING</div>
+    <div class="meta"><span id="voice">marin · es</span> · session <span id="clock">00:00</span></div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* 1. THREE scene (approved preview, with hooks for reactivity) */
+(function () {
+  var host = document.getElementById('jb-host');
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x03070d, 5.5, 22);
+  var camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 60);
+  camera.position.set(0, 0.9, 4.6);
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
+  host.appendChild(renderer.domElement);
+
+  var CYAN = 0x5cf2ff, HIGH = 0xb8fffa;
+  function grid(y, opacity, size, divisions) {
+    var g = new THREE.GridHelper(size, divisions, CYAN, CYAN);
+    g.position.y = y; g.material.transparent = true; g.material.opacity = opacity;
+    return g;
+  }
+  scene.add(grid(-1.7, 0.28, 30, 30));
+  scene.add(grid(2.0, 0.14, 30, 30));
+
+  function wireframe(geo, color, opacity) {
+    var edges = new THREE.EdgesGeometry(geo);
+    return new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: opacity }));
+  }
+  var octa = wireframe(new THREE.OctahedronGeometry(0.9, 0), HIGH, 0.95); scene.add(octa);
+  var icosa = wireframe(new THREE.IcosahedronGeometry(0.5, 0), 0xffffff, 0.95); scene.add(icosa);
+
+  var rays = new THREE.Group();
+  for (var i = 0; i < 18; i++) {
+    var theta = (i / 18) * Math.PI * 2;
+    var phi = (Math.random() - 0.5) * 1.1;
+    var r = 2.2 + Math.random() * 0.5;
+    var end = new THREE.Vector3(Math.cos(theta) * Math.cos(phi) * r, Math.sin(phi) * r, Math.sin(theta) * Math.cos(phi) * r);
+    var geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), end]);
+    rays.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.16 + Math.random() * 0.18 })));
+  }
+  scene.add(rays);
+
+  function ping(radius) {
+    var seg = 64, pts = [];
+    for (var k = 0; k <= seg; k++) { var a = (k / seg) * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius)); }
+    return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: CYAN, transparent: true, opacity: 0.9 }));
+  }
+  var pings = [];
+  for (var p = 0; p < 2; p++) { var pg = ping(0.3); pg.userData = { phase: p * 1.5 }; pings.push(pg); scene.add(pg); }
+
+  /* 2. State machine: drives ring opacity + rotation speed + core pulse */
+  var STATE = {
+    waiting_for_wake: { rayOpacityScale: 0.45, rotSpeed: 0.5, label: 'WAITING' },
+    listening:        { rayOpacityScale: 0.75, rotSpeed: 0.9, label: 'LISTENING' },
+    thinking:         { rayOpacityScale: 1.10, rotSpeed: 1.4, label: 'THINKING' },
+    speaking:         { rayOpacityScale: 1.35, rotSpeed: 1.7, label: 'SPEAKING' },
+  };
+  var current = STATE.waiting_for_wake;
+  var outputLevel = 0; /* 0..1, smoothed */
+  var outputTarget = 0;
+
+  function setState(name) {
+    if (!STATE[name]) return;
+    current = STATE[name];
+    document.getElementById('state').textContent = current.label;
+  }
+
+  var baseRayOpacities = rays.children.map(function (l) { return l.material.opacity; });
+
+  var t = 0;
+  function loop() {
+    t += 0.012;
+    outputLevel += (outputTarget - outputLevel) * 0.18;
+
+    rays.rotation.y += 0.0025 * current.rotSpeed;
+    for (var i = 0; i < rays.children.length; i++) {
+      rays.children[i].material.opacity = baseRayOpacities[i] * current.rayOpacityScale;
+    }
+    octa.rotation.x += 0.005 * current.rotSpeed;
+    octa.rotation.y += 0.007 * current.rotSpeed;
+    icosa.rotation.x -= 0.011 * current.rotSpeed;
+    icosa.rotation.z += 0.008 * current.rotSpeed;
+    var pulse = 0.82 + Math.sin(t * 2.2) * 0.18 + outputLevel * 0.35;
+    icosa.material.opacity = Math.min(1.0, pulse);
+    var scl = 1.0 + outputLevel * 0.25 + Math.sin(t * 2.2) * 0.04;
+    icosa.scale.set(scl, scl, scl);
+
+    for (var k = 0; k < pings.length; k++) {
+      var pg = pings[k]; var phase = (t + pg.userData.phase) % 3.0; var r = 0.3 + phase * 1.1;
+      pg.scale.set(r, 1, r); pg.material.opacity = Math.max(0, 1 - phase / 3.0);
+    }
+
+    var camAng = t * 0.07;
+    camera.position.x = Math.sin(camAng) * 0.55;
+    camera.position.y = 0.9 + Math.sin(t * 0.14) * 0.22;
+    camera.position.z = 4.6 + Math.cos(camAng) * 0.2;
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  window.addEventListener('resize', function () {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  /* 3. Session clock (only ticks when a session is active) */
+  var sessionStart = null;
+  setInterval(function () {
+    var el = document.getElementById('clock');
+    if (sessionStart === null) { el.textContent = '00:00'; return; }
+    var s = Math.floor((Date.now() - sessionStart) / 1000);
+    el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }, 250);
+
+  /* 4. WebSocket subscriber with exponential backoff (1s -> 16s cap) */
+  var backoff = 1000;
+  function connect() {
+    var ws = new WebSocket('ws://' + window.location.hostname + ':3201/events');
+    ws.onopen = function () { backoff = 1000; };
+    ws.onmessage = function (ev) {
+      var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type === 'init') {
+        if (msg.vad_threshold != null) document.getElementById('vad').textContent = msg.vad_threshold.toFixed(2);
+      } else if (msg.type === 'state') {
+        setState(msg.state);
+        if (msg.state === 'waiting_for_wake') sessionStart = null;
+      } else if (msg.type === 'session_started') {
+        sessionStart = Date.now();
+      } else if (msg.type === 'session_ended') {
+        sessionStart = null;
+      } else if (msg.type === 'latency') {
+        document.getElementById('lat').textContent = (msg.wake_to_first_audio_ms / 1000).toFixed(2) + ' s';
+      } else if (msg.type === 'tool_completed') {
+        document.getElementById('last-tool').textContent = msg.name + ' · ' + msg.elapsed_ms + ' ms';
+      } else if (msg.type === 'output_level') {
+        outputTarget = Math.max(0, Math.min(1, msg.level));
+      }
+    };
+    ws.onclose = function () { setTimeout(connect, backoff); backoff = Math.min(backoff * 2, 16000); };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+  connect();
+
+  /* 5. Cursor auto-hide after 3s idle */
+  var hideT;
+  function poke() { document.body.classList.remove('idle'); clearTimeout(hideT); hideT = setTimeout(function () { document.body.classList.add('idle'); }, 3000); }
+  ['mousemove', 'mousedown', 'keydown', 'touchstart'].forEach(function (e) { window.addEventListener(e, poke); });
+  poke();
+})();
+</script>
+</body>
+</html>

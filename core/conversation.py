@@ -29,6 +29,7 @@ package source:
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from typing import Any
 
@@ -41,7 +42,9 @@ from pipecat.frames.frames import (
     Frame,
     LLMContextFrame,
     LLMTextFrame,
+    OutputAudioRawFrame,
     TranscriptionFrame,
+    UserStartedSpeakingFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -67,6 +70,7 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
+from core import events_bus
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -118,8 +122,10 @@ class EchoGateProcessor(FrameProcessor):
         await super().process_frame(frame, direction)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
+            events_bus.publish("state", state="speaking")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._gate.set_bot_speaking(False)
+            events_bus.publish("state", state="listening")
         await self.push_frame(frame, direction)
 
 
@@ -139,6 +145,8 @@ class TranscriptCollector(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
+        if isinstance(frame, UserStartedSpeakingFrame):
+            events_bus.publish("state", state="thinking")
         if isinstance(frame, TranscriptionFrame) and frame.text:
             self._user_text += frame.text + " "
         elif isinstance(frame, LLMTextFrame) and frame.text:
@@ -153,6 +161,55 @@ class TranscriptCollector(FrameProcessor):
             self._user_text = ""
             self._assistant_text = ""
         await self.push_frame(frame, direction)
+
+
+class _AudioLevelTap(FrameProcessor):
+    """Publishes the RMS of outbound audio so the visualizer core pulses live.
+
+    Computes a normalized 0..1 level from each ``OutputAudioRawFrame`` (the
+    bot's voice) and publishes ``output_level`` at ~10 Hz (throttled). On the
+    first audio frame of the session it also publishes a ``latency`` event
+    (tap-construction → first audio ≈ model response time). Cheap: int16 RMS,
+    no resampling. Placed just before ``transport.output()``.
+    """
+
+    _FULL_SCALE = 9000.0  # int16 RMS that maps to level 1.0 (speech is well below 32767)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._t0 = time.monotonic()
+        self._last_pub = 0.0
+        self._first_audio_done = False
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, OutputAudioRawFrame) and frame.audio:
+            now = time.monotonic()
+            if not self._first_audio_done:
+                self._first_audio_done = True
+                events_bus.publish(
+                    "latency", wake_to_first_audio_ms=int((now - self._t0) * 1000)
+                )
+            if now - self._last_pub >= 0.1:  # throttle to ~10 Hz
+                self._last_pub = now
+                level = self._rms(frame.audio) / self._FULL_SCALE
+                events_bus.publish("output_level", level=max(0.0, min(1.0, level)))
+        await self.push_frame(frame, direction)
+
+    @staticmethod
+    def _rms(audio: bytes) -> float:
+        n = len(audio) // 2
+        if n == 0:
+            return 0.0
+        total = 0
+        # int16 little-endian; sample a stride for speed on big frames
+        stride = max(1, n // 1024)
+        count = 0
+        for i in range(0, n * 2, 2 * stride):
+            s = int.from_bytes(audio[i : i + 2], "little", signed=True)
+            total += s * s
+            count += 1
+        return math.sqrt(total / count) if count else 0.0
 
 
 class AuthErrorWatcher(FrameProcessor):
@@ -362,12 +419,14 @@ def _make_function_handler(control: SessionControl):
         # Log only the argument NAMES, never values — secret args (passwords,
         # tokens) must not reach the logs even before the redaction processor.
         log.info("tool_started", name=name, args_keys=list(args.keys()))
+        events_bus.publish("tool_started", name=name)
         t_start = time.monotonic()
         try:
             result = await asyncio.wait_for(dispatch(name, args), timeout=20.0)
         except TimeoutError:
             elapsed = int((time.monotonic() - t_start) * 1000)
             log.error("tool_timed_out", name=name, elapsed_ms=elapsed)
+            events_bus.publish("tool_timed_out", name=name, elapsed_ms=elapsed)
             await params.result_callback(
                 {
                     "success": False,
@@ -380,6 +439,7 @@ def _make_function_handler(control: SessionControl):
         except Exception as exc:
             elapsed = int((time.monotonic() - t_start) * 1000)
             log.error("tool_failed", name=name, elapsed_ms=elapsed, error=str(exc))
+            events_bus.publish("tool_failed", name=name, elapsed_ms=elapsed)
             await params.result_callback(
                 {
                     "success": False,
@@ -391,6 +451,7 @@ def _make_function_handler(control: SessionControl):
             return
         elapsed = int((time.monotonic() - t_start) * 1000)
         log.info("tool_completed", name=name, elapsed_ms=elapsed, success=result.success)
+        events_bus.publish("tool_completed", name=name, elapsed_ms=elapsed, success=result.success)
         payload: dict[str, Any] = {
             "success": result.success,
             "user_message": result.user_message,
@@ -487,6 +548,7 @@ async def build_pipeline() -> tuple[
     transcript_collector = TranscriptCollector()
     auth_watcher = AuthErrorWatcher()
     end_watcher = EndSessionWatcher(session_control)
+    audio_tap = _AudioLevelTap()  # publishes output RMS for the visualizer core pulse
 
     pipeline = Pipeline([
         transport.input(),
@@ -496,6 +558,7 @@ async def build_pipeline() -> tuple[
         assistant_aggregator,
         transcript_collector,
         gate_proc,
+        audio_tap,  # just before output: taps the bot's outgoing audio RMS
         transport.output(),
     ])
     task = PipelineTask(

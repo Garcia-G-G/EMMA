@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import logging
 import logging.handlers
+import os
 import signal
 import sys
 from pathlib import Path
@@ -25,6 +26,9 @@ from core.redaction import redaction_processor
 
 LOG_DIR = Path.home() / "Library/Logs/Emma"
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Background tasks (e.g. the opt-in dashboard) kept alive for the process lifetime.
+_bg_tasks: list[asyncio.Task] = []
 
 
 def _setup_logging(debug: bool) -> None:
@@ -110,6 +114,15 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
     error from run_session) propagates out so the process exits non-zero.
     """
     orchestrator_task = asyncio.create_task(orchestrator.main_loop())
+
+    # Opt-in: run the JARVIS dashboard/visualizer in THIS process so the
+    # in-process events_bus is shared (publishers + WS subscribers same loop).
+    if os.environ.get("EMMA_DASHBOARD", "").lower() in ("1", "true", "yes"):
+        from dashboard import server as dashboard
+
+        # Keep a reference so the task isn't garbage-collected mid-run.
+        _bg_tasks.append(asyncio.create_task(dashboard.start()))
+        log.info("dashboard_started", port=settings.DASHBOARD_PORT)
 
     def _shutdown(sig: int) -> None:
         log.info("signal_received", sig=signal.Signals(sig).name)
