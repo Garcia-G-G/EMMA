@@ -13,8 +13,6 @@ hooks — not yet implemented.
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import signal
 import time
 import uuid
 
@@ -47,13 +45,6 @@ def preflight() -> None:
     return
 
 
-def _install_signals() -> None:
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        with contextlib.suppress(NotImplementedError):
-            loop.add_signal_handler(sig, _shutdown.set)
-
-
 async def _one_session() -> None:
     """Wake → Pipecat session → return. One iteration of the main loop."""
     global _last_turn_id
@@ -84,32 +75,39 @@ async def _one_session() -> None:
 
 
 async def main_loop() -> None:
-    """Entry point called by ``emma.__main__``."""
-    _install_signals()
-    log.info("waiting_for_wake")
-    while not _shutdown.is_set():
-        try:
-            await _one_session()
-        except asyncio.CancelledError:
-            break
-        except RuntimeError as exc:
-            if "test crash" in str(exc):
-                raise
-            log.error("session_error", error=str(exc))
-            await asyncio.sleep(0.5)
-        except Exception as exc:
-            log.error("session_error", error=str(exc))
-            await asyncio.sleep(0.5)
-        if dev_state.shutdown_requested.is_set():
-            log.info("dev_mode_exit")
-            break
-    try:
-        from tools.browser import shutdown_browser
+    """Entry point called by ``emma.__main__``.
 
-        await shutdown_browser()
-    except Exception:
-        pass
-    log.info("shutdown_complete")
+    Signal handling lives in ``emma.__main__``, which cancels this task on
+    SIGINT/SIGTERM. We must let ``CancelledError`` propagate (cooperative
+    shutdown) rather than swallow it, and run cleanup in ``finally``. A
+    ``SystemExit`` (terminal auth error raised by ``run_session``) likewise
+    propagates so ``__main__`` can exit non-zero. Only ordinary
+    ``RuntimeError``/``Exception`` per-session faults are caught and retried.
+    """
+    log.info("waiting_for_wake")
+    try:
+        while not _shutdown.is_set():
+            try:
+                await _one_session()
+            except RuntimeError as exc:
+                if "test crash" in str(exc):
+                    raise
+                log.error("session_error", error=str(exc))
+                await asyncio.sleep(0.5)
+            except Exception as exc:
+                log.error("session_error", error=str(exc))
+                await asyncio.sleep(0.5)
+            if dev_state.shutdown_requested.is_set():
+                log.info("dev_mode_exit")
+                break
+    finally:
+        try:
+            from tools.browser import shutdown_browser
+
+            await shutdown_browser()
+        except Exception:
+            pass
+        log.info("shutdown_complete")
 
 
 run = main_loop  # backward-compat: emma/__main__.py historically used run()
