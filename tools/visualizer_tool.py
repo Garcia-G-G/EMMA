@@ -12,13 +12,15 @@ from tools.base import ToolResult, tool
 
 @tool()
 async def show_visualizer() -> ToolResult:
-    """Open Emma's visual brain — a native macOS window — and bring it forward.
+    """Open Emma's visual interface — the JARVIS-style native window — and bring it forward.
 
-    Use when Garcia says any of:
-    - "Emma, abre tu cerebro"
-    - "Emma, muéstrate"
-    - "Emma, show your visualizer"
-    - "Emma, show your brain"
+    Call this for ANY request to show Emma's visual self / interface / brain / HUD,
+    in Spanish or English. Triggers include: "abre tu cerebro", "abre tu interfaz",
+    "muéstrate", "muestra tu interfaz", "enséñame tu cara", "abre tu pantalla",
+    "show your brain", "show your interface", "open your interface", "show yourself",
+    "open your visualizer", "show me your face/HUD". If Garcia asks to see Emma,
+    her interface, her brain, her face, or her visualizer in any wording, this is
+    the tool — do not refuse.
     """
     env = {
         **os.environ,
