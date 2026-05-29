@@ -15,11 +15,12 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import UTC, datetime
 
 import structlog
 
 from config.settings import settings
-from core import conversation, dev_state
+from core import conversation, dev_state, events_bus
 from core.wake_word import listen_for_wake_word
 
 log = structlog.get_logger("emma.orchestrator")
@@ -27,6 +28,10 @@ log = structlog.get_logger("emma.orchestrator")
 _shutdown = asyncio.Event()
 _simulate_crash = False
 _last_turn_id: str = ""
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def enable_simulate_crash() -> None:
@@ -64,10 +69,14 @@ async def _one_session() -> None:
     _last_turn_id = turn_id
     structlog.contextvars.bind_contextvars(turn_id=turn_id)
     try:
+        events_bus.publish("state", state="waiting_for_wake")
         t_start = time.monotonic()
         await listen_for_wake_word()
         t_wake = time.monotonic()
         log.info("wake_detected", elapsed_ms=int((t_wake - t_start) * 1000))
+        events_bus.publish("wake_detected")
+        events_bus.publish("session_started", id=turn_id, ts=_now_iso())
+        events_bus.publish("state", state="listening")
         # Let the ack tone fully decay before Pipecat opens the mic.
         # Without this, the beep leaks into the Realtime session's VAD
         # and fires spurious speech_started events (self-interruption loop).
@@ -81,7 +90,10 @@ async def _one_session() -> None:
             )
         except TimeoutError:
             log.info("session_timeout")
-        log.info("session_close", duration_s=int(time.monotonic() - t_wake))
+        duration_s = round(time.monotonic() - t_wake, 1)
+        log.info("session_close", duration_s=int(duration_s))
+        events_bus.publish("session_ended", id=turn_id, duration_s=duration_s)
+        events_bus.publish("state", state="waiting_for_wake")
     finally:
         structlog.contextvars.unbind_contextvars("turn_id")
 

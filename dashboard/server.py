@@ -11,11 +11,17 @@ import json
 import re
 import sqlite3
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 import websockets
 from websockets.asyncio.server import serve
+
+# Ensure the repo root is importable when this is run standalone
+# (`python dashboard/server.py` only puts dashboard/ on sys.path).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core import events_bus
 
 EMMA_LOG = Path("/tmp/emma_session.log")
 EMMA_HOME = Path.home() / ".emma"
@@ -285,8 +291,54 @@ async def handler(ws):
         tail_task.cancel()
 
 
-async def main():
-    # Serve static files via a simple HTTP server in a thread
+def _tools_count() -> int:
+    try:
+        from tools.registry import openai_tool_specs
+
+        return len(openai_tool_specs())
+    except Exception:
+        return 0
+
+
+async def events_handler(ws):
+    """Forward curated events_bus payloads to the JARVIS visualizer (/events).
+
+    Sends an `init` payload immediately (static fields the page can't infer),
+    then streams whatever the in-process bus publishes. Lossy + best-effort.
+    """
+    q = events_bus.subscribe()
+    try:
+        await ws.send(
+            json.dumps({"type": "init", "tools_count": _tools_count(), "vad_threshold": 0.75})
+        )
+        while True:
+            payload = await q.get()
+            await ws.send(json.dumps(payload))
+    except websockets.ConnectionClosed:
+        pass
+    except Exception:
+        pass  # any send error -> end cleanly
+    finally:
+        events_bus.unsubscribe(q)
+
+
+async def ws_router(ws):
+    """Route the WebSocket by path: /events -> visualizer bus, else -> legacy dashboard."""
+    request = getattr(ws, "request", None)
+    path = (getattr(request, "path", None) or "/").split("?")[0].rstrip("/")
+    if path == "/events":
+        await events_handler(ws)
+    else:
+        await handler(ws)
+
+
+async def start():
+    """Run the dashboard HTTP server (thread) + WebSocket server (this loop) forever.
+
+    Used both by ``__main__`` (standalone) and by the daemon when
+    ``EMMA_DASHBOARD`` is truthy. The HTTP handler also routes ``/visualizer``
+    to ``visualizer.html``.
+    """
     import http.server
     import threading
 
@@ -297,15 +349,31 @@ async def main():
         def log_message(self, format, *args):
             pass  # silence
 
+        def _rewrite(self):
+            if self.path.split("?")[0].rstrip("/") == "/visualizer":
+                self.path = "/visualizer.html"
+
+        def do_GET(self):
+            self._rewrite()
+            return super().do_GET()
+
+        def do_HEAD(self):
+            self._rewrite()
+            return super().do_HEAD()
+
     httpd = http.server.HTTPServer(("0.0.0.0", PORT), DashHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
-    # WebSocket on PORT+1
-    async with serve(handler, "0.0.0.0", PORT + 1):
-        print(f"  Dashboard:  http://localhost:{PORT}")
-        print(f"  WebSocket:  ws://localhost:{PORT + 1}")
+    async with serve(ws_router, "0.0.0.0", PORT + 1):
+        print(f"  Dashboard:   http://localhost:{PORT}")
+        print(f"  Visualizer:  http://localhost:{PORT}/visualizer")
+        print(f"  WebSocket:   ws://localhost:{PORT + 1} (/events)")
         print()
         await asyncio.Future()  # run forever
+
+
+async def main():
+    await start()
 
 
 if __name__ == "__main__":

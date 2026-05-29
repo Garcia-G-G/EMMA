@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     EMMA_HOME: Path = Path.home() / ".emma"
 
+    # Real-time dashboard / JARVIS visualizer HTTP port (WebSocket runs on +1).
+    # The native visualizer window and the daemon's opt-in dashboard read this.
+    DASHBOARD_PORT: int = 3200
+
     # macOS Keychain service holding Secret-tier values + migrated credentials.
     # Parameterizable for future multi-user; core/secrets.py reads the same
     # name from the EMMA_KEYCHAIN_SERVICE environment variable.
