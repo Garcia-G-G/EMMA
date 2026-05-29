@@ -51,13 +51,18 @@ async def _run(args: list[str]) -> tuple[int, str, str]:
 
 
 async def store(label: str, value: str, kind: str = "secret") -> None:
-    """Store (or update, via -U) a secret under `label`. Never logs `value`."""
+    """Store (or update, via -U) a secret under `label`. Never logs `value`.
+
+    Raises on any non-zero exit from the `security` CLI. The success log is
+    emitted only AFTER the rc check, so a failed store never logs success.
+    The exception text never includes `value` (it is secret).
+    """
     rc, _out, err = await _run(
         ["add-generic-password", "-s", SERVICE, "-a", label, "-D", kind, "-w", value, "-U"]
     )
-    log.info("secret_stored", label=label, kind=kind, value="<hidden>")
     if rc != 0:
-        raise RuntimeError(f"keychain store failed for {label}: {err.strip()}")
+        raise RuntimeError(f"keychain store failed for {label} (rc={rc}): {err.strip()}")
+    log.info("secret_stored", label=label, kind=kind, value="<hidden>")
 
 
 async def retrieve(label: str) -> str | None:
@@ -134,14 +139,21 @@ async def bootstrap_from_env(env_path: Path) -> dict:
     or its value looks like an API key. Migrated lines are kept in the file but
     blanked, with a ``# moved to Keychain on <date>`` comment, so the settings
     loader still parses.
+
+    Data-safety contract (Prompt 15.9 Bug 1): a credential's ``.env`` line is
+    blanked ONLY after the stored value is read back from Keychain and matches.
+    If any store or readback fails, the original ``.env`` is restored verbatim
+    and a ``RuntimeError`` is raised — never a half-migrated split where the
+    value is gone from both ``.env`` and Keychain. The final write happens once,
+    after every credential has been verified, so the file is all-or-nothing.
     """
-    text = env_path.read_text()
+    original_text = env_path.read_text()
     moved: list[str] = []
     skipped: list[str] = []
     out_lines: list[str] = []
     stamp = date.today().isoformat()
 
-    for raw in text.splitlines():
+    for raw in original_text.splitlines():
         line = raw.rstrip("\n")
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in line:
@@ -151,7 +163,19 @@ async def bootstrap_from_env(env_path: Path) -> dict:
         key = key.strip()
         value = value.strip()
         if value and _is_credential(key, value):
-            await store(key, value, kind="env_credential")
+            try:
+                await store(key, value, kind="env_credential")
+                readback = await retrieve(key)
+            except Exception:
+                env_path.write_text(original_text)  # restore (it was untouched)
+                log.error("bootstrap_store_failed", field=key)
+                raise
+            if readback != value:
+                env_path.write_text(original_text)  # leave .env intact
+                log.error("bootstrap_readback_failed", field=key)
+                raise RuntimeError(
+                    f"Keychain readback mismatch for {key}; .env left intact (no value blanked)."
+                )
             moved.append(key)
             out_lines.append(f"{key}=  # moved to Keychain on {stamp}")
         else:

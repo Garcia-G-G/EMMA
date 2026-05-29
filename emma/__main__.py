@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import logging.handlers
+import signal
 import sys
 from pathlib import Path
 
@@ -19,6 +21,7 @@ import structlog
 from config.settings import settings
 from core import orchestrator, permissions
 from core.crash_handler import handle_crash
+from core.redaction import redaction_processor
 
 LOG_DIR = Path.home() / "Library/Logs/Emma"
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -56,6 +59,7 @@ def _setup_logging(debug: bool) -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
+            redaction_processor,
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
@@ -75,11 +79,65 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _credential_preflight(log: structlog.BoundLogger) -> int | None:
+    """Fast startup credential check. Returns exit code 2 on a bad key, else None.
+
+    A missing or malformed OpenAI key can never produce a working session, so
+    we fail fast — before probing permissions, opening the mic, or waiting for
+    a wake word — instead of looping on reconnect. Exit code 2 is distinct from
+    0 (success) and 1 (generic), so launchd's SuccessfulExit=false policy treats
+    it as a real failure rather than a retry case.
+    """
+    from core.conversation import _looks_like_openai_key
+
+    if not _looks_like_openai_key(settings.OPENAI_API_KEY):
+        log.error(
+            "credentials_invalid",
+            field="OPENAI_API_KEY",
+            present=bool(settings.OPENAI_API_KEY),
+            length=len(settings.OPENAI_API_KEY or ""),
+        )
+        return 2
+    return None
+
+
+async def _run_orchestrator(log: structlog.BoundLogger) -> int:
+    """Run the orchestrator with cooperative SIGINT/SIGTERM shutdown.
+
+    Cancelling the orchestrator task raises CancelledError into whatever it is
+    awaiting (wake-word listen or the Pipecat runner), which unwinds cleanly and
+    runs the orchestrator's finally-block cleanup. A SystemExit (terminal auth
+    error from run_session) propagates out so the process exits non-zero.
+    """
+    orchestrator_task = asyncio.create_task(orchestrator.main_loop())
+
+    def _shutdown(sig: int) -> None:
+        log.info("signal_received", sig=signal.Signals(sig).name)
+        orchestrator_task.cancel()
+
+    loop = asyncio.get_running_loop()
+    for s in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError):
+            loop.add_signal_handler(s, _shutdown, s)
+
+    try:
+        await orchestrator_task
+    except asyncio.CancelledError:
+        log.info("orchestrator_cancelled")
+    return 0
+
+
 def main() -> int:
     args = _parse_args()
     _setup_logging(args.debug)
     log = structlog.get_logger("emma")
     log.info("starting", debug=args.debug, simulate_crash=args.simulate_crash)
+
+    # Credential pre-flight FIRST: fail fast on a bad OpenAI key (exit 2) before
+    # any permission probe, mic open, or wake-word wait.
+    cred_rc = _credential_preflight(log)
+    if cred_rc is not None:
+        return cred_rc
 
     if args.simulate_crash:
         orchestrator.enable_simulate_crash()
@@ -110,7 +168,7 @@ def main() -> int:
         log.warning("memory_initialize_failed", error=str(exc))
 
     try:
-        asyncio.run(orchestrator.main_loop())
+        return asyncio.run(_run_orchestrator(log))
     except KeyboardInterrupt:
         log.info("interrupted")
         return 0
@@ -120,8 +178,6 @@ def main() -> int:
         log.error("unhandled_exception", error=str(exc))
         ctx = orchestrator.last_context()
         return handle_crash(exc, ctx, REPO_ROOT)
-
-    return 0
 
 
 if __name__ == "__main__":

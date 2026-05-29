@@ -35,6 +35,7 @@ from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    ErrorFrame,
     Frame,
     LLMContextFrame,
     LLMTextFrame,
@@ -74,6 +75,34 @@ log = structlog.get_logger("emma.conversation")
 
 # Native sample rate of the Realtime model.
 SAMPLE_RATE_HZ = 24000
+
+# Substrings in a Realtime error that mean "reconnecting will never help" —
+# the key/model/permission is wrong, so terminate instead of looping. The
+# first four are OpenAI session-level error codes (surfaced via an `error`
+# server event). The HTTP markers cover the WebSocket-handshake rejection a
+# bad key produces at connect time ("Error connecting: ... HTTP 401"), which
+# never carries the `invalid_api_key` code. Transient failures (timeouts,
+# DNS, 5xx) match none of these, so the existing reconnect still applies.
+_TERMINAL_AUTH_MARKERS = (
+    "invalid_api_key",
+    "permission_denied",
+    "model_not_found",
+    "organization_not_authorized",
+    "HTTP 401",
+    "HTTP 403",
+    "Unauthorized",
+    "Forbidden",
+)
+
+
+def _looks_like_openai_key(s: str) -> bool:
+    """Cheap shape check for an OpenAI key: ``sk-`` prefix, ≥40 chars, no spaces."""
+    return bool(s) and s.startswith("sk-") and len(s) >= 40 and " " not in s and "\t" not in s
+
+
+def _is_terminal_auth_error(message: str) -> bool:
+    """True if `message` names an auth/config error that reconnecting can't fix."""
+    return any(marker in message for marker in _TERMINAL_AUTH_MARKERS)
 
 
 class EchoGateProcessor(FrameProcessor):
@@ -121,6 +150,37 @@ class TranscriptCollector(FrameProcessor):
                 log.debug("transcript_captured", user=user[:80], assistant=assistant[:80])
             self._user_text = ""
             self._assistant_text = ""
+        await self.push_frame(frame, direction)
+
+
+class AuthErrorWatcher(FrameProcessor):
+    """Terminates the session on a known-terminal auth/config error.
+
+    Pipecat's Realtime service reports failures by pushing an ``ErrorFrame``
+    downstream (``push_error``). On a transient error it would otherwise
+    reconnect forever; on a terminal auth error (bad key, missing model,
+    permission denied) reconnecting is pointless. When we see one we log a
+    single ``credentials_invalid`` line and cancel the pipeline task, so
+    ``run_session`` returns and the orchestrator can exit non-zero.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._task: PipelineTask | None = None
+        self.terminal_error: str | None = None
+
+    def set_task(self, task: PipelineTask) -> None:
+        self._task = task
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, ErrorFrame):
+            message = str(getattr(frame, "error", "") or "")
+            if self.terminal_error is None and _is_terminal_auth_error(message):
+                self.terminal_error = message
+                log.error("credentials_invalid", reason=message[:200])
+                if self._task is not None:
+                    await self._task.cancel()
         await self.push_frame(frame, direction)
 
 
@@ -239,10 +299,10 @@ async def _build_session_properties() -> SessionProperties:
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
                 transcription=InputAudioTranscription(model="whisper-1"),
-                noise_reduction=InputAudioNoiseReduction(type="near_field"),
+                noise_reduction=InputAudioNoiseReduction(type="far_field"),
                 turn_detection=TurnDetection(
                     type="server_vad",
-                    threshold=0.7,
+                    threshold=0.75,
                     prefix_padding_ms=300,
                     silence_duration_ms=800,
                 ),
@@ -258,15 +318,18 @@ async def _build_session_properties() -> SessionProperties:
     )
 
 
-async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]:
+async def build_pipeline() -> tuple[
+    Pipeline, PipelineTask, LocalAudioTransport, LLMContext, AuthErrorWatcher
+]:
     """Wire transport + Realtime LLM + tool handlers into a Pipecat pipeline.
 
-    Returns the constructed (pipeline, task, transport) triple so the
+    Returns (pipeline, task, transport, context, auth_watcher) so the
     orchestrator can manage their lifecycle. The transport opens the
     mic + speaker streams when the pipeline starts and closes them on
-    cancel / idle-timeout.
+    cancel / idle-timeout. The auth_watcher lets run_session detect a
+    terminal auth error and exit non-zero instead of reconnecting.
     """
-    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=3000.0)
+    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=4000.0)
 
     transport = LocalAudioTransport(
         LocalAudioTransportParams(
@@ -299,10 +362,12 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
     context = LLMContext(messages=[])
     assistant_aggregator = LLMAssistantAggregator(context)
     transcript_collector = TranscriptCollector()
+    auth_watcher = AuthErrorWatcher()
 
     pipeline = Pipeline([
         transport.input(),
         llm,
+        auth_watcher,  # right after the LLM so it sees its ErrorFrames first
         assistant_aggregator,
         transcript_collector,
         gate_proc,
@@ -317,7 +382,8 @@ async def build_pipeline() -> tuple[Pipeline, PipelineTask, LocalAudioTransport]
         idle_timeout_secs=float(settings.SESSION_MAX_S),
         cancel_on_idle_timeout=True,
     )
-    return pipeline, task, transport, context
+    auth_watcher.set_task(task)
+    return pipeline, task, transport, context, auth_watcher
 
 
 async def run_session() -> None:
@@ -326,8 +392,22 @@ async def run_session() -> None:
     The orchestrator calls this once per wake-word detection. The
     pipeline starts the mic + speaker streams; OpenAI Realtime serves
     audio in/out + function calls; the runner blocks here until idle.
+
+    Two credential guards: a pre-flight key-shape check before any session
+    opens (raises SystemExit(2) on a missing/malformed key), and an
+    auth-error watcher inside the pipeline that terminates with SystemExit(2)
+    on a terminal auth error instead of reconnecting forever.
     """
-    _pipeline, task, _transport, context = await build_pipeline()
+    if not _looks_like_openai_key(settings.OPENAI_API_KEY):
+        log.error(
+            "credentials_invalid",
+            field="OPENAI_API_KEY",
+            present=bool(settings.OPENAI_API_KEY),
+            length=len(settings.OPENAI_API_KEY or ""),
+        )
+        raise SystemExit(2)  # non-zero exit; launchd KeepAlive treats as real failure
+
+    _pipeline, task, _transport, context, auth_watcher = await build_pipeline()
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:
@@ -335,3 +415,8 @@ async def run_session() -> None:
         await runner.run(task)
     finally:
         log.info("conversation_end")
+
+    if auth_watcher.terminal_error is not None:
+        # A terminal auth/config error surfaced; do not let the orchestrator
+        # loop reopen the session. Bubble out as a non-zero exit.
+        raise SystemExit(2)

@@ -1,6 +1,7 @@
 """CLI for Emma's security layer: Keychain provisioning + audit.
 
     python -m emma.security bootstrap   # store sentinel + migrate .env credentials
+    python -m emma.security verify      # readback every credential field from Keychain
     python -m emma.security audit       # list Keychain labels + recent vault_ref rows
     python -m emma.security wipe-all     # delete every Emma Keychain item (destructive)
 
@@ -51,8 +52,28 @@ async def _audit() -> None:
             print("  (none)")
     except Exception as exc:
         print(f"  (memory.db unavailable: {exc})")
-    print("log redaction: core.redaction.redact available; wire redaction_processor")
-    print("               into the structlog config to apply it to every log event.")
+    print("log redaction: wired into structlog (emma.__main__).")
+
+
+async def _verify() -> int:
+    """Read back every credential field from Keychain. Exit 1 if any missing.
+
+    Prints a field/status/length table. Only the length of each value is shown,
+    never the value itself. This is the post-migration health check for Bug 1:
+    a credential blanked in .env but absent here means a lost secret.
+    """
+    from config.settings import _CREDENTIAL_FIELDS
+
+    print(f"{'field':<24} {'status':<10} length")
+    all_present = True
+    for field in _CREDENTIAL_FIELDS:
+        value = await secrets.retrieve(field)
+        if value:
+            print(f"{field:<24} {'present':<10} {len(value)}")
+        else:
+            all_present = False
+            print(f"{field:<24} {'MISSING':<10} 0")
+    return 0 if all_present else 1
 
 
 async def _wipe_all() -> None:
@@ -70,12 +91,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("bootstrap", help="Store sentinel + migrate .env credentials to Keychain.")
+    sub.add_parser("verify", help="Read back every credential field from Keychain (exit 1 if any missing).")
     sub.add_parser("audit", help="List Keychain labels + recent vault_ref rows.")
     sub.add_parser("wipe-all", help="Delete every Emma Keychain item (DESTRUCTIVE).")
     args = parser.parse_args(argv)
 
     if args.command == "bootstrap":
         asyncio.run(_bootstrap())
+    elif args.command == "verify":
+        return asyncio.run(_verify())
     elif args.command == "audit":
         asyncio.run(_audit())
     elif args.command == "wipe-all":
