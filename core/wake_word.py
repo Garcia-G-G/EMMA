@@ -17,6 +17,8 @@ configured wake-word's score crosses the threshold.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +117,23 @@ def _reset_model(model: Any) -> None:
         log.warning("wake_model_reset_failed", error=str(exc))
 
 
+def _close_stream_background(stream: Any) -> None:
+    """Abort + close a PortAudio stream off the event loop.
+
+    sounddevice ``stop``/``close`` can block indefinitely on the CoreAudio HAL
+    mutex (same hazard as ``check_microphone``). During shutdown we must not let
+    that hang the cancellation, so we abort (drop buffers immediately) and close
+    in a daemon thread we never join — if it wedges, it dies with the process.
+    """
+
+    def _close() -> None:
+        for op in ("abort", "close"):
+            with contextlib.suppress(Exception):
+                getattr(stream, op)()
+
+    threading.Thread(target=_close, name="wake-stream-close", daemon=True).start()
+
+
 async def listen_for_wake_word() -> None:
     """Block until 'Hey Emma' is detected, then return. Plays an ack tone."""
     model = await _get_model()
@@ -150,13 +169,18 @@ async def listen_for_wake_word() -> None:
     stream.start()
     try:
         await detected.wait()
-    finally:
-        stream.stop()
-        stream.close()
-        # Belt-and-suspenders: also reset after detection so the next
-        # listen starts clean even if the next-turn entry reset is
-        # somehow skipped. Model stays warm; only its state is cleared.
+    except asyncio.CancelledError:
+        # Shutdown (Ctrl+C / SIGTERM): close in the background so a blocking
+        # PortAudio close can't hang the exit, then propagate the cancel.
+        log.info("wake_listen_cancelled")
+        _close_stream_background(stream)
         _reset_model(model)
-        # Note: we intentionally do NOT free `_model` - keep it warm.
+        raise
 
+    # Normal detection path: close synchronously so the next listen reopens
+    # a fresh stream. Reset clears openWakeWord's afterglow (otherwise it
+    # re-fires "wake" on the next loop). Model stays warm; only state clears.
+    stream.stop()
+    stream.close()
+    _reset_model(model)
     play_wake_chime()
