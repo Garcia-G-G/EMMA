@@ -25,30 +25,33 @@ os_major="$(sw_vers -productVersion | cut -d. -f1)"
 [[ "$(uname -m)" == "arm64" ]] || fail "Apple Silicon (arm64) required. Found $(uname -m)."
 ok "macOS $(sw_vers -productVersion) on $(uname -m)"
 
-# 2. Python 3.11+
-step "Checking Python"
-command -v python3 >/dev/null 2>&1 || fail "python3 not found. Install with: brew install python@3.11"
-py_ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-py_major="$(echo "${py_ver}" | cut -d. -f1)"
-py_minor="$(echo "${py_ver}" | cut -d. -f2)"
-if (( py_major < 3 )) || { (( py_major == 3 )) && (( py_minor < 11 )); }; then
-    fail "Python 3.11+ required. Found ${py_ver}. Install with: brew install python@3.11"
-fi
-ok "Python ${py_ver}"
-
-# 3. ffmpeg
+# 2. ffmpeg
 step "Checking ffmpeg"
 command -v ffmpeg >/dev/null 2>&1 || fail "ffmpeg not found. Install with: brew install ffmpeg"
 ok "ffmpeg"
 
-# 4. uv + dependencies
+# 3. uv (provisions the project's Python per pyproject `requires-python`).
+# We deliberately do NOT gate on the system `python3`: Emma never runs under it.
+# uv selects/downloads a compatible interpreter into .venv during `uv sync`.
 step "Checking uv"
 command -v uv >/dev/null 2>&1 || fail "uv not found. Install with: brew install uv"
 ok "uv $(uv --version | head -n1)"
 
+# 4. Dependencies (uv enforces requires-python >=3.11; fails here if unmet)
 step "Installing Python dependencies"
 ( cd "${EMMA_ROOT}" && uv sync )
 ok "Dependencies installed"
+
+# 4.5 Verify the interpreter that will actually run Emma is 3.11+
+step "Checking Python"
+[[ -x "${VENV_PYTHON}" ]] || fail "Expected venv interpreter missing at ${VENV_PYTHON} after 'uv sync'."
+py_ver="$("${VENV_PYTHON}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+py_major="$(echo "${py_ver}" | cut -d. -f1)"
+py_minor="$(echo "${py_ver}" | cut -d. -f2)"
+if (( py_major < 3 )) || { (( py_major == 3 )) && (( py_minor < 11 )); }; then
+    fail "venv Python 3.11+ required. Found ${py_ver}. Run: uv python install 3.12 && uv sync"
+fi
+ok "Python ${py_ver} (venv)"
 
 # 5. Playwright Chromium (one-time, ~180MB)
 step "Installing Playwright Chromium (one-time, idempotent)"
@@ -110,12 +113,37 @@ sed \
     "${PLIST_SRC}" > "${PLIST_DST}"
 ok "Plist written to ${PLIST_DST}"
 
-# 9. Bootstrap into launchd. Idempotent: bootout first if a stale copy is loaded.
+# 9. Robust load into launchd.
+#
+# launchctl bootstrap can fail with "5: Input/output error" if a stale copy
+# of the service is in a half-loaded state. We:
+#  a) inspect with `launchctl print` first
+#  b) attempt bootout if loaded (twice if needed)
+#  c) sleep briefly to let launchd settle
+#  d) try bootstrap; on failure, fall back to enable + kickstart
 step "Loading service into launchd"
-launchctl bootout "${SERVICE_TARGET}" 2>/dev/null || true
-launchctl bootstrap "gui/${UID_NUM}" "${PLIST_DST}"
+
+if launchctl print "${SERVICE_TARGET}" >/dev/null 2>&1; then
+    launchctl bootout "${SERVICE_TARGET}" 2>/dev/null || true
+    sleep 1
+    if launchctl print "${SERVICE_TARGET}" >/dev/null 2>&1; then
+        warn "Stale service still loaded after bootout; trying again."
+        launchctl bootout "${SERVICE_TARGET}" 2>/dev/null || true
+        sleep 2
+    fi
+fi
+
+if launchctl bootstrap "gui/${UID_NUM}" "${PLIST_DST}" 2>/tmp/emma-bootstrap.err; then
+    ok "Bootstrap OK"
+else
+    bootstrap_err=$(cat /tmp/emma-bootstrap.err 2>/dev/null)
+    warn "Bootstrap failed: ${bootstrap_err}"
+    warn "Falling back to enable + kickstart"
+    launchctl enable "${SERVICE_TARGET}" 2>/dev/null || true
+    launchctl kickstart -k "${SERVICE_TARGET}" 2>/dev/null || true
+fi
+
 launchctl enable "${SERVICE_TARGET}" 2>/dev/null || true
-launchctl kickstart -k "${SERVICE_TARGET}" 2>/dev/null || true
 ok "Service loaded"
 
 # 10. Confirm startup

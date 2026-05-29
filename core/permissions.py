@@ -20,12 +20,18 @@ log = structlog.get_logger("emma.permissions")
 Pane = Literal["Microphone", "Accessibility", "Automation", "AllFiles"]
 
 
-def _say(text: str) -> None:
+def _say(text: str, *, voice: str = "Mónica") -> None:
+    """Speak `text` via macOS `say`. BLOCKING — returns when speech ends.
+
+    Bootstrap relies on this: each prompt should finish before the next so
+    the Spanish phrases don't overlap.
+    """
     try:
-        subprocess.Popen(
-            ["say", "-v", "Mónica", text],
+        subprocess.run(
+            ["say", "-v", voice, text],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=15.0,
         )
     except Exception as exc:
         log.error("say_failed", error=str(exc))
@@ -158,6 +164,27 @@ _AUTOMATION_APPS = (
     "Terminal",
 )
 
+# Data-model queries that exist on each app without needing a UI window open.
+# These are the calls that cross the TCC Automation boundary and surface the
+# permission dialog the first time. Every _AUTOMATION_APPS entry has one so the
+# query is a real data-model probe rather than the UI-only "count windows"
+# fallback (which does not reliably fire TCC for freshly-launched apps).
+_AUTOMATION_QUERIES = {
+    "Calendar": "count calendars",
+    "Mail": "count accounts",
+    "Messages": "count services",
+    "Notes": "count folders",
+    "Reminders": "count lists",
+    "Safari": "count tabs of windows",  # works even with no open window: returns 0
+    "Finder": "count items of (path to home folder)",
+    "Music": "count playlists",
+    "Terminal": "count windows",
+}
+
+# After _say returns (speech finished), give the user this long to actually
+# click Allow on the dialog before triggering the next app's ping.
+_DWELL_AFTER_DIALOG_S = 4.0
+
 # Permissions Apple does not let us trigger programmatically.
 # We open the Settings pane and speak instructions.
 _MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
@@ -166,13 +193,42 @@ _MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
 )
 
 
-async def _ping_automation(app: str) -> tuple[str, bool]:
-    """Trigger the Automation permission dialog for `app` via a minimal AppleScript.
+async def _ping_automation(app: str) -> tuple[str, str]:
+    """Trigger the Automation permission dialog for `app`.
 
-    macOS does not expose the user's choice; we treat a clean execution as
-    'dialog shown, user responded somehow.' Returns (app, executed_without_error).
+    Strategy:
+    1. `launch application "X"` to make sure the app is running (this alone
+       does not trigger TCC, but ensures the subsequent target exists).
+    2. `tell application "X" to count <data_model_thing>` — this is what
+       actually crosses the TCC boundary and surfaces the dialog the first
+       time. Subsequent runs return immediately.
+
+    Returns (app, status) where status is one of:
+      'dialog_shown'    — script executed cleanly (user saw a dialog or
+                          permission was already granted)
+      'not_running'     — could not launch the app (-600 persists)
+      'denied'          — explicit denial (-1743)
+      'error:<code>'    — anything else
+      'timeout'         — script didn't return in time
     """
-    script = f'tell application "{app}" to count windows'
+    # Stage 1: launch (no-op if already running). Does not need permission.
+    launch_script = f'launch application "{app}"'
+    launch_proc = await asyncio.create_subprocess_exec(
+        "/usr/bin/osascript",
+        "-e",
+        launch_script,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        await asyncio.wait_for(launch_proc.communicate(), timeout=5.0)
+    except TimeoutError:
+        launch_proc.kill()
+        return (app, "timeout")
+
+    # Stage 2: data-model query (per-app, because each app exposes different things).
+    query = _AUTOMATION_QUERIES.get(app, "count windows")
+    script = f'tell application "{app}" to {query}'
     proc = await asyncio.create_subprocess_exec(
         "/usr/bin/osascript",
         "-e",
@@ -181,11 +237,19 @@ async def _ping_automation(app: str) -> tuple[str, bool]:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        await asyncio.wait_for(proc.communicate(), timeout=5.0)
+        _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
     except TimeoutError:
         proc.kill()
-        return (app, False)
-    return (app, proc.returncode == 0)
+        return (app, "timeout")
+
+    if proc.returncode == 0:
+        return (app, "dialog_shown")
+    err = stderr.decode("utf-8", errors="replace")
+    if "-1743" in err:
+        return (app, "denied")
+    if "-600" in err:
+        return (app, "not_running")
+    return (app, f"error:{proc.returncode}")
 
 
 async def _ping_microphone() -> bool:
@@ -216,9 +280,11 @@ async def bootstrap() -> dict:
     for app in _AUTOMATION_APPS:
         print(f"→ Automation: {app}")
         _say(f"Permiso para controlar {app}. Dale Allow.")
-        await _ping_automation(app)
-        results[f"Automation:{app}"] = "dialog_shown"
-        await asyncio.sleep(2)
+        _, status = await _ping_automation(app)
+        results[f"Automation:{app}"] = status
+        # _say already blocked until the phrase ended; now give the user time
+        # to actually click Allow before the next app's ping fires.
+        await asyncio.sleep(_DWELL_AFTER_DIALOG_S)
 
     # 3. Manual panes (Accessibility, Full Disk Access)
     for pane, instruction in _MANUAL_PANES:
@@ -226,7 +292,7 @@ async def bootstrap() -> dict:
         _say(instruction)
         _open_settings(pane)
         results[pane] = "settings_opened"
-        await asyncio.sleep(4)  # give the user time to interact
+        await asyncio.sleep(6)  # manual panes need a longer dwell to interact
 
     # Recap
     print("\n=== Resumen ===")

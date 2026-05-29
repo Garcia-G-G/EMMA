@@ -48,8 +48,9 @@ def test_bootstrap_pings_every_automation_app_and_opens_every_pane() -> None:
     ):
         results = asyncio.run(permissions.bootstrap())
 
-    # exactly one osascript invocation per automation app
-    assert len(calls) == len(_AUTOMATION_APPS)
+    # two osascript invocations per automation app: `launch application` then
+    # the data-model query (the two-stage TCC trigger from Prompt 15.8 Bug A).
+    assert len(calls) == 2 * len(_AUTOMATION_APPS)
     for app in _AUTOMATION_APPS:
         assert results[f"Automation:{app}"] == "dialog_shown"
 
