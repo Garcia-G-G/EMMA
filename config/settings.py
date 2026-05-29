@@ -178,7 +178,9 @@ class Settings(BaseSettings):
     # PipelineTask.idle_timeout_secs. Pipecat will cancel the pipeline
     # if no BotSpeakingFrame / UserSpeakingFrame has fired for this
     # long; the orchestrator then loops back to wake-word listening.
-    SESSION_MAX_S: int = 120
+    # 300s (5 min) keeps Emma in the conversation through natural pauses
+    # instead of dropping out after 2 minutes mid-task.
+    SESSION_MAX_S: int = 300
 
 
 settings = Settings()

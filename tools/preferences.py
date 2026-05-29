@@ -103,11 +103,22 @@ def set_preferred_app(category: str, app_name: str) -> ToolResult:
             f"No soporto {app_name} todavía. Las opciones para {cat} son: {options}.",
             False,
         )
+    # Ground the preference in reality: only honor an app the user actually has.
+    detected = detect_preferred(cat)  # type: ignore[arg-type]
+    installed = detected.available_alternatives
     set_preference(cat, key)  # type: ignore[arg-type]
+    if key in installed:
+        msg = f"Listo. Voy a usar {app_name} para {cat} de ahora en adelante."
+    else:
+        have = ", ".join(installed) if installed else "ninguna"
+        msg = (
+            f"Anoté {app_name} como tu preferencia de {cat}, pero no la tienes instalada. "
+            f"Instaladas: {have}. Dime si quieres que la instale o uso una de esas."
+        )
     return ToolResult(
         True,
-        {"category": cat, "app": key},
-        f"Listo. Voy a usar {app_name} para {cat} de ahora en adelante.",
+        {"category": cat, "app": key, "installed": key in installed, "available": installed},
+        msg,
         False,
     )
 
@@ -144,10 +155,48 @@ def get_preferred_app(category: str) -> ToolResult:
             "category": cat,
             "app": result.app_name,
             "is_user_override": result.is_user_override,
+            "available": result.available_alternatives,
         },
         f"Uso {result.app_name} para {cat}{suffix}.",
         False,
     )
+
+
+@tool()
+def list_apps(category: str = "") -> ToolResult:
+    """List which apps are installed for a category and which one Emma uses by default.
+
+    Use this BEFORE choosing or opening an app, and when the user asks things like:
+
+    - "Emma, ¿qué editores tengo?"
+    - "Emma, what browsers do I have?"
+    - "Emma, ¿qué apps tengo instaladas?"
+
+    Categories: ``ide``, ``terminal``, ``music``, ``browser``. With no category,
+    reports all four. Never pick or open an app that isn't in the installed list.
+    """
+    requested = category.lower().strip()
+    if requested and requested not in SHORTLISTS:
+        return ToolResult(
+            False,
+            None,
+            f"No reconozco la categoría '{category}'. Las categorías son: ide, terminal, music, browser.",
+            False,
+        )
+    cats: list[Category] = [requested] if requested else list(SHORTLISTS.keys())  # type: ignore[list-item]
+    data: dict[str, dict[str, object]] = {}
+    parts: list[str] = []
+    for cat in cats:
+        result = detect_preferred(cat)
+        installed = result.available_alternatives
+        data[cat] = {
+            "installed": installed,
+            "default": result.app_name,
+            "is_user_override": result.is_user_override,
+        }
+        have = ", ".join(installed) if installed else "ninguna"
+        parts.append(f"{cat}: tienes {have}; uso {result.app_name or 'ninguna'}")
+    return ToolResult(True, data, ". ".join(parts) + ".", False)
 
 
 @tool(destructive=True)
@@ -175,7 +224,15 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
             False,
         )
 
-    entry = next(e for e in BROWSER_SHORTLIST if e["key"] == key)
+    entry = next((e for e in BROWSER_SHORTLIST if e["key"] == key), None)
+    if entry is None:
+        options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
+        return ToolResult(
+            False,
+            None,
+            f"No soporto {name} como navegador. Las opciones son: {options}.",
+            False,
+        )
     bundle = entry["bundle"]
 
     # Install if missing (must explicitly confirm: this is destructive).
