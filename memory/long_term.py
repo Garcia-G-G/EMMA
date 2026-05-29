@@ -261,12 +261,47 @@ def _forget_sync(content_or_id: str | int) -> int:
     with _connect() as conn:
         if isinstance(content_or_id, int):
             cur = conn.execute("DELETE FROM facts WHERE id = ?", (content_or_id,))
+            conn.execute("DELETE FROM facts_vec WHERE rowid = ?", (content_or_id,))
         else:
             cur = conn.execute(
                 "DELETE FROM facts WHERE content = ? OR content LIKE ?",
                 (content_or_id, f"%{content_or_id}%"),
             )
         return int(cur.rowcount)
+
+
+def _forget_semantic_sync(query_vec: bytes, k: int = 8) -> int:
+    """Delete the SINGLE best-matching non-secret fact (cosine >= _RECALL_MIN_SIM).
+
+    Destructive deletes are deliberately conservative. Deleting *every* fact
+    above recall's permissive 0.20 floor wiped many loosely-related facts in
+    testing (one "olvida lo del editor" removed 7 facts, including unrelated
+    ones), because that floor is tuned for *ranked* recall, not for a one-shot
+    delete. So we embed the query like recall does but remove only the nearest
+    match — "forget X" deletes the one fact X most clearly refers to; the user
+    can repeat to remove more. Secret-tier facts are never touched (only
+    ``forget_secret`` removes those), and the fact's embedding is deleted
+    alongside it so facts_vec never orphans.
+    """
+    with _connect() as conn:
+        knn = conn.execute(
+            "SELECT rowid, distance FROM facts_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (query_vec, k),
+        ).fetchall()
+        for r in knn:  # nearest-first
+            if (1.0 - float(r["distance"])) < _RECALL_MIN_SIM:
+                break
+            rid = int(r["rowid"])
+            row = conn.execute(
+                "SELECT id FROM facts WHERE id = ? AND vault_ref IS NULL", (rid,)
+            ).fetchone()
+            if row is None:
+                continue  # secret-tier or already gone — try the next nearest
+            conn.execute("DELETE FROM facts WHERE id = ?", (rid,))
+            conn.execute("DELETE FROM facts_vec WHERE rowid = ?", (rid,))
+            return 1
+    return 0
 
 
 def _count_sync() -> int:
@@ -322,7 +357,21 @@ async def recall(query: str | None = None, *, limit: int = 5) -> list[Fact]:
 
 
 async def forget(content_or_id: str | int) -> int:
-    return await asyncio.to_thread(_forget_sync, content_or_id)
+    """Delete facts by id (exact row) or by content (semantic).
+
+    An integer id deletes that exact row. A string is embedded and matched with
+    the same vec0 KNN + ``_RECALL_MIN_SIM`` floor as :func:`recall`, so
+    "olvida lo del editor" removes the fact "¿qué editor uso?" would have found —
+    keyword ``LIKE`` (the old behavior) matched nothing for paraphrases.
+    Secret-tier facts are never touched. Returns the number of facts deleted.
+    """
+    if isinstance(content_or_id, int):
+        return await asyncio.to_thread(_forget_sync, content_or_id)
+    text = str(content_or_id).strip()
+    if not text:
+        return 0
+    vec = await embeddings.embed(text)
+    return await asyncio.to_thread(_forget_semantic_sync, _serialize(vec))
 
 
 async def count() -> int:

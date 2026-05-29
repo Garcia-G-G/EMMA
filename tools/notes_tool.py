@@ -113,3 +113,38 @@ async def append_to_note(title: str, text: str) -> ToolResult:
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude agregar a la nota: {exc}", False)
     return ToolResult(True, {"title": title}, f"Agregado a '{title}'.", False)
+
+
+@tool(destructive=True)
+async def delete_note(title: str, confirmed: bool = False) -> ToolResult:
+    """Borra la nota de Apple Notes cuyo título es `title`. Pide confirmación."""
+    if not confirmed:
+        return ToolResult(True, {"title": title}, f"¿Borro la nota '{title}'?", True)
+    t = macos.esc_applescript(title)
+    script = (
+        'tell application "Notes"\n'
+        f'  set matches to (notes whose name is "{t}")\n'
+        "  set deletedCount to 0\n"
+        "  repeat with nt in matches\n"
+        "    delete nt\n"
+        "    set deletedCount to deletedCount + 1\n"
+        "  end repeat\n"
+        "  return deletedCount\n"
+        "end tell"
+    )
+    try:
+        out = await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
+    except macos.AppleScriptError as exc:
+        msg = str(exc)
+        if "app_dialog_blocked" in msg:
+            return ToolResult(
+                False, None, "macOS me pidió confirmar en pantalla. Autorízalo y dime otra vez.", False
+            )
+        return ToolResult(False, None, f"No pude borrar la nota: {msg}", False)
+    try:
+        n = int((out or "0").strip())
+    except ValueError:
+        n = 0
+    if n == 0:
+        return ToolResult(True, {"deleted": 0}, f"No encontré la nota '{title}'.", False)
+    return ToolResult(True, {"deleted": n}, f"Listo, borré la nota '{title}'.", False)

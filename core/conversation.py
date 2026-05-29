@@ -29,6 +29,7 @@ package source:
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import structlog
@@ -250,6 +251,18 @@ async def _build_instructions() -> str:
         "an alternative.\n"
         "- run_command: use ONE simple command. Never chain with "
         "&& or write inline scripts. Call multiple times if needed.\n\n"
+        "# Confirmation flow (mandatory)\n"
+        "- When a tool returns `requires_confirmation: true`, treat its `user_message` "
+        "as a yes/no question. SPEAK the user_message verbatim, then STOP and WAIT for "
+        "the user's reply.\n"
+        "- If the user says yes (sí, claro, dale, ok, hazlo, confirm, do it, yes), "
+        "re-call the SAME tool with the SAME arguments PLUS `confirmed: true`. "
+        "Do NOT call a different tool first.\n"
+        "- If the user says no (no, cancela, mejor no, déjalo, cancel), abandon the "
+        "operation and say 'Listo, lo dejo' / 'Got it, leaving it' (rotate).\n"
+        "- If the user says something else, treat it as 'no' for safety — say "
+        "'No te entendí, cancelo por si acaso' / 'Didn't catch that, cancelling to "
+        "be safe'.\n\n"
         "# Defaults & apps\n"
         "- You CAN set and change Garcia's preferred app per category "
         "(editor/ide, terminal, music, browser) and read it back. When he asks "
@@ -346,8 +359,38 @@ def _make_function_handler(control: SessionControl):
     async def _handler(params: FunctionCallParams) -> None:
         name = params.function_name
         args = dict(params.arguments or {})
-        log.info("fn_call", name=name, args=args)
-        result = await dispatch(name, args)
+        # Log only the argument NAMES, never values — secret args (passwords,
+        # tokens) must not reach the logs even before the redaction processor.
+        log.info("tool_started", name=name, args_keys=list(args.keys()))
+        t_start = time.monotonic()
+        try:
+            result = await asyncio.wait_for(dispatch(name, args), timeout=20.0)
+        except TimeoutError:
+            elapsed = int((time.monotonic() - t_start) * 1000)
+            log.error("tool_timed_out", name=name, elapsed_ms=elapsed)
+            await params.result_callback(
+                {
+                    "success": False,
+                    "user_message": "Esa acción se quedó pegada. Intenta de nuevo.",
+                    "data": None,
+                    "requires_confirmation": False,
+                }
+            )
+            return
+        except Exception as exc:
+            elapsed = int((time.monotonic() - t_start) * 1000)
+            log.error("tool_failed", name=name, elapsed_ms=elapsed, error=str(exc))
+            await params.result_callback(
+                {
+                    "success": False,
+                    "user_message": "Algo falló con esa acción.",
+                    "data": None,
+                    "requires_confirmation": False,
+                }
+            )
+            return
+        elapsed = int((time.monotonic() - t_start) * 1000)
+        log.info("tool_completed", name=name, elapsed_ms=elapsed, success=result.success)
         payload: dict[str, Any] = {
             "success": result.success,
             "user_message": result.user_message,

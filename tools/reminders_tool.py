@@ -95,9 +95,11 @@ async def add_reminder(title: str, due_iso: str = "", list_name: str = "Reminder
     return ToolResult(True, {"title": title}, f"Listo, te recordaré: {title}.", False)
 
 
-@tool()
-async def complete_reminder(title: str) -> ToolResult:
-    """Marca como completado el recordatorio pendiente cuyo nombre es `title`."""
+@tool(destructive=True)
+async def complete_reminder(title: str, confirmed: bool = False) -> ToolResult:
+    """Marca como completado el recordatorio pendiente `title`. Pide confirmación."""
+    if not confirmed:
+        return ToolResult(True, {"title": title}, f"¿Marco completado '{title}'?", True)
     t = macos.esc_applescript(title)
     script = (
         'tell application "Reminders"\n'
@@ -109,5 +111,10 @@ async def complete_reminder(title: str) -> ToolResult:
     try:
         await macos.osascript(script, timeout_s=_REM_TIMEOUT_S)
     except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude completar el recordatorio: {exc}", False)
+        msg = str(exc)
+        if "app_dialog_blocked" in msg:
+            return ToolResult(
+                False, None, "macOS me pidió confirmar en pantalla. Autorízalo y dime otra vez.", False
+            )
+        return ToolResult(False, None, f"No pude completar el recordatorio: {msg}", False)
     return ToolResult(True, {"title": title}, f"Hecho: {title}.", False)
