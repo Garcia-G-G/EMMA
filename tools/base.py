@@ -43,6 +43,11 @@ class ToolResult:
     data: Any
     user_message: str
     requires_confirmation: bool = False
+    # When True, the conversation session closes after Emma speaks this result's
+    # message (returning to wake-word listening). Used by playback tools so the
+    # open mic stops fighting the music it just started (Emma has no acoustic
+    # echo cancellation for third-party audio like Spotify).
+    ends_session: bool = False
 
 
 @dataclass(frozen=True)

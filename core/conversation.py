@@ -28,6 +28,7 @@ package source:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import structlog
@@ -277,25 +278,87 @@ async def _build_instructions() -> str:
     return base
 
 
-async def _on_function_call(params: FunctionCallParams) -> None:
-    """Pipecat function-call handler. Dispatches to the existing tools registry.
+class SessionControl:
+    """Lets a tool request the session close after Emma finishes speaking.
 
-    Pipecat's ``register_function`` contract: handler receives a
-    :class:`FunctionCallParams` and reports its result by awaiting
-    ``params.result_callback(payload)``. The payload is serialized to
-    JSON and sent back to the Realtime model as a ``function_call_output``.
+    Playback tools set ``ToolResult.ends_session=True``; the function-call
+    handler flags it here, and :class:`EndSessionWatcher` cancels the pipeline
+    task on the next ``BotStoppedSpeakingFrame`` (after the spoken confirmation),
+    so the open mic stops fighting the music it just started. A fallback timer
+    ends the session even if the model never speaks.
     """
-    name = params.function_name
-    args = dict(params.arguments or {})
-    log.info("fn_call", name=name, args=args)
-    result = await dispatch(name, args)
-    payload: dict[str, Any] = {
-        "success": result.success,
-        "user_message": result.user_message,
-        "data": result.data,
-        "requires_confirmation": result.requires_confirmation,
-    }
-    await params.result_callback(payload)
+
+    def __init__(self) -> None:
+        self.task: PipelineTask | None = None
+        self._end_requested = False
+        self._fallback: asyncio.Task | None = None
+
+    def set_task(self, task: PipelineTask) -> None:
+        self.task = task
+
+    @property
+    def end_requested(self) -> bool:
+        return self._end_requested
+
+    def request_end(self) -> None:
+        if self._end_requested:
+            return
+        self._end_requested = True
+        self._fallback = asyncio.create_task(self._fallback_end())
+
+    async def _fallback_end(self) -> None:
+        await asyncio.sleep(10.0)
+        await self.end_now("fallback_timeout")
+
+    async def end_now(self, reason: str) -> None:
+        if not self._end_requested:
+            return
+        self._end_requested = False
+        if self.task is not None:
+            log.info("session_end_after_tool", reason=reason)
+            await self.task.cancel()
+
+
+class EndSessionWatcher(FrameProcessor):
+    """Ends the session after the bot stops speaking, when a tool requested it."""
+
+    def __init__(self, control: SessionControl) -> None:
+        super().__init__()
+        self._control = control
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        await self.push_frame(frame, direction)
+        if self._control.end_requested and isinstance(frame, BotStoppedSpeakingFrame):
+            await self._control.end_now("after_speech")
+
+
+def _make_function_handler(control: SessionControl):
+    """Build the Pipecat function-call handler bound to a session's control.
+
+    Pipecat's ``register_function`` contract: the handler receives a
+    :class:`FunctionCallParams` and reports its result by awaiting
+    ``params.result_callback(payload)``. The payload is serialized to JSON and
+    sent back to the Realtime model as a ``function_call_output``. If the tool
+    set ``ends_session``, we ask the session to close after Emma speaks.
+    """
+
+    async def _handler(params: FunctionCallParams) -> None:
+        name = params.function_name
+        args = dict(params.arguments or {})
+        log.info("fn_call", name=name, args=args)
+        result = await dispatch(name, args)
+        payload: dict[str, Any] = {
+            "success": result.success,
+            "user_message": result.user_message,
+            "data": result.data,
+            "requires_confirmation": result.requires_confirmation,
+        }
+        await params.result_callback(payload)
+        if getattr(result, "ends_session", False):
+            control.request_end()
+
+    return _handler
 
 
 async def _build_session_properties() -> SessionProperties:
@@ -368,21 +431,25 @@ async def build_pipeline() -> tuple[
         ),
     )
 
+    session_control = SessionControl()
+    function_handler = _make_function_handler(session_control)
     for spec in openai_tool_specs():
         fn = spec.get("function", spec)
         name = fn.get("name")
         if name:
-            llm.register_function(name, _on_function_call)
+            llm.register_function(name, function_handler)
 
     context = LLMContext(messages=[])
     assistant_aggregator = LLMAssistantAggregator(context)
     transcript_collector = TranscriptCollector()
     auth_watcher = AuthErrorWatcher()
+    end_watcher = EndSessionWatcher(session_control)
 
     pipeline = Pipeline([
         transport.input(),
         llm,
         auth_watcher,  # right after the LLM so it sees its ErrorFrames first
+        end_watcher,  # closes the session after playback tools finish speaking
         assistant_aggregator,
         transcript_collector,
         gate_proc,
@@ -398,6 +465,7 @@ async def build_pipeline() -> tuple[
         cancel_on_idle_timeout=True,
     )
     auth_watcher.set_task(task)
+    session_control.set_task(task)
     return pipeline, task, transport, context, auth_watcher
 
 
