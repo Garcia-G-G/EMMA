@@ -70,7 +70,7 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import events_bus
+from core import events_bus, vocabulary
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -148,7 +148,10 @@ class TranscriptCollector(FrameProcessor):
         if isinstance(frame, UserStartedSpeakingFrame):
             events_bus.publish("state", state="thinking")
         if isinstance(frame, TranscriptionFrame) and frame.text:
-            self._user_text += frame.text + " "
+            cleaned = vocabulary.corrections(frame.text)
+            if cleaned != frame.text:
+                log.debug("transcript_corrected", before=frame.text, after=cleaned)
+            self._user_text += cleaned + " "
         elif isinstance(frame, LLMTextFrame) and frame.text:
             self._assistant_text += frame.text
         elif isinstance(frame, BotStoppedSpeakingFrame):
@@ -338,6 +341,9 @@ async def _build_instructions() -> str:
         "- No lists unless requested.\n"
         "- No repeating the same information.\n"
     )
+    pron = vocabulary.pronunciation_block("es")
+    if pron:
+        base = f"{base}\n\n{pron}"
     try:
         memory = await priming_block()
     except Exception as exc:
@@ -475,7 +481,12 @@ async def _build_session_properties() -> SessionProperties:
         audio=AudioConfiguration(
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
-                transcription=InputAudioTranscription(model="whisper-1"),
+                transcription=InputAudioTranscription(
+                    model="whisper-1",
+                    # Hot-word bias: nudge Whisper toward our technical
+                    # vocabulary. Trimmed to ≤500 chars per the Realtime API.
+                    prompt=" ".join(vocabulary.bias_words())[:500],
+                ),
                 noise_reduction=InputAudioNoiseReduction(type="far_field"),
                 turn_detection=TurnDetection(
                     type="server_vad",

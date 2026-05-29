@@ -1,0 +1,164 @@
+# Emma vocabulary library.
+# - canonical: the official spelling Emma reads and writes.
+# - stt_aliases: common mistranscriptions folded back to canonical.
+# - say_es / say_en: optional phonetic spelling so Emma pronounces the
+#   word correctly when speaking that language.
+# - description: one-liner for the LLM's situational awareness.
+
+[Claude]
+canonical = "Claude"
+description = "Anthropic's AI assistant; pronounced like English 'klohd'."
+stt_aliases = ["clout", "cloud", "clod", "claudia", "klaud", "klauz"]
+say_es = "clod"
+say_en = "klohd"
+
+[ClaudeCode]
+canonical = "Claude Code"
+description = "Anthropic's coding agent CLI."
+stt_aliases = ["cloud code", "clout code", "claude codes"]
+say_es = "clod cod"
+say_en = "klohd code"
+
+[Anthropic]
+canonical = "Anthropic"
+description = "The AI safety company."
+stt_aliases = ["antropico", "antrópico", "antropic", "antrhopic"]
+say_es = "an-trópic"
+say_en = "an-THROP-ic"
+
+[OpenAI]
+canonical = "OpenAI"
+description = "The AI company."
+stt_aliases = ["open a i", "openei", "open ay"]
+say_es = "oupen ei ai"
+say_en = "OH-pen-AY-eye"
+
+[Pipecat]
+canonical = "Pipecat"
+description = "Open-source voice-AI framework."
+stt_aliases = ["pipe cat", "paypa cat", "pipa cat"]
+say_es = "paip-cat"
+say_en = "PIPE-cat"
+
+[Whisper]
+canonical = "Whisper"
+description = "OpenAI's speech-to-text model."
+stt_aliases = ["wisper", "guisper"]
+
+[ElevenLabs]
+canonical = "ElevenLabs"
+description = "Voice synthesis platform."
+stt_aliases = ["eleven labs", "elevenlabs", "eleven labes"]
+say_es = "ilevenlabs"
+say_en = "e-LEH-ven-labs"
+
+[GPT]
+canonical = "GPT"
+description = "OpenAI's transformer model family."
+stt_aliases = ["yi pi ti", "gee pee tee"]
+say_es = "ye-pe-te"
+say_en = "GEE-PEE-TEE"
+
+[iCloud]
+canonical = "iCloud"
+description = "Apple's cloud service."
+stt_aliases = ["i cloud", "i-cloud", "ai cloud"]
+say_es = "aiclaud"
+say_en = "EYE-cloud"
+
+[iMessage]
+canonical = "iMessage"
+description = "Apple's messaging service."
+stt_aliases = ["i message", "ai message"]
+say_es = "aimésaych"
+say_en = "EYE-message"
+
+[AirPods]
+canonical = "AirPods"
+description = "Apple wireless earbuds."
+stt_aliases = ["air pods", "ear pods", "airpads"]
+say_es = "érpods"
+say_en = "AIR-pods"
+
+[macOS]
+canonical = "macOS"
+description = "Apple's desktop operating system."
+stt_aliases = ["mac os", "mac o s", "máck os"]
+say_es = "mac-o-ese"
+say_en = "MAC-O-S"
+
+[AppleScript]
+canonical = "AppleScript"
+description = "Apple's automation scripting language."
+stt_aliases = ["apple script", "appel script"]
+
+[Mycroft]
+canonical = "Mycroft"
+description = "Emma's current wake word model (open-source assistant)."
+stt_aliases = ["minecraft", "my croft", "mycraft"]
+say_es = "máicroft"
+say_en = "MY-croft"
+
+[Jarvis]
+canonical = "Jarvis"
+description = "Iron Man's AI; also a wake word model name."
+stt_aliases = ["service", "jarvas", "yarvis"]
+say_es = "yárvis"
+say_en = "JAR-vis"
+
+[Emma]
+canonical = "Emma"
+description = "Garcia's assistant — this project."
+stt_aliases = ["ema", "hema"]
+say_es = "ema"
+
+[Garcia]
+canonical = "Garcia"
+description = "The user."
+stt_aliases = ["garcía", "garsia"]
+say_es = "garsía"
+say_en = "GAR-see-uh"
+
+[Monterrey]
+canonical = "Monterrey"
+description = "Garcia's city, Nuevo León, Mexico."
+stt_aliases = ["monterey"]
+
+[Pydantic]
+canonical = "Pydantic"
+description = "Python data validation library."
+stt_aliases = ["pidantic", "pi dantic"]
+say_es = "paidántic"
+say_en = "pie-DAN-tic"
+
+[SQLite]
+canonical = "SQLite"
+description = "Embedded SQL database."
+stt_aliases = ["sequelite", "esquelite", "sequel light"]
+say_es = "es-cu-él-lait"
+say_en = "SEE-kwul-lite"
+
+[asyncio]
+canonical = "asyncio"
+description = "Python's async/await library."
+stt_aliases = ["asincio", "a sync i o"]
+
+[GitHub]
+canonical = "GitHub"
+description = "Code hosting platform."
+stt_aliases = ["git hub", "github"]
+
+[Tavily]
+canonical = "Tavily"
+description = "Web search API."
+stt_aliases = ["taviley", "tablely"]
+
+[Spotify]
+canonical = "Spotify"
+description = "Music streaming service."
+stt_aliases = ["espotify", "espotifai"]
+
+[YouTube]
+canonical = "YouTube"
+description = "Video platform."
+stt_aliases = ["yutub", "yutu"]
