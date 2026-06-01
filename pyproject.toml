@@ -29,6 +29,7 @@ dependencies = [
     "sqlite-vec>=0.1.9",
     "pyobjc-framework-cocoa>=12.1",
     "pyobjc-framework-webkit>=12.1",
+    "pvporcupine>=4.0.2",
 ]
 
 [dependency-groups]
