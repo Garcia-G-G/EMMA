@@ -37,6 +37,16 @@ _CHUNK_SAMPLES = 1280  # 80 ms at 16 kHz - openWakeWord's expected input size
 _model: Any = None
 _model_lock = asyncio.Lock()
 
+# Project root, so a relative WAKE_WORD_PATH (e.g. "wake_words/emma.ppn") resolves
+# the same whether the daemon launches from the repo or from launchd's cwd.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve(raw: str) -> Path:
+    """Expand ~ and anchor a relative wake-word path to the project root."""
+    p = Path(raw).expanduser()
+    return p if p.is_absolute() else (_PROJECT_ROOT / p)
+
 
 async def _get_model() -> Any:
     """Lazy-construct (and keep warm) the openWakeWord Model singleton."""
@@ -134,8 +144,8 @@ def _close_stream_background(stream: Any) -> None:
     threading.Thread(target=_close, name="wake-stream-close", daemon=True).start()
 
 
-async def listen_for_wake_word() -> None:
-    """Block until 'Hey Emma' is detected, then return. Plays an ack tone."""
+async def _listen_openwakeword() -> None:
+    """Block until the openWakeWord model fires, then return. Plays an ack tone."""
     model = await _get_model()
 
     # Clear retained state from any prior detection before listening
@@ -151,7 +161,7 @@ async def listen_for_wake_word() -> None:
         if status:
             log.warning("input_status", status=str(status))
         try:
-            samples = np.frombuffer(bytes(indata), dtype=np.int16)  # type: ignore[arg-type]
+            samples = np.frombuffer(bytes(indata), dtype=np.int16)  # type: ignore[call-overload]
             predictions = model.predict(samples)
             score = float(predictions.get(name, 0.0))
             if score >= threshold:
@@ -184,3 +194,119 @@ async def listen_for_wake_word() -> None:
     stream.close()
     _reset_model(model)
     play_wake_chime()
+
+
+async def _listen_porcupine() -> None:
+    """Block until Picovoice Porcupine detects the wake word, then return.
+
+    Porcupine ships a self-contained ``.ppn`` keyword model (trained in the
+    Picovoice Console) and a tiny C engine: ``process()`` takes one frame of
+    ``frame_length`` int16 samples at ``sample_rate`` (16 kHz) and returns the
+    matched keyword index (``>= 0``) or ``-1``. We feed it straight from the
+    sounddevice callback, mirroring the openWakeWord branch's lifecycle
+    (background close on cancel, ack chime on hit).
+    """
+    try:
+        import pvporcupine
+    except ImportError as exc:
+        raise SystemExit(
+            "WAKE_WORD_ENGINE=pvporcupine but the 'pvporcupine' package is not "
+            "installed. Run `uv add pvporcupine` (path A), or set "
+            "WAKE_WORD_ENGINE=openwakeword in .env to use the open-source engine."
+        ) from exc
+
+    key = settings.PICOVOICE_ACCESS_KEY
+    if not key:
+        raise SystemExit(
+            "WAKE_WORD_ENGINE=pvporcupine but PICOVOICE_ACCESS_KEY is missing. "
+            "Add it to .env (from https://console.picovoice.ai/) — it migrates "
+            "to Keychain on the next install."
+        )
+
+    model_path = _resolve(settings.WAKE_WORD_PATH)
+    if not model_path.exists():
+        raise SystemExit(
+            f"Porcupine keyword file not found at {model_path}. Train 'Emma' in "
+            "the Picovoice Console, download the macOS .ppn, and drop it at "
+            "wake_words/emma.ppn (matching WAKE_WORD_PATH)."
+        )
+    sensitivity = float(settings.WAKE_WORD_THRESHOLD)
+
+    try:
+        porcupine = await asyncio.to_thread(
+            pvporcupine.create,
+            access_key=key,
+            keyword_paths=[str(model_path)],
+            sensitivities=[sensitivity],
+        )
+    except Exception as exc:  # pvporcupine.PorcupineError + friends
+        raise SystemExit(
+            f"Failed to initialise Porcupine with {model_path}: {exc}. Check the "
+            "AccessKey and that the .ppn was built for macOS (Apple Silicon)."
+        ) from exc
+
+    log.info(
+        "wake_model_loaded",
+        engine="pvporcupine",
+        source=str(model_path),
+        sensitivity=sensitivity,
+        name=settings.WAKE_WORD_NAME,
+    )
+
+    detected = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    def _cb(indata: object, frames: int, _t: object, status: object) -> None:
+        if status:
+            log.warning("input_status", status=str(status))
+        try:
+            samples = np.frombuffer(bytes(indata), dtype=np.int16)  # type: ignore[call-overload]
+            if porcupine.process(samples) >= 0:
+                loop.call_soon_threadsafe(detected.set)
+        except Exception as exc:
+            log.warning("wake_predict_failed", error=str(exc))
+
+    stream = sd.RawInputStream(
+        samplerate=porcupine.sample_rate,
+        channels=1,
+        dtype="int16",
+        blocksize=porcupine.frame_length,
+        callback=_cb,
+    )
+    stream.start()
+    try:
+        await detected.wait()
+    except asyncio.CancelledError:
+        log.info("wake_listen_cancelled")
+        _close_stream_background(stream)
+        with contextlib.suppress(Exception):
+            porcupine.delete()
+        raise
+
+    log.info("wake_detected", engine="pvporcupine")
+    stream.stop()
+    stream.close()
+    with contextlib.suppress(Exception):
+        porcupine.delete()
+    play_wake_chime()
+
+
+async def listen_for_wake_word() -> None:
+    """Block until the configured wake word fires, then return (plays a chime).
+
+    Engine is selected by ``WAKE_WORD_ENGINE`` (``pvporcupine`` or, by default,
+    ``openwakeword``). An unset/unknown value falls back to openWakeWord so a
+    broken ``.env`` never bricks wake detection — the openWakeWord branch itself
+    falls back to the built-in ``hey_jarvis`` model when WAKE_WORD_PATH is unset.
+    """
+    engine = (settings.WAKE_WORD_ENGINE or "openwakeword").strip().lower()
+    if engine == "pvporcupine":
+        await _listen_porcupine()
+    else:
+        if engine != "openwakeword":
+            log.warning("wake_engine_unknown", engine=engine, falling_back="openwakeword")
+        await _listen_openwakeword()
+
+
+# Alias for standalone scripts / docs that call wait_for_wake().
+wait_for_wake = listen_for_wake_word

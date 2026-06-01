@@ -22,6 +22,7 @@ _CREDENTIAL_FIELDS = (
     "POSTGRES_DSN",
     "BRAVE_API_KEY",
     "TAVILY_API_KEY",
+    "PICOVOICE_ACCESS_KEY",
 )
 
 
@@ -50,7 +51,14 @@ class Settings(BaseSettings):
     WAKE_WORD_NAME: str = "hey_emma"
     # Detection threshold (0.0-1.0). Raise for fewer false positives (stricter),
     # lower for higher recall. 0.5 is balanced for personal use in a quiet room.
+    # For pvporcupine this is passed as the per-keyword `sensitivity`.
     WAKE_WORD_THRESHOLD: float = 0.5
+    # Wake-word engine: "openwakeword" (default, open-source, built-in fallback
+    # models) or "pvporcupine" (Picovoice; needs a .ppn + PICOVOICE_ACCESS_KEY).
+    WAKE_WORD_ENGINE: str = "openwakeword"
+    # Picovoice AccessKey, only read when WAKE_WORD_ENGINE="pvporcupine". Treated
+    # as a credential (ends in _KEY) — migrated to Keychain by bootstrap_from_env.
+    PICOVOICE_ACCESS_KEY: str | None = None
     LOG_LEVEL: str = "INFO"
     EMMA_HOME: Path = Path.home() / ".emma"
 
