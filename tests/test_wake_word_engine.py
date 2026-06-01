@@ -139,6 +139,18 @@ class TestPorcupineBranch:
         assert "PICOVOICE_ACCESS_KEY" in str(exc.value)
 
     @pytest.mark.asyncio
+    async def test_missing_ppn_file_raises_systemexit(self, monkeypatch, tmp_path):
+        missing = tmp_path / "nope.ppn"  # never created
+        monkeypatch.setattr(settings, "WAKE_WORD_ENGINE", "pvporcupine")
+        monkeypatch.setattr(settings, "PICOVOICE_ACCESS_KEY", "test-access-key")
+        monkeypatch.setattr(settings, "WAKE_WORD_PATH", str(missing))
+        _install_fake_porcupine(monkeypatch)
+
+        with pytest.raises(SystemExit) as exc:
+            await wake_word._listen_porcupine()
+        assert str(missing) in str(exc.value) or "not found" in str(exc.value)
+
+    @pytest.mark.asyncio
     async def test_missing_package_raises_clear_systemexit(self, monkeypatch):
         # Ensure the import fails even if pvporcupine gets installed later.
         monkeypatch.setitem(sys.modules, "pvporcupine", None)
