@@ -196,15 +196,11 @@ async def delete_event(title: str, date: str = "", confirmed: bool = False) -> T
         "return deletedCount\n"
         "end tell"
     )
-    try:
-        out = await macos.osascript(script, timeout_s=15.0)
-    except macos.AppleScriptError as exc:
-        msg = str(exc)
-        if "app_dialog_blocked" in msg:
-            return ToolResult(
-                False, None, "macOS me pidió confirmar en pantalla. Autorízalo y dime otra vez.", False
-            )
-        return ToolResult(False, None, f"No pude borrar el evento: {msg}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=15.0, on_error="No pude borrar el evento"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     try:
         n = int((out or "0").strip())
     except ValueError:

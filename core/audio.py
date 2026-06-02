@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import io
 import math
 import time
-import wave
 from collections.abc import AsyncIterator
 from typing import Final
 
@@ -199,15 +197,6 @@ async def listen_for_speech(
             stream.close()
 
 
-def play_tone(freq_hz: float = 880.0, duration_ms: int = 150, volume: float = 0.18) -> None:
-    """Play a short non-blocking sine pip."""
-    n = int(SAMPLE_RATE * duration_ms / 1000)
-    t = np.arange(n) / SAMPLE_RATE
-    fade = np.minimum(np.linspace(0.0, 1.0, n), np.linspace(1.0, 0.0, n))
-    waveform = (np.sin(2 * np.pi * freq_hz * t) * fade * volume * 32767).astype(np.int16)
-    sd.play(waveform, SAMPLE_RATE, blocking=False)
-
-
 def play_wake_chime() -> None:
     """Two-tone rising chime for wake acknowledgment. Feels premium."""
     vol = 0.15
@@ -223,14 +212,3 @@ def play_wake_chime() -> None:
     tone2 = (np.sin(2 * np.pi * 880.0 * t2) * fade2 * vol * 32767).astype(np.int16)
     waveform = np.concatenate([tone1, gap, tone2])
     sd.play(waveform, r, blocking=True)
-
-
-def pcm_to_wav_bytes(pcm: bytes) -> bytes:
-    """Wrap raw 16 kHz mono int16 PCM in a WAV container (for Whisper API)."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(pcm)
-    return buf.getvalue()

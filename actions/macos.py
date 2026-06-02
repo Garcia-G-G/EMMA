@@ -78,6 +78,27 @@ async def osascript(script: str, timeout_s: float = 15.0) -> str:
     return stdout.decode("utf-8", errors="replace").strip()
 
 
+async def osascript_or_friendly(
+    script: str, timeout_s: float = 15.0, on_error: str = "No pude hacerlo"
+) -> tuple[bool, str]:
+    """Run :func:`osascript`; never raise. Returns ``(ok, output_or_message)``.
+
+    On success: ``(True, stdout)``. On the ``app_dialog_blocked`` timeout
+    marker: ``(False, <dialog guidance>)``. On any other AppleScript failure:
+    ``(False, f"{on_error}: {msg}")`` — callers pass their own ``on_error``
+    prefix (e.g. "No pude borrar la nota") so each tool keeps its specific
+    message while the duplicated try/except + dialog handling lives here once.
+    """
+    try:
+        out = await osascript(script, timeout_s=timeout_s)
+        return True, out
+    except AppleScriptError as exc:
+        msg = str(exc)
+        if "app_dialog_blocked" in msg:
+            return False, "macOS me pidió confirmar en pantalla. Autorízalo y pídemelo otra vez."
+        return False, f"{on_error}: {msg}"
+
+
 def esc_applescript(s: str) -> str:
     """Escape a Python string for safe embedding in an AppleScript string literal."""
     return s.replace("\\", "\\\\").replace('"', '\\"')
