@@ -61,6 +61,7 @@ _contacts: dict[str, Contact] = {}
 _terms: dict[str, Term] = {}
 _apps: dict[str, str] = {}
 _facts: dict[str, Fact] = {}
+_user_apps: dict[str, dict[str, Any]] = {}
 
 
 def _parse() -> None:
@@ -79,6 +80,7 @@ def _parse() -> None:
         _terms.clear()
         _apps.clear()
         _facts.clear()
+        _user_apps.clear()
         for k, v in (data.get("pages") or {}).items():
             _pages[k] = Page(
                 key=k, url=v.get("url", ""), title=v.get("title", ""), open_in=v.get("open_in", "")
@@ -95,6 +97,9 @@ def _parse() -> None:
             _terms[k] = Term(key=k, expansion=v.get("expansion", ""), context=v.get("context", ""))
         for k, v in (data.get("apps") or {}).items():
             _apps[k] = v.get("default", "")
+        for k, v in (data.get("user_apps") or {}).items():
+            if isinstance(v, dict):
+                _user_apps[k.lower()] = dict(v)
         for k, v in (data.get("facts") or {}).items():
             _facts[k] = Fact(
                 key=k,
@@ -138,6 +143,11 @@ def terms() -> dict[str, Term]:
 
 def app_for(category: str) -> str:
     return _apps.get(category, "")
+
+
+def user_app(name: str) -> dict[str, Any]:
+    """Per-user config for an app (workspace/team/vault IDs), or {}."""
+    return dict(_user_apps.get(name.strip().lower(), {}))
 
 
 def facts() -> list[Fact]:

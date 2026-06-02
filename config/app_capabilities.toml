@@ -1,0 +1,94 @@
+# Emma app-capabilities registry.
+#
+# Maps each app Garcia uses to its automation mechanisms so a single set of
+# tools can drive many apps — adding an app is a TOML block, not new code.
+#
+# Fields (all optional):
+#   url_scheme        the scheme name without "://" (implies deep-linking).
+#   applescript_dict  "full" | "limited" (a usable AppleScript dictionary).
+#   cli               CLI binary name in PATH, if the app ships one.
+#   category          chat|notes|tasks|design|dev|media|productivity|cloud.
+#   notes             one-line human note.
+#
+# PUBLIC capability info only — NO per-user data (workspace/team/vault IDs).
+# Those live in config/dictionary.toml [user_apps]. Hot-reload:
+#   python -c "from core.app_capabilities import reload; print(reload())"
+
+[slack]
+url_scheme = "slack"
+category = "chat"
+notes = "Deep link: slack://channel?team=TEAM_ID&id=CHANNEL_ID (real IDs)."
+
+[discord]
+url_scheme = "discord"
+category = "chat"
+notes = "discord://-/channels/<server>/<channel>."
+
+[whatsapp]
+url_scheme = "whatsapp"
+category = "chat"
+notes = "whatsapp://send?phone=<intl-number>."
+
+[figma]
+url_scheme = "figma"
+category = "design"
+notes = "figma://file/<file-id>/<file-name>."
+
+[linear]
+url_scheme = "linear"
+category = "dev"
+notes = "linear://team/<team-id>/issue/<issue-id>."
+
+[notion]
+url_scheme = "notion"
+category = "notes"
+notes = "notion://www.notion.so/<workspace>/<page-id>."
+
+[obsidian]
+url_scheme = "obsidian"
+category = "notes"
+notes = "obsidian://open?vault=<vault>&file=<path>."
+
+[bear]
+url_scheme = "bear"
+applescript_dict = "full"
+category = "notes"
+notes = "bear://x-callback-url/create?title=&text=."
+
+[things]
+url_scheme = "things"
+applescript_dict = "full"
+category = "tasks"
+notes = "things:///add?title=&notes= (three slashes)."
+
+[todoist]
+url_scheme = "todoist"
+category = "tasks"
+notes = "todoist://addtask?content=."
+
+[github_desktop]
+url_scheme = "x-github-client"
+category = "dev"
+notes = "GitHub Desktop: x-github-client://openRepo/<https-url>."
+
+[postman]
+url_scheme = "postman"
+category = "dev"
+notes = "Postman desktop deep links."
+
+[vlc]
+url_scheme = "vlc"
+applescript_dict = "limited"
+category = "media"
+notes = "vlc://<path-or-url>."
+
+[spotify]
+url_scheme = "spotify"
+applescript_dict = "full"
+category = "media"
+notes = "spotify:track:<id> / full AppleScript transport."
+
+[apple_music]
+applescript_dict = "full"
+category = "media"
+notes = "Apple Music — full AppleScript, no deep-link scheme used here."

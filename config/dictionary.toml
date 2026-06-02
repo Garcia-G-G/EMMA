@@ -94,3 +94,18 @@ confidence = 0.99
 text = "Garcia prefiere clonar repos a ~/Documents/repos."
 kind = "preference"
 confidence = 0.9
+
+# -----------------------------------------------------------------------
+# [user_apps] — per-user app config the capabilities registry can't know
+# (workspace/team/vault IDs). Replace these placeholders with your real
+# values. Used by tools/app_url_tool to build deep links.
+# -----------------------------------------------------------------------
+[user_apps.slack]
+workspace = "<your-team-id>"
+default_channel = "general"
+
+[user_apps.linear]
+team = "<your-team-key>"
+
+[user_apps.obsidian]
+default_vault = "Notas"

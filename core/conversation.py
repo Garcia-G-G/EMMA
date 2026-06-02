@@ -383,6 +383,17 @@ async def _build_instructions() -> str:
         "keystrokes for play/pause.\n"
         "- Only reach for app_keystroke / app_menu_click / app_focus when no "
         "specialized action exists for what Garcia asked.\n"
+        "\n# App URL schemes (mandatory)\n"
+        "- When Garcia names an app + an action (Slack, Figma, Linear, Notion, "
+        "Things, Obsidian, Discord, WhatsApp...), use open_in_app — it builds the "
+        "app's deep-link URL from the capabilities registry. Don't fall back to "
+        "app_keystroke unless the app has no URL scheme.\n"
+        "- For chat apps (Slack/Discord/WhatsApp) prefer channel deep-linking via "
+        "open_in_app over app_focus.\n"
+        "- For plain 'abre <app>' with no further intent, just use "
+        "open_application — don't reinvent it.\n"
+        "- If Garcia teaches you a new app ('recuerda que X usa el esquema Y'), "
+        "use remember_app.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
