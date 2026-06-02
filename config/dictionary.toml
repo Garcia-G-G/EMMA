@@ -1,0 +1,96 @@
+# Emma knowledge dictionary.
+#
+# Five sections, each a different kind of durable knowledge Garcia uses
+# daily. Entries are public-tier — no passwords, no full addresses, no
+# phone numbers. Secrets live in the macOS Keychain via
+# `tools/secrets_tool.remember_secret`.
+#
+# Hot-reload: `python -m emma.dictionary reload`.
+
+# -----------------------------------------------------------------------
+# [pages] — URL shortcuts. "Emma, abre mi <key>" → opens the url.
+# Optional fields: open_in (browser bundle id), title.
+# -----------------------------------------------------------------------
+[pages.github]
+url = "https://github.com/<your-username>"
+title = "Mi GitHub"
+
+[pages.github_inbox]
+url = "https://github.com/notifications"
+title = "GitHub notifications"
+
+[pages.linear]
+url = "https://linear.app/"
+title = "Linear"
+
+[pages.calendar]
+url = "https://calendar.google.com/"
+title = "Google Calendar"
+
+# -----------------------------------------------------------------------
+# [contacts] — people Garcia mentions by relation or first name.
+# Used by mail/messages tools to resolve "manda mensaje a mi mamá".
+# Public fields only: name, email, relation. NOT phone numbers.
+# -----------------------------------------------------------------------
+[contacts.mom]
+name = "Ana García"
+email = "ana@example.com"
+relation = "madre"
+aliases = ["mami", "mamá", "mom"]
+
+# -----------------------------------------------------------------------
+# [terms] — glossary. Acronyms, project codenames, jargon.
+# Stored as semantic memory facts so the LLM has them in priming.
+# -----------------------------------------------------------------------
+[terms.OWASP]
+expansion = "Open Web Application Security Project"
+context = "Seguridad web. Garcia usa el OWASP Top 10 como referencia."
+
+[terms.MCP]
+expansion = "Model Context Protocol"
+context = "Estándar de Anthropic para conectar LLMs a herramientas externas."
+
+[terms.MVP]
+expansion = "Minimum Viable Product"
+context = "Producto mínimo viable — versión más pequeña que entrega valor."
+
+# -----------------------------------------------------------------------
+# [apps] — Garcia's preferred app per category (when detect_preferred
+# can't pick). Routes voice intents directly without asking.
+# -----------------------------------------------------------------------
+[apps.editor]
+default = "Cursor"
+
+[apps.browser]
+default = "Arc"
+
+[apps.terminal]
+default = "iTerm"
+
+[apps.music]
+default = "Spotify"
+
+# -----------------------------------------------------------------------
+# [facts] — durable personal facts. Get seeded into memory so the LLM
+# has them in every priming block.
+# Each entry has `text` (Spanish) and optional `kind` and `confidence`.
+# -----------------------------------------------------------------------
+[facts.001]
+text = "Garcia vive en Monterrey, Nuevo León, México."
+kind = "profile"
+confidence = 0.99
+
+[facts.002]
+text = "Garcia trabaja como desarrollador de software."
+kind = "profile"
+confidence = 0.95
+
+[facts.003]
+text = "Garcia habla español mexicano de Monterrey y inglés."
+kind = "profile"
+confidence = 0.99
+
+[facts.004]
+text = "Garcia prefiere clonar repos a ~/Documents/repos."
+kind = "preference"
+confidence = 0.9

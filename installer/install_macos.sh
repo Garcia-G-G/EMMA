@@ -103,6 +103,17 @@ else
     echo "    cd ${EMMA_ROOT} && uv run python -m emma.security bootstrap"
 fi
 
+# 7.7 Seed knowledge dictionary into memory + vocabulary
+step "Seeding knowledge dictionary"
+if [ -t 0 ] && [ -t 1 ]; then
+    ( cd "${EMMA_ROOT}" && uv run python -m emma.dictionary seed ) || \
+        warn "Dictionary seed exited non-zero (you can re-run manually)."
+    ok "Dictionary seeded"
+else
+    warn "Non-interactive shell; skipping dictionary seed. Run manually:"
+    echo "    cd ${EMMA_ROOT} && uv run python -m emma.dictionary seed"
+fi
+
 # 8. Install plist with paths substituted
 step "Installing LaunchAgent"
 mkdir -p "${HOME_DIR}/Library/LaunchAgents" "${LOG_DIR}"
