@@ -108,13 +108,9 @@ async def complete_reminder(title: str, confirmed: bool = False) -> ToolResult:
         "  set completed of (item 1 of matches) to true\n"
         "end tell"
     )
-    try:
-        await macos.osascript(script, timeout_s=_REM_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        msg = str(exc)
-        if "app_dialog_blocked" in msg:
-            return ToolResult(
-                False, None, "macOS me pidió confirmar en pantalla. Autorízalo y dime otra vez.", False
-            )
-        return ToolResult(False, None, f"No pude completar el recordatorio: {msg}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_REM_TIMEOUT_S, on_error="No pude completar el recordatorio"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"title": title}, f"Hecho: {title}.", False)
