@@ -128,6 +128,49 @@ def _memory_facts() -> list[dict]:
         return []
 
 
+def _wake_word_card() -> dict:
+    """Wake-word status card reflecting the live engine config (Prompt 16)."""
+    from config.settings import settings
+
+    engine = (settings.WAKE_WORD_ENGINE or "openwakeword").lower()
+    if engine == "pvporcupine":
+        ppn = Path(settings.WAKE_WORD_PATH)
+        if not ppn.is_absolute():
+            ppn = Path(__file__).resolve().parent.parent / ppn
+        if ppn.exists():
+            return {
+                "id": "WAKE-02",
+                "severity": "info",
+                "status": "closed",
+                "title": "Custom Picovoice 'Emma' wake word active",
+                "detail": (
+                    f"Engine pvporcupine, keyword '{settings.WAKE_WORD_NAME}', "
+                    f"sensitivity {settings.WAKE_WORD_THRESHOLD}."
+                ),
+            }
+        return {
+            "id": "WAKE-02",
+            "severity": "medium",
+            "status": "open",
+            "title": "Picovoice wake word configured but model file missing",
+            "detail": (
+                f"WAKE_WORD_ENGINE=pvporcupine but no .ppn at {ppn}. Train 'Emma' "
+                "in the Picovoice Console and drop it at wake_words/emma.ppn."
+            ),
+        }
+    return {
+        "id": "WAKE-02",
+        "severity": "low",
+        "status": "open",
+        "title": "Using built-in hey_jarvis (openWakeWord fallback)",
+        "detail": (
+            "Default engine. Switch to the custom 'Emma' wake word by training a "
+            ".ppn in the Picovoice Console and setting WAKE_WORD_ENGINE=pvporcupine "
+            "in .env."
+        ),
+    }
+
+
 def _known_issues() -> list[dict]:
     return [
         {
@@ -165,13 +208,7 @@ def _known_issues() -> list[dict]:
             "title": "YouTube disambiguation loop",
             "detail": "Exact creator name match added but needs live validation.",
         },
-        {
-            "id": "WAKE-02",
-            "severity": "low",
-            "status": "open",
-            "title": "Custom 'Hey Emma' wake word not trained",
-            "detail": "Using built-in hey_jarvis. Colab training not done yet.",
-        },
+        _wake_word_card(),
     ]
 
 

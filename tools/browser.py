@@ -12,13 +12,6 @@ uses the dedicated Chromium with the persistent profile at
 ``open <url>`` so macOS routes to the user's system default. There is
 no browser-preference memory fact - behavior is determined by the
 action type, not by who the user prefers.
-
-# TODO(future-phase): replace the scripted browser_do with a general
-#   LLM-driven agent. The agent should take a free-form intent, drive the
-#   browser turn-by-turn using screenshots + DOM context with GPT-4o,
-#   structured action grammar, retries, and a hard step cap (15). Until
-#   then, any non-Amazon intent surfaces a clean "not yet available"
-#   error so the LLM falls back to lower-level tools or asks the user.
 """
 
 from __future__ import annotations
