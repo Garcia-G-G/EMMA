@@ -23,6 +23,7 @@ _CREDENTIAL_FIELDS = (
     "BRAVE_API_KEY",
     "TAVILY_API_KEY",
     "PICOVOICE_ACCESS_KEY",
+    "GITHUB_TOKEN",
 )
 
 
@@ -40,6 +41,11 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_ID: str | None = None
     SPOTIFY_CLIENT_SECRET: str | None = None
     POSTGRES_DSN: str | None = None
+    # Optional. If set, GitHub search uses 5000/hr instead of 60/hr. Credential
+    # (ends in _TOKEN) — migrated to Keychain by bootstrap_from_env.
+    GITHUB_TOKEN: str = ""
+    # Where Emma drops cloned repos by default (override in .env).
+    CLONE_DIR: Path = Path.home() / "Documents" / "repos"
     ELEVENLABS_VOICE_ID_ES: str
     ELEVENLABS_VOICE_ID_EN: str
     # Path to the user-trained openWakeWord ONNX model (see README "Wake word").

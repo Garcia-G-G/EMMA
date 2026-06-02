@@ -349,6 +349,18 @@ async def _build_instructions() -> str:
         "content in his preferred language (default Spanish), naturally, then "
         "STOP. Do not invite a follow-up or append questions unless the "
         "directive itself contains one.\n"
+        "\n# Repo cloning flow (mandatory)\n"
+        "- When Garcia asks to 'buscar un repo', call search_github. Read the "
+        "top 1-3 matches by name + star count. If he names one (a number or "
+        "owner), pick it; otherwise present the top match and ask '¿clono el "
+        "de X?'.\n"
+        "- When he says 'clónalo en mi IDE' or chains 'busca X y clónalo', call "
+        "clone_and_open with the resolved repo (use get_repo_url first if you "
+        "only have a name). It returns requires_confirmation the first time — "
+        "speak the question, wait for sí/no, then re-call with confirmed: true.\n"
+        "- Once the clone is spawned, do NOT narrate. Say one short line "
+        "('listo, clonando X') and stop. The macOS notification + the IDE "
+        "opening on completion are enough signal.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
