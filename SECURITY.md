@@ -50,8 +50,12 @@ Enforcement:
 - **Public:** `self/capabilities.md`, source tree — `~/Documents/EMMA/`.
 - **Personal:** `~/.emma/memory.db` (SQLite + sqlite-vec). Protect with FileVault.
 - **Secret:** login Keychain, service `com.garcia.emma`. Migrated credentials use
-  the env-var name as the label; secret facts use `fact_<uuid>`; user secrets use
-  whatever label you choose via the `remember_secret` tool.
+  the env-var name as the label (`OPENAI_API_KEY`, `ELEVENLABS_API_KEY`,
+  `PICOVOICE_ACCESS_KEY` — the Porcupine wake-word key added in Prompt 16 —
+  `BRAVE_API_KEY`, `TAVILY_API_KEY`, `YOUTUBE_API_KEY`, `SPOTIFY_CLIENT_*`,
+  `POSTGRES_DSN`); secret facts use `fact_<uuid>`; user secrets use whatever
+  label you choose via the `remember_secret` tool. The canonical credential
+  list lives in `config/settings.py:_CREDENTIAL_FIELDS`.
 
 ## How to wipe everything
 
@@ -76,6 +80,12 @@ care about a stored secret beyond Emma's convenience, **export it to your passwo
 manager**. Migrated API keys also remain retrievable from their original provider
 dashboards. The sentinel `emma.master_present` lets `emma.security audit` detect a
 wiped Keychain.
+
+If you ever suspect a security regression (a secret in a log, a credential not
+loading, a destructive tool acting without confirmation), re-run the live audit
+from **Prompt 16.1** — it checks log redaction, the `vault_ref` priming filter,
+the Keychain credential roundtrip in a launchd-like env, destructive-tool
+confirmation gating, and `vocabulary.append_entry` injection resistance.
 
 ## What goes to OpenAI vs. stays local
 
