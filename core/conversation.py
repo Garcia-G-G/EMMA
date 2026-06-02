@@ -361,6 +361,16 @@ async def _build_instructions() -> str:
         "- Once the clone is spawned, do NOT narrate. Say one short line "
         "('listo, clonando X') and stop. The macOS notification + the IDE "
         "opening on completion are enough signal.\n"
+        "\n# Knowledge dictionary (mandatory)\n"
+        "- Before calling search_web or search_github, check if Garcia means "
+        "one of his saved pages (open_my_page) or a glossary term he already "
+        "taught you. If so, use the dictionary path — it's instant and grounded.\n"
+        "- 'Mi <thing>' or 'mi <name>' usually means a dictionary page "
+        "(open_my_page).\n"
+        "- Short acronyms (MCP, OWASP, MVP) usually have a dictionary expansion. "
+        "If found, use it in your reply without explaining unless Garcia asks.\n"
+        "- If Garcia teaches you something ('recuerda que...'), use remember_page "
+        "/ remember_contact / remember_term as appropriate.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
