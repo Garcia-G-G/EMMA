@@ -172,3 +172,17 @@ class TestVocabulary:
 
         result = await add_vocabulary_word(canonical="   ")
         assert result.success is False
+
+    def test_append_entry_resists_toml_injection(self, temp_vocab):
+        # Crafted input with newlines must not break the TOML or inject sections.
+        vocabulary.append_entry(
+            canonical='Evil"\nfake\n[BadKey]\nbad="yes"',
+            aliases=['x"\n[X]\ny="2"'],
+            description="A; rm -rf /",
+        )
+        import tomllib
+
+        data = tomllib.loads(temp_vocab.read_text(encoding="utf-8"))
+        assert "BadKey" not in data and "X" not in data, "TOML section injected"
+        # The file still parses and the prior entries survive.
+        assert vocabulary.reload() >= 4

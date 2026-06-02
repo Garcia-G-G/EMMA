@@ -131,7 +131,16 @@ def bias_words() -> list[str]:
 
 
 def _toml_escape(value: str) -> str:
-    """Escape a string for a TOML basic (double-quoted) value."""
+    """Escape a string for a TOML basic (double-quoted) value.
+
+    Vocabulary values are always single-line (names, aliases, pronunciations),
+    so control characters — newlines, tabs, CR — are stripped outright. This is
+    the security boundary for :func:`append_entry`: without it, a crafted value
+    containing ``\\n[BadSection]`` would break the single-line string and inject
+    rogue TOML structure (or corrupt the whole file). After stripping, the
+    backslash and double-quote are escaped so the value stays one basic string.
+    """
+    value = "".join(ch for ch in value if ord(ch) >= 0x20)
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
