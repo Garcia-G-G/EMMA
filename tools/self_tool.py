@@ -139,9 +139,10 @@ def describe_capabilities() -> ToolResult:
 
 def _summarize_for_voice(tool_names: list[str]) -> str:
     """Map raw tool names to a short, spoken list of categories."""
-    has = lambda *prefixes: any(  # noqa: E731
-        any(t.startswith(p) for p in prefixes) for t in tool_names
-    )
+
+    def has(*prefixes: str) -> bool:
+        return any(any(t.startswith(p) for p in prefixes) for t in tool_names)
+
     bits: list[str] = []
     if has("play_", "pause", "resume", "next_track", "previous_track", "now_playing"):
         bits.append("controlar música")

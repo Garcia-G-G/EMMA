@@ -82,7 +82,7 @@ def test_ping_automation_launches_then_queries() -> None:
     first_script = mock_exec.call_args_list[0].args[2]
     second_script = mock_exec.call_args_list[1].args[2]
     assert first_script == 'launch application "Calendar"', first_script
-    assert second_script == "tell application \"Calendar\" to count calendars", second_script
+    assert second_script == 'tell application "Calendar" to count calendars', second_script
     # ordering: launch must come before the data-model query
     assert first_script.startswith("launch application")
     assert second_script.startswith("tell application")

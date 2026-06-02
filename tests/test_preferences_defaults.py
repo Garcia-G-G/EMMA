@@ -67,7 +67,9 @@ def test_set_preferred_unknown_category_refused():
 
 
 def test_list_apps_single_category():
-    with patch("tools.preferences.detect_preferred", return_value=_det("chrome", ["chrome", "safari"])):
+    with patch(
+        "tools.preferences.detect_preferred", return_value=_det("chrome", ["chrome", "safari"])
+    ):
         r = list_apps("browser")
     assert r.success
     assert r.data["browser"]["installed"] == ["chrome", "safari"]

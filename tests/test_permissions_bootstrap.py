@@ -92,7 +92,14 @@ def test_automation_app_list_covers_macos_tool_apps() -> None:
     # Guard the convention: the 7 Prompt-15 apps plus Music (music.py) and
     # Terminal (dev.py) must all be in the canonical bootstrap list.
     for app in (
-        "Calendar", "Mail", "Messages", "Notes", "Reminders",
-        "Safari", "Finder", "Music", "Terminal",
+        "Calendar",
+        "Mail",
+        "Messages",
+        "Notes",
+        "Reminders",
+        "Safari",
+        "Finder",
+        "Music",
+        "Terminal",
     ):
         assert app in _AUTOMATION_APPS

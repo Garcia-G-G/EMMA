@@ -43,6 +43,7 @@ async def _run(args: list[str]) -> tuple[int, str, str]:
     except TimeoutError:
         proc.kill()
         raise RuntimeError("security CLI timed out") from None
+    assert proc.returncode is not None  # set after communicate() returns
     return (
         proc.returncode,
         stdout.decode("utf-8", "replace"),
@@ -132,7 +133,7 @@ def _is_credential(key: str, value: str) -> bool:
     return looks_like_api_key(value)
 
 
-async def bootstrap_from_env(env_path: Path) -> dict:
+async def bootstrap_from_env(env_path: Path) -> dict[str, list[str]]:
     """Move credentials from `.env` to Keychain (one-way). Returns {moved, skipped}.
 
     A line is a credential if its key matches *_KEY/_TOKEN/_SECRET/_PASSWORD/_DSN

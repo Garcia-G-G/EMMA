@@ -62,9 +62,7 @@ def test_visualizer_route_and_events_ws():
         try:
             # HTTP 200 for /visualizer (blocking urllib -> executor)
             def _get():
-                with urllib.request.urlopen(
-                    "http://localhost:39210/visualizer", timeout=3
-                ) as r:
+                with urllib.request.urlopen("http://localhost:39210/visualizer", timeout=3) as r:
                     return r.status, r.read().decode("utf-8", "replace")
 
             status, body = await asyncio.get_event_loop().run_in_executor(None, _get)

@@ -14,6 +14,8 @@ ISO dates — from being redacted.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
 _API_KEY_RE = re.compile(r"[A-Za-z0-9+/_\-]{32,}")
 
@@ -35,25 +37,25 @@ def _luhn_ok(digits: str) -> bool:
     return total % 10 == 0
 
 
-def _card_sub(m: re.Match) -> str:
+def _card_sub(m: re.Match[str]) -> str:
     digits = re.sub(r"\D", "", m.group(0))
     if 13 <= len(digits) <= 19 and _luhn_ok(digits):
         return "[REDACTED:CREDIT_CARD]"
     return m.group(0)
 
 
-def _iban_sub(m: re.Match) -> str:
+def _iban_sub(m: re.Match[str]) -> str:
     return "[REDACTED:IBAN]" if len(m.group(0)) >= 15 else m.group(0)
 
 
-def _phone_sub(m: re.Match) -> str:
+def _phone_sub(m: re.Match[str]) -> str:
     if len(re.sub(r"\D", "", m.group(0))) >= 10:
         return "[REDACTED:PHONE_INTL]"
     return m.group(0)
 
 
 # (type, compiled pattern, replacement) — order matters.
-_RULES: list[tuple[str, re.Pattern, object]] = [
+_RULES: list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     ("CREDIT_CARD", re.compile(r"\d(?:[ -]?\d){12,18}"), _card_sub),
     ("CURP", re.compile(r"\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b"), "[REDACTED:CURP]"),
     ("RFC", re.compile(r"\b[A-Z&Ñ]{3,4}\d{6}[A-Z\d]{3}\b"), "[REDACTED:RFC]"),
@@ -74,7 +76,9 @@ def redact(text: str) -> str:
     return out
 
 
-def redaction_processor(logger, method_name, event_dict):
+def redaction_processor(
+    logger: Any, method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """structlog processor: redact every string value in the event dict."""
     for k, v in list(event_dict.items()):
         if isinstance(v, str):

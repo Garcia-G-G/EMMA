@@ -43,7 +43,9 @@ async def recall_secret(label: str) -> ToolResult:
     value = await secrets.retrieve(label)
     log.info("secret_tool_recall", label_read=label)  # never log the value
     if value is None:
-        return ToolResult(True, {"label": label, "found": False}, f"No tengo nada bajo '{label}'.", False)
+        return ToolResult(
+            True, {"label": label, "found": False}, f"No tengo nada bajo '{label}'.", False
+        )
     # value goes only in user_message (to be spoken); never in `data`.
     return ToolResult(True, {"label": label, "found": True}, value, False)
 
@@ -52,7 +54,9 @@ async def recall_secret(label: str) -> ToolResult:
 async def forget_secret(label: str, confirmed: bool = False) -> ToolResult:
     """Borra permanentemente un secreto guardado. Pide confirmación."""
     if not confirmed:
-        return ToolResult(True, {"label": label}, f"¿Borro permanentemente el secreto '{label}'?", True)
+        return ToolResult(
+            True, {"label": label}, f"¿Borro permanentemente el secreto '{label}'?", True
+        )
     ok = await secrets.delete(label)
     return ToolResult(ok, {"label": label}, "Borrado." if ok else f"No encontré '{label}'.", False)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 import structlog
 
@@ -28,9 +29,9 @@ def _date_setter(var: str, d: dt.datetime) -> str:
     )
 
 
-def _parse_events(raw: str) -> list[dict]:
+def _parse_events(raw: str) -> list[dict[str, Any]]:
     """Parse 'Y-M-D-h-m|summary|location' lines into sorted event dicts."""
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     for line in raw.splitlines():
         line = line.strip()
         if not line or "|" not in line:
@@ -48,7 +49,13 @@ def _parse_events(raw: str) -> list[dict]:
         if location:
             label += f" ({location})"
         events.append(
-            {"iso": when.isoformat(), "title": summary, "location": location, "label": label, "_dt": when}
+            {
+                "iso": when.isoformat(),
+                "title": summary,
+                "location": location,
+                "label": label,
+                "_dt": when,
+            }
         )
     events.sort(key=lambda e: e["_dt"])
     for e in events:
@@ -56,12 +63,12 @@ def _parse_events(raw: str) -> list[dict]:
     return events
 
 
-async def _fetch_between(start: dt.datetime, end: dt.datetime) -> list[dict]:
+async def _fetch_between(start: dt.datetime, end: dt.datetime) -> list[dict[str, Any]]:
     script = (
         'tell application "Calendar"\n'
         + _date_setter("startB", start)
         + _date_setter("endB", end)
-        + "set out to \"\"\n"
+        + 'set out to ""\n'
         "repeat with cal in calendars\n"
         "  repeat with ev in (every event of cal whose start date ≥ startB and start date ≤ endB)\n"
         "    set sd to start date of ev\n"

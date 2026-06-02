@@ -78,16 +78,10 @@ async def add_reminder(title: str, due_iso: str = "", list_name: str = "Reminder
         except ValueError:
             return ToolResult(False, None, "La fecha debe estar en formato ISO.", False)
         props = f'{{name:"{t}", due date:dueD}}'
-        make = _date_setter("dueD", due) + f'make new reminder with properties {props}'
+        make = _date_setter("dueD", due) + f"make new reminder with properties {props}"
     else:
         make = f'make new reminder with properties {{name:"{t}"}}'
-    script = (
-        'tell application "Reminders"\n'
-        f'tell list "{ln}"\n'
-        f"{make}\n"
-        "end tell\n"
-        "end tell"
-    )
+    script = f'tell application "Reminders"\ntell list "{ln}"\n{make}\nend tell\nend tell'
     try:
         await macos.osascript(script, timeout_s=_REM_TIMEOUT_S)
     except macos.AppleScriptError as exc:

@@ -16,6 +16,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -28,7 +29,7 @@ LOG_DIR = Path.home() / "Library/Logs/Emma"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Background tasks (e.g. the opt-in dashboard) kept alive for the process lifetime.
-_bg_tasks: list[asyncio.Task] = []
+_bg_tasks: list[asyncio.Task[Any]] = []
 
 
 def _setup_logging(debug: bool) -> None:
@@ -121,7 +122,7 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         from dashboard import server as dashboard
 
         # Keep a reference so the task isn't garbage-collected mid-run.
-        _bg_tasks.append(asyncio.create_task(dashboard.start()))
+        _bg_tasks.append(asyncio.create_task(dashboard.start()))  # type: ignore[no-untyped-call]
         log.info("dashboard_started", port=settings.DASHBOARD_PORT)
 
     # Proactive engine (Prompt 17): scheduled briefings + event triggers. Runs

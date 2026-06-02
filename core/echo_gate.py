@@ -39,16 +39,16 @@ class EchoGateFilter(BaseAudioFilter):
         self._sample_rate = 24000
         self._gate_logged = False
 
-    async def start(self, sample_rate: int):
+    async def start(self, sample_rate: int) -> None:
         self._sample_rate = sample_rate
 
-    async def stop(self):
+    async def stop(self) -> None:
         pass
 
-    async def process_frame(self, frame: FilterControlFrame):
+    async def process_frame(self, frame: FilterControlFrame) -> None:
         pass
 
-    def set_bot_speaking(self, speaking: bool):
+    def set_bot_speaking(self, speaking: bool) -> None:
         if speaking and not self._bot_speaking:
             self._bot_speaking = True
             self._gate_logged = False

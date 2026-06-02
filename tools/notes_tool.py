@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from actions import macos
@@ -12,8 +14,8 @@ log = structlog.get_logger("emma.tools.notes")
 _NOTES_TIMEOUT_S = 15.0
 
 
-def _parse_notes(raw: str) -> list[dict]:
-    out: list[dict] = []
+def _parse_notes(raw: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for line in raw.splitlines():
         line = line.strip()
         if not line:
@@ -23,7 +25,7 @@ def _parse_notes(raw: str) -> list[dict]:
     return out
 
 
-async def _list(name_filter: str, limit: int) -> list[dict]:
+async def _list(name_filter: str, limit: int) -> list[dict[str, Any]]:
     if name_filter:
         f = macos.esc_applescript(name_filter)
         selector = f'(notes whose name contains "{f}")'
@@ -103,7 +105,7 @@ async def append_to_note(title: str, text: str) -> ToolResult:
     script = (
         'tell application "Notes"\n'
         f'  set matches to (notes whose name is "{t}")\n'
-        "  if (count of matches) is 0 then error \"no encontré esa nota\"\n"
+        '  if (count of matches) is 0 then error "no encontré esa nota"\n'
         "  set theNote to item 1 of matches\n"
         f'  set body of theNote to (body of theNote) & "<div>{x}</div>"\n'
         "end tell"

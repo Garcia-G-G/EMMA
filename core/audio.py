@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import math
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Final
 
 import numpy as np
@@ -27,7 +27,7 @@ FRAME_DURATION_MS: Final = 32
 FRAME_SAMPLES: Final = SAMPLE_RATE * FRAME_DURATION_MS // 1000  # 512 samples
 
 
-async def mic_stream() -> AsyncIterator[bytes]:
+async def mic_stream() -> AsyncGenerator[bytes, None]:
     """Yield 16 kHz mono int16 PCM frames from the default input device."""
     queue: asyncio.Queue[bytes] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -35,7 +35,7 @@ async def mic_stream() -> AsyncIterator[bytes]:
     def _cb(indata: object, frames: int, _t: object, status: object) -> None:
         if status:
             log.warning("input_status", status=str(status))
-        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))  # type: ignore[arg-type]
+        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))  # type: ignore[call-overload]
 
     stream = sd.RawInputStream(
         samplerate=SAMPLE_RATE,
@@ -149,7 +149,7 @@ async def listen_for_speech(
     def _cb(indata: object, frames: int, _t: object, status: object) -> None:
         if status:
             log.warning("input_status_listen", status=str(status))
-        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))  # type: ignore[arg-type]
+        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))  # type: ignore[call-overload]
 
     stream = sd.RawInputStream(
         samplerate=SAMPLE_RATE,

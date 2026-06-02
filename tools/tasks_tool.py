@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from core.background import registry
+from core.background import TaskRecord, registry
 from tools.base import ToolResult, tool
 
 
-def _format(rec) -> str:
+def _format(rec: TaskRecord) -> str:
     elapsed = int((rec.ended_at or rec.started_at) - rec.started_at)
     return f"{rec.name} · {rec.kind} · {rec.status} · {elapsed}s"
 
@@ -14,7 +14,7 @@ def _format(rec) -> str:
 @tool()
 async def list_my_tasks(status: str = "") -> ToolResult:
     """List Emma's background tasks. Filter by status (running/completed/failed/cancelled/aborted)."""
-    items = registry().list(status=status or None, limit=15)
+    items = registry().list(status=status or None, limit=15)  # type: ignore[arg-type]
     if not items:
         return ToolResult(True, {"tasks": []}, "No tengo tareas anotadas.", False)
     lines = [_format(r) for r in items]
@@ -39,7 +39,9 @@ async def cancel_my_task(name_or_id: str, confirmed: bool = False) -> ToolResult
     if rec.status != "running":
         return ToolResult(False, None, f"'{rec.name}' ya está en estado {rec.status}.", False)
     if not confirmed:
-        return ToolResult(True, {"name": rec.name}, f"¿Cancelo '{rec.name}'?", requires_confirmation=True)
+        return ToolResult(
+            True, {"name": rec.name}, f"¿Cancelo '{rec.name}'?", requires_confirmation=True
+        )
     ok = await registry().cancel(rec.id)
     return ToolResult(ok, {"name": rec.name}, "Cancelada." if ok else "No pude cancelarla.", False)
 

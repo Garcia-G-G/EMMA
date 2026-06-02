@@ -30,6 +30,7 @@ def _music_app() -> str:
     core.apps.resolve instead of a hardcoded app name.)"""
     return resolve("music") or "Music"
 
+
 _SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing"
 _spotify_client: Any = None
 _spotify_unavailable = False

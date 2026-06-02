@@ -183,8 +183,11 @@ async def reflect_async(window: list[short_term.Turn]) -> None:
                 label = f"fact_{uuid.uuid4().hex[:8]}"
                 await secrets.store(label, value, kind="secret_fact")
                 await long_term.remember(
-                    "secret", kind=f["kind"], confidence=f["confidence"],
-                    source="reflection", vault_ref=label,
+                    "secret",
+                    kind=f["kind"],
+                    confidence=f["confidence"],
+                    source="reflection",
+                    vault_ref=label,
                 )
                 secret += 1
             else:
