@@ -17,9 +17,18 @@ import structlog
 
 from actions import macos
 from config.settings import settings
+from core.apps import resolve
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.music")
+
+
+def _music_app() -> str:
+    """Garcia's preferred music app for the AppleScript path (transport +
+    now-playing share identical syntax between Music and Spotify). Defaults to
+    Apple Music, which is always installed. (Closes the phase-06 deuda: route via
+    core.apps.resolve instead of a hardcoded app name.)"""
+    return resolve("music") or "Music"
 
 _SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing"
 _spotify_client: Any = None
@@ -165,7 +174,7 @@ def pause() -> ToolResult:
     """Pause whatever is playing."""
     # pause stops the audio, so the mic no longer fights it — keep listening.
     return _spotify_transport(
-        "pause_playback", "Pausado.", 'tell application "Music" to pause', "Pausado."
+        "pause_playback", "Pausado.", f'tell application "{_music_app()}" to pause', "Pausado."
     )
 
 
@@ -173,7 +182,11 @@ def pause() -> ToolResult:
 def resume() -> ToolResult:
     """Resume playback."""
     return _spotify_transport(
-        "start_playback", "Listo.", 'tell application "Music" to play', "Listo.", ends_session=True
+        "start_playback",
+        "Listo.",
+        f'tell application "{_music_app()}" to play',
+        "Listo.",
+        ends_session=True,
     )
 
 
@@ -183,7 +196,7 @@ def next_track() -> ToolResult:
     return _spotify_transport(
         "next_track",
         "Siguiente.",
-        'tell application "Music" to next track',
+        f'tell application "{_music_app()}" to next track',
         "Siguiente.",
         ends_session=True,
     )
@@ -195,7 +208,7 @@ def previous_track() -> ToolResult:
     return _spotify_transport(
         "previous_track",
         "Anterior.",
-        'tell application "Music" to previous track',
+        f'tell application "{_music_app()}" to previous track',
         "Anterior.",
         ends_session=True,
     )
@@ -208,7 +221,8 @@ def now_playing() -> ToolResult:
     if sp is None:
         try:
             name = macos.run_applescript(
-                'tell application "Music" to name of current track & " - " & artist of current track'
+                f'tell application "{_music_app()}" to name of current track '
+                '& " - " & artist of current track'
             )
         except macos.AppleScriptError:
             return ToolResult(True, None, "No hay nada sonando.", False)

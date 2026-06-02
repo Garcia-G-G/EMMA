@@ -371,6 +371,18 @@ async def _build_instructions() -> str:
         "If found, use it in your reply without explaining unless Garcia asks.\n"
         "- If Garcia teaches you something ('recuerda que...'), use remember_page "
         "/ remember_contact / remember_term as appropriate.\n"
+        "\n# App control layering (mandatory)\n"
+        "- For IDE actions prefer the specialized tools: open_in_ide, "
+        "new_file_in_ide, search_in_ide. Don't hand-roll AppleScript when these "
+        "exist.\n"
+        "- To open URLs use open_url (Garcia's normal browser). Do NOT use "
+        "browser_navigate — that's headless Playwright, a different flow.\n"
+        "- For shell commands Garcia wants to watch, use run_in_terminal; for "
+        "background work he won't watch, use run_shell_task.\n"
+        "- For music use play_track / play_playlist / pause / resume — don't send "
+        "keystrokes for play/pause.\n"
+        "- Only reach for app_keystroke / app_menu_click / app_focus when no "
+        "specialized action exists for what Garcia asked.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
