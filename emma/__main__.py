@@ -124,6 +124,14 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         _bg_tasks.append(asyncio.create_task(dashboard.start()))
         log.info("dashboard_started", port=settings.DASHBOARD_PORT)
 
+    # Proactive engine (Prompt 17): scheduled briefings + event triggers. Runs
+    # as a sibling task in this process so it shares the events_bus + memory.
+    if settings.PROACTIVE_ENABLED:
+        from core.proactive import engine as proactive_engine
+
+        _bg_tasks.append(asyncio.create_task(proactive_engine.run(), name="emma-proactive"))
+        log.info("proactive_engine_spawned")
+
     def _shutdown(sig: int) -> None:
         log.info("signal_received", sig=signal.Signals(sig).name)
         # Set the flag first so the loop exits even if Pipecat swallows the
@@ -131,6 +139,8 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         # unwind immediately.
         orchestrator.request_shutdown()
         orchestrator_task.cancel()
+        for t in _bg_tasks:
+            t.cancel()
 
     loop = asyncio.get_running_loop()
     for s in (signal.SIGINT, signal.SIGTERM):

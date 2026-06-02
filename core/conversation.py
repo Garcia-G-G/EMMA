@@ -341,6 +341,15 @@ async def _build_instructions() -> str:
         "- No lists unless requested.\n"
         "- No repeating the same information.\n"
     )
+    base = (
+        f"{base}\n\n# Unprompted speech (mandatory)\n"
+        "- If a turn's first message is wrapped in "
+        "<UNPROMPTED_SPEECH>...</UNPROMPTED_SPEECH>, Garcia did NOT ask for it: "
+        "it's a proactive line (a briefing, reminder, or alert). Speak the "
+        "content in his preferred language (default Spanish), naturally, then "
+        "STOP. Do not invite a follow-up or append questions unless the "
+        "directive itself contains one.\n"
+    )
     pron = vocabulary.pronunciation_block("es")
     if pron:
         base = f"{base}\n\n{pron}"
