@@ -83,7 +83,10 @@ def test_bootstrap_blanks_only_after_readback(tmp_path):
     async def good_retrieve(label):
         return stored.get(label)
 
-    with patch("core.secrets.store", new=ok_store), patch("core.secrets.retrieve", new=good_retrieve):
+    with (
+        patch("core.secrets.store", new=ok_store),
+        patch("core.secrets.retrieve", new=good_retrieve),
+    ):
         result = asyncio.run(secrets.bootstrap_from_env(env))
 
     assert "OPENAI_API_KEY" in result["moved"]

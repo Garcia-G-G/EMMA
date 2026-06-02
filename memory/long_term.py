@@ -24,6 +24,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import sqlite_vec
 import structlog
@@ -89,9 +90,7 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
     """
     cols = {r[1] for r in conn.execute("PRAGMA table_info(facts)").fetchall()}
     if "times_observed" not in cols:
-        conn.execute(
-            "ALTER TABLE facts ADD COLUMN times_observed INTEGER NOT NULL DEFAULT 1"
-        )
+        conn.execute("ALTER TABLE facts ADD COLUMN times_observed INTEGER NOT NULL DEFAULT 1")
     if "vault_ref" not in cols:
         conn.execute("ALTER TABLE facts ADD COLUMN vault_ref TEXT")
 
@@ -113,7 +112,8 @@ def _connect() -> sqlite3.Connection:
 
 def _serialize(vec: list[float]) -> bytes:
     """Pack a float vector into sqlite-vec's binary format."""
-    return sqlite_vec.serialize_float32(vec)
+    data: bytes = sqlite_vec.serialize_float32(vec)
+    return data
 
 
 def _row_to_fact(row: sqlite3.Row) -> Fact:
@@ -160,7 +160,7 @@ def _remember_sync(content: str, kind: str, confidence: float, source: str) -> i
             """,
             (content, kind, confidence, source, now, now),
         )
-        return int(cur.lastrowid)
+        return int(cur.lastrowid or 0)
 
 
 def _remember_with_vec_sync(
@@ -202,7 +202,7 @@ def _remember_with_vec_sync(
             "last_seen_at, times_observed, vault_ref) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
             (content, kind, confidence, source, now, now, vault_ref),
         )
-        rid = int(cur.lastrowid)
+        rid = int(cur.lastrowid or 0)
         conn.execute("INSERT INTO facts_vec(rowid, embedding) VALUES (?, ?)", (rid, qv))
         return rid
 
@@ -450,7 +450,7 @@ async def backfill_embeddings(batch_size: int = 10) -> tuple[int, int]:
 
 def _consolidate_sync(
     facts: list[Fact], vecs: dict[int, list[float]], threshold: float
-) -> dict:
+) -> dict[str, Any]:
     """Union-find cluster by cosine >= threshold, collapse each cluster."""
     from collections import defaultdict
 
@@ -480,7 +480,7 @@ def _consolidate_sync(
         clusters[find(i)].append(i)
 
     before = len(facts)
-    collapsed: list[dict] = []
+    collapsed: list[dict[str, Any]] = []
     with _connect() as conn:
         for members in clusters.values():
             if len(members) < 2:
@@ -503,14 +503,12 @@ def _consolidate_sync(
                 deleted_ids=others,
                 count=len(members),
             )
-            collapsed.append(
-                {"kept_id": keeper, "deleted_ids": others, "count": len(members)}
-            )
+            collapsed.append({"kept_id": keeper, "deleted_ids": others, "count": len(members)})
         after = int(conn.execute("SELECT count(*) FROM facts").fetchone()[0])
     return {"before": before, "after": after, "collapsed": collapsed}
 
 
-async def consolidate_paraphrases(threshold: float = _DEDUP_MIN_SIM) -> dict:
+async def consolidate_paraphrases(threshold: float = _DEDUP_MIN_SIM) -> dict[str, Any]:
     """One-shot: collapse near-duplicate fact clusters (cosine >= threshold).
 
     Keeps the highest-confidence representative per cluster (tie -> oldest),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from actions import macos
@@ -12,8 +14,8 @@ log = structlog.get_logger("emma.tools.mail")
 _MAIL_TIMEOUT_S = 15.0
 
 
-def _parse_pairs(raw: str) -> list[dict]:
-    out: list[dict] = []
+def _parse_pairs(raw: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for line in raw.splitlines():
         line = line.strip()
         if not line or "|" not in line:

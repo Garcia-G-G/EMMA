@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import structlog
 
@@ -38,7 +40,7 @@ def _missing_key() -> ToolResult:
     )
 
 
-def _api_get(path: str, params: dict[str, str]) -> dict | None:
+def _api_get(path: str, params: dict[str, str]) -> dict[str, Any] | None:
     if not settings.YOUTUBE_API_KEY:
         return None
     full = {"key": settings.YOUTUBE_API_KEY, **params}
@@ -48,7 +50,8 @@ def _api_get(path: str, params: dict[str, str]) -> dict | None:
     except httpx.HTTPError as exc:
         log.error("youtube_http_failed", error=str(exc))
         return None
-    return r.json()
+    data: dict[str, Any] = r.json()
+    return data
 
 
 @tool()

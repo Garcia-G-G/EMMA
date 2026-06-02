@@ -91,7 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("bootstrap", help="Store sentinel + migrate .env credentials to Keychain.")
-    sub.add_parser("verify", help="Read back every credential field from Keychain (exit 1 if any missing).")
+    sub.add_parser(
+        "verify", help="Read back every credential field from Keychain (exit 1 if any missing)."
+    )
     sub.add_parser("audit", help="List Keychain labels + recent vault_ref rows.")
     sub.add_parser("wipe-all", help="Delete every Emma Keychain item (DESTRUCTIVE).")
     args = parser.parse_args(argv)

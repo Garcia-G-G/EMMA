@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
-from AppKit import (  # type: ignore[import-not-found]
+from AppKit import (
     NSApplication,
     NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered,
@@ -35,8 +35,8 @@ from AppKit import (  # type: ignore[import-not-found]
     NSWindowStyleMaskTitled,
     NSWindowTitleHidden,
 )
-from Foundation import NSURL, NSURLRequest  # type: ignore[import-not-found]
-from WebKit import WKWebView, WKWebViewConfiguration  # type: ignore[import-not-found]
+from Foundation import NSURL, NSURLRequest
+from WebKit import WKWebView, WKWebViewConfiguration
 
 
 def _env_float(name: str, default: float) -> float:

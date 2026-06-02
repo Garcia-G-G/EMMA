@@ -6,6 +6,7 @@ import asyncio
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 from core.background import MAX_PARALLEL_TASKS, registry
 from tools.base import ToolResult, tool
@@ -67,7 +68,7 @@ async def delegate_to_claude_code(
     if branch:
         wt_root = repo.parent / f"emma-wt-{branch.replace('/', '-')}"
 
-        async def _setup():
+        async def _setup() -> None:
             for cmd in (
                 ["/usr/bin/git", "fetch", "--quiet"],
                 ["/usr/bin/git", "worktree", "add", "-B", branch, str(wt_root), "HEAD"],
@@ -78,7 +79,7 @@ async def delegate_to_claude_code(
         await _setup()
         work_dir = wt_root
 
-    async def runner(ctrl):
+    async def runner(ctrl: Any) -> int:
         argv = ["claude", "-p", task, "--cwd", str(work_dir)]
         proc = await asyncio.create_subprocess_exec(
             *argv,
@@ -86,6 +87,7 @@ async def delegate_to_claude_code(
             stderr=asyncio.subprocess.STDOUT,
             start_new_session=True,
         )
+        assert proc.stdout is not None  # PIPE above guarantees it
         while True:
             line = await proc.stdout.readline()
             if not line:

@@ -72,9 +72,7 @@ def test_reminders_list_today_filters_to_today() -> None:
 
     today = dt.date.today()
     raw = (
-        f"Call dentist|{today.year}-{today.month}-{today.day}\n"
-        "Pay rent|2000-1-1\n"
-        "Someday task|none"
+        f"Call dentist|{today.year}-{today.month}-{today.day}\nPay rent|2000-1-1\nSomeday task|none"
     )
     with _mock_osascript(raw):
         res = _run(list_today())

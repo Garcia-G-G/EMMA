@@ -94,9 +94,9 @@ def set_preferred_app(category: str, app_name: str) -> ToolResult:
             f"No reconozco la categoría '{category}'. Las categorías son: ide, terminal, music, browser.",
             False,
         )
-    key = _normalize_app(cat, app_name)  # type: ignore[arg-type]
+    key = _normalize_app(cat, app_name)
     if key is None:
-        options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
+        options = ", ".join(_category_options(cat))
         return ToolResult(
             False,
             None,
@@ -104,9 +104,9 @@ def set_preferred_app(category: str, app_name: str) -> ToolResult:
             False,
         )
     # Ground the preference in reality: only honor an app the user actually has.
-    detected = detect_preferred(cat)  # type: ignore[arg-type]
+    detected = detect_preferred(cat)
     installed = detected.available_alternatives
-    set_preference(cat, key)  # type: ignore[arg-type]
+    set_preference(cat, key)
     if key in installed:
         msg = f"Listo. Voy a usar {app_name} para {cat} de ahora en adelante."
     else:
@@ -140,7 +140,7 @@ def get_preferred_app(category: str) -> ToolResult:
             f"No reconozco la categoría '{category}'.",
             False,
         )
-    result = detect_preferred(cat)  # type: ignore[arg-type]
+    result = detect_preferred(cat)
     if result.app_name is None:
         return ToolResult(
             True,
@@ -183,7 +183,7 @@ def list_apps(category: str = "") -> ToolResult:
             f"No reconozco la categoría '{category}'. Las categorías son: ide, terminal, music, browser.",
             False,
         )
-    cats: list[Category] = [requested] if requested else list(SHORTLISTS.keys())  # type: ignore[list-item]
+    cats: list[Category] = [requested] if requested else list(SHORTLISTS.keys())
     data: dict[str, dict[str, object]] = {}
     parts: list[str] = []
     for cat in cats:
@@ -213,10 +213,10 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
     it so its own "Set as default" prompt fires, then reads back the
     LaunchServices handler after 5 seconds to confirm.
     """
-    cat = "browser"
-    key = _normalize_app(cat, name)  # type: ignore[arg-type]
+    cat: Category = "browser"
+    key = _normalize_app(cat, name)
     if key is None:
-        options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
+        options = ", ".join(_category_options(cat))
         return ToolResult(
             False,
             None,
@@ -226,7 +226,7 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
 
     entry = next((e for e in BROWSER_SHORTLIST if e["key"] == key), None)
     if entry is None:
-        options = ", ".join(_category_options(cat))  # type: ignore[arg-type]
+        options = ", ".join(_category_options(cat))
         return ToolResult(
             False,
             None,
@@ -236,7 +236,7 @@ async def set_default_browser(name: str, confirmed: bool = False) -> ToolResult:
     bundle = entry["bundle"]
 
     # Install if missing (must explicitly confirm: this is destructive).
-    detect = detect_preferred(cat)  # type: ignore[arg-type]
+    detect = detect_preferred(cat)
     available = detect.available_alternatives
     needs_install = key not in available
     cask = entry.get("cask")

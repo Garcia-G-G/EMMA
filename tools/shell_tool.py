@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from typing import Any
 
 from core.background import MAX_PARALLEL_TASKS, registry
 from tools.base import ToolResult, tool
@@ -43,7 +44,7 @@ async def run_shell_task(
             False,
         )
 
-    async def runner(ctrl):
+    async def runner(ctrl: Any) -> int:
         proc = await asyncio.create_subprocess_exec(
             "/bin/zsh",
             "-lc",
@@ -52,6 +53,7 @@ async def run_shell_task(
             stderr=asyncio.subprocess.STDOUT,
             start_new_session=True,
         )
+        assert proc.stdout is not None  # PIPE above guarantees it
         try:
             while True:
                 line = await asyncio.wait_for(proc.stdout.readline(), timeout=timeout_s)

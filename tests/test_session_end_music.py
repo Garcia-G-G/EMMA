@@ -36,7 +36,9 @@ def test_toolresult_ends_session_defaults_false():
 def test_play_track_ends_session():
     fake = MagicMock()
     fake.search.return_value = {
-        "tracks": {"items": [{"uri": "spotify:track:1", "name": "Song", "artists": [{"name": "Artist"}]}]}
+        "tracks": {
+            "items": [{"uri": "spotify:track:1", "name": "Song", "artists": [{"name": "Artist"}]}]
+        }
     }
     with patch("tools.music._spotify", return_value=fake):
         r = play_track("a song")
@@ -46,7 +48,10 @@ def test_play_track_ends_session():
 
 
 def test_play_track_apple_music_fallback_ends_session():
-    with patch("tools.music._spotify", return_value=None), patch("tools.music.macos.run_applescript"):
+    with (
+        patch("tools.music._spotify", return_value=None),
+        patch("tools.music.macos.run_applescript"),
+    ):
         r = play_track("a song")
     assert r.success
     assert r.ends_session is True

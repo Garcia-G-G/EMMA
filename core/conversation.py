@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import math
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import structlog
@@ -118,7 +119,7 @@ class EchoGateProcessor(FrameProcessor):
         super().__init__()
         self._gate = gate
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
@@ -138,12 +139,12 @@ class TranscriptCollector(FrameProcessor):
     short-term memory and reflection is scheduled in the background.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._user_text = ""
         self._assistant_text = ""
 
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, UserStartedSpeakingFrame):
             events_bus.publish("state", state="thinking")
@@ -190,9 +191,7 @@ class _AudioLevelTap(FrameProcessor):
             now = time.monotonic()
             if not self._first_audio_done:
                 self._first_audio_done = True
-                events_bus.publish(
-                    "latency", wake_to_first_audio_ms=int((now - self._t0) * 1000)
-                )
+                events_bus.publish("latency", wake_to_first_audio_ms=int((now - self._t0) * 1000))
             if now - self._last_pub >= 0.1:  # throttle to ~10 Hz
                 self._last_pub = now
                 level = self._rms(frame.audio) / self._FULL_SCALE
@@ -421,7 +420,7 @@ class SessionControl:
     def __init__(self) -> None:
         self.task: PipelineTask | None = None
         self._end_requested = False
-        self._fallback: asyncio.Task | None = None
+        self._fallback: asyncio.Task[None] | None = None
 
     def set_task(self, task: PipelineTask) -> None:
         self.task = task
@@ -463,7 +462,9 @@ class EndSessionWatcher(FrameProcessor):
             await self._control.end_now("after_speech")
 
 
-def _make_function_handler(control: SessionControl):
+def _make_function_handler(
+    control: SessionControl,
+) -> Callable[[FunctionCallParams], Awaitable[None]]:
     """Build the Pipecat function-call handler bound to a session's control.
 
     Pipecat's ``register_function`` contract: the handler receives a
@@ -615,17 +616,19 @@ async def build_pipeline() -> tuple[
     end_watcher = EndSessionWatcher(session_control)
     audio_tap = _AudioLevelTap()  # publishes output RMS for the visualizer core pulse
 
-    pipeline = Pipeline([
-        transport.input(),
-        llm,
-        auth_watcher,  # right after the LLM so it sees its ErrorFrames first
-        end_watcher,  # closes the session after playback tools finish speaking
-        assistant_aggregator,
-        transcript_collector,
-        gate_proc,
-        audio_tap,  # just before output: taps the bot's outgoing audio RMS
-        transport.output(),
-    ])
+    pipeline = Pipeline(
+        [
+            transport.input(),
+            llm,
+            auth_watcher,  # right after the LLM so it sees its ErrorFrames first
+            end_watcher,  # closes the session after playback tools finish speaking
+            assistant_aggregator,
+            transcript_collector,
+            gate_proc,
+            audio_tap,  # just before output: taps the bot's outgoing audio RMS
+            transport.output(),
+        ]
+    )
     task = PipelineTask(
         pipeline,
         params=PipelineParams(

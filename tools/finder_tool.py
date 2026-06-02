@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import structlog
 
@@ -33,7 +34,7 @@ async def list_folder(path: str) -> ToolResult:
     )
     if not ok:
         return ToolResult(False, None, out, False)
-    entries: list[dict] = []
+    entries: list[dict[str, Any]] = []
     for line in out.splitlines():
         line = line.strip()
         if not line or "|" not in line:

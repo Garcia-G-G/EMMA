@@ -143,7 +143,8 @@ def _load_state() -> dict[str, Any]:
     if not CACHE_PATH.exists():
         return {}
     try:
-        return json.loads(CACHE_PATH.read_text())
+        data: dict[str, Any] = json.loads(CACHE_PATH.read_text())
+        return data
     except Exception as exc:
         log.warning("env_cache_load_failed", error=str(exc))
         return {}
@@ -265,14 +266,15 @@ def detect_preferred(category: Category, *, force_refresh: bool = False) -> Dete
 def warm_cache() -> None:
     """Run all detections; call once at startup. Idempotent."""
     for cat in ("ide", "terminal", "music"):
-        detect_preferred(cat)  # type: ignore[arg-type]
+        detect_preferred(cat)
 
 
 # ---------- preference + decline tracking --------------------------------
 
 
 def get_preference(category: Category) -> str | None:
-    return _load_state().get("preferences", {}).get(category)
+    val: str | None = _load_state().get("preferences", {}).get(category)
+    return val
 
 
 def set_preference(category: Category, key: str) -> None:

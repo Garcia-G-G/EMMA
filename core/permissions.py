@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import subprocess
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 
@@ -188,7 +188,10 @@ _DWELL_AFTER_DIALOG_S = 4.0
 # Permissions Apple does not let us trigger programmatically.
 # We open the Settings pane and speak instructions.
 _MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
-    ("Accessibility", "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas."),
+    (
+        "Accessibility",
+        "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas.",
+    ),
     ("AllFiles", "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas."),
 )
 
@@ -257,7 +260,7 @@ async def _ping_microphone() -> bool:
     return check_microphone()  # reuse the existing probe
 
 
-async def bootstrap() -> dict:
+async def bootstrap() -> dict[str, Any]:
     """Interactive install-time permission walkthrough.
 
     Prints headers, speaks one-line context in Spanish, triggers each system
