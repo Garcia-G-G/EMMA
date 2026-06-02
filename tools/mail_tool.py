@@ -38,11 +38,12 @@ async def list_unread(limit: int = 10) -> ToolResult:
         "return out\n"
         "end tell"
     )
-    try:
-        raw = await macos.osascript(script, timeout_s=_MAIL_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer el correo: {exc}", False)
-    msgs = _parse_pairs(raw)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MAIL_TIMEOUT_S, on_error="No pude leer el correo"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
+    msgs = _parse_pairs(out)
     if not msgs:
         return ToolResult(True, {"messages": []}, "No tienes correos sin leer.", False)
     spoken = "; ".join(f"{m['from']}: {m['subject']}" for m in msgs)
@@ -65,11 +66,12 @@ async def search_mail(query: str, limit: int = 10) -> ToolResult:
         "return out\n"
         "end tell"
     )
-    try:
-        raw = await macos.osascript(script, timeout_s=_MAIL_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude buscar en el correo: {exc}", False)
-    msgs = _parse_pairs(raw)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MAIL_TIMEOUT_S, on_error="No pude buscar en el correo"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
+    msgs = _parse_pairs(out)
     spoken = "; ".join(f"{m['from']}: {m['subject']}" for m in msgs) or "nada"
     return ToolResult(True, {"messages": msgs}, f"Encontré: {spoken}.", False)
 
@@ -89,17 +91,16 @@ async def draft_to(recipient: str, subject: str, body: str) -> ToolResult:
         "  activate\n"
         "end tell"
     )
-    try:
-        await macos.osascript(script, timeout_s=_MAIL_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude abrir el borrador: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MAIL_TIMEOUT_S, on_error="No pude abrir el borrador"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"recipient": recipient}, f"Abrí un borrador para {recipient}.", False)
 
 
 @tool(destructive=True)
-async def send_to(
-    recipient: str, subject: str, body: str, confirmed: bool = False
-) -> ToolResult:
+async def send_to(recipient: str, subject: str, body: str, confirmed: bool = False) -> ToolResult:
     """Envía un correo a `recipient`. Pide confirmación antes de enviarlo."""
     if not confirmed:
         return ToolResult(
@@ -120,8 +121,9 @@ async def send_to(
         "  send newMsg\n"
         "end tell"
     )
-    try:
-        await macos.osascript(script, timeout_s=_MAIL_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude enviar el correo: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MAIL_TIMEOUT_S, on_error="No pude enviar el correo"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"recipient": recipient}, f"Correo enviado a {recipient}.", False)
