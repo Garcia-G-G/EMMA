@@ -194,5 +194,37 @@ class Settings(BaseSettings):
     # instead of dropping out after 2 minutes mid-task.
     SESSION_MAX_S: int = 300
 
+    # ---- Proactive engine (Prompt 17) -------------------------------
+    # Master switch + global behavior. Conservative defaults: only the
+    # smallest set of proactivities is ON; everything else is opt-in.
+    PROACTIVE_ENABLED: bool = True
+    PROACTIVE_QUIET_HOURS: str = "22:30-07:30"  # comma-separated H:M-H:M windows
+    PROACTIVE_RESPECT_MEETINGS: bool = True  # demote during calendar events
+    PROACTIVE_VIP_SENDERS: str = ""  # comma-separated VIP email addresses
+    PROACTIVE_VOICE_TIMEOUT_S: float = 30.0  # hard cap on an unprompted-speech session
+
+    # Per-proactivity flags (True = active). Default ON: morning_briefing,
+    # meeting_prep, calendar_conflict, memory_followup, overdue_reminders,
+    # background_task_done. The rest are opt-in.
+    PROACTIVE_MORNING_BRIEFING: bool = True
+    PROACTIVE_MEETING_PREP: bool = True
+    PROACTIVE_EOD_REFLECTION: bool = False
+    PROACTIVE_CALENDAR_CONFLICT: bool = True
+    PROACTIVE_URGENT_EMAIL: bool = False
+    PROACTIVE_FRIDAY_RECAP: bool = False
+    PROACTIVE_HABIT_TRACKER: bool = False
+    PROACTIVE_MEMORY_FOLLOWUP: bool = True
+    PROACTIVE_INTENTION_SETTING: bool = False
+    PROACTIVE_BIRTHDAY_ALERTS: bool = False
+    PROACTIVE_OVERDUE_REMINDERS: bool = True
+    PROACTIVE_FOCUS_NUDGE: bool = False
+    PROACTIVE_BACKGROUND_TASK_DONE: bool = True  # 15.12 integration
+
+    # Timing knobs (cron). croniter 5-field "m h dom mon dow".
+    PROACTIVE_MORNING_BRIEFING_CRON: str = "0 8 * * 1-5"  # 8am Mon-Fri
+    PROACTIVE_EOD_REFLECTION_CRON: str = "0 22 * * *"  # 10pm daily
+    PROACTIVE_FRIDAY_RECAP_CRON: str = "0 17 * * 5"  # 5pm Fri
+    PROACTIVE_HABIT_TRACKER_CRON: str = "0 11,15 * * *"  # 11am & 3pm
+
 
 settings = Settings()
