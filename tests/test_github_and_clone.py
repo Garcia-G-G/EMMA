@@ -67,6 +67,61 @@ def mock_github(monkeypatch):
     monkeypatch.setattr(github_tool.httpx, "AsyncClient", _FakeClient)
 
 
+# --- 422 strip-and-retry harness ----------------------------------------
+
+_VALIDATION_422 = {
+    "message": "Validation Failed",
+    "errors": [
+        {
+            "message": (
+                "The listed users and repositories cannot be searched either "
+                "because the resources do not exist or you do not have "
+                "permission to view them."
+            ),
+            "resource": "Search",
+            "field": "q",
+            "code": "invalid",
+        }
+    ],
+}
+
+
+class _ProgrammedResp:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self) -> dict:
+        return self._payload
+
+
+def _client_from_handler(handler, calls):
+    """Build a fake AsyncClient whose .get() delegates to `handler(q)` and
+    records each queried `q` into `calls`."""
+
+    class _C:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get(self, url, headers=None, params=None):
+            q = params["q"]
+            calls.append(q)
+            return handler(q)
+
+    return _C
+
+
 class TestSearch:
     @pytest.mark.asyncio
     async def test_search_parses_matches(self, mock_github):
@@ -88,6 +143,62 @@ class TestSearch:
         r = await github_tool.get_repo_url("pipecat")
         assert r.success is True
         assert r.data["clone_url"] == "https://github.com/pipecat-ai/pipecat.git"
+
+
+class TestQualifier422:
+    """A bad user:/org:/repo: qualifier makes GitHub 422 the whole query.
+    Emma strips scoping qualifiers and retries as free text rather than
+    failing an otherwise-answerable search."""
+
+    def test_strip_scope_qualifiers(self):
+        f = github_tool._strip_scope_qualifiers
+        assert f("user:Garcia-G-H Reachi") == "Reachi"
+        assert f("org:foo repo:bar/baz voice ai") == "voice ai"
+        assert f("REPOSITORY:x/y kanban") == "kanban"
+        assert f("user:only") == ""  # nothing left to search
+        assert f("plain query") == "plain query"  # untouched
+
+    @pytest.mark.asyncio
+    async def test_422_bad_qualifier_retries_stripped(self, monkeypatch):
+        calls: list[str] = []
+
+        def handler(q: str):
+            if "user:" in q:
+                return _ProgrammedResp(422, _VALIDATION_422)
+            return _ProgrammedResp(200, _FAKE_ITEMS)
+
+        monkeypatch.setattr(github_tool.httpx, "AsyncClient", _client_from_handler(handler, calls))
+        r = await github_tool.search_github("user:Garcia-G-H Reachi")
+        assert r.success is True
+        assert r.data["matches"][0]["full_name"] == "pipecat-ai/pipecat"
+        # First the original query 422'd, then the stripped retry succeeded.
+        assert calls == ["user:Garcia-G-H Reachi", "Reachi"]
+
+    @pytest.mark.asyncio
+    async def test_422_persists_surfaces_github_message(self, monkeypatch):
+        calls: list[str] = []
+
+        def handler(q: str):
+            return _ProgrammedResp(422, _VALIDATION_422)
+
+        monkeypatch.setattr(github_tool.httpx, "AsyncClient", _client_from_handler(handler, calls))
+        r = await github_tool.search_github("user:Garcia-G-H Reachi")
+        assert r.success is False
+        # GitHub's real validation message is surfaced, not an opaque httpx error.
+        assert "cannot be searched" in r.user_message
+
+    @pytest.mark.asyncio
+    async def test_422_with_no_free_text_does_not_retry(self, monkeypatch):
+        calls: list[str] = []
+
+        def handler(q: str):
+            return _ProgrammedResp(422, _VALIDATION_422)
+
+        monkeypatch.setattr(github_tool.httpx, "AsyncClient", _client_from_handler(handler, calls))
+        r = await github_tool.search_github("user:nonexistent")
+        assert r.success is False
+        # Stripping leaves nothing searchable -> no pointless second request.
+        assert calls == ["user:nonexistent"]
 
 
 class TestCloneAndOpen:
