@@ -26,14 +26,15 @@ async def list_folder(path: str) -> ToolResult:
     script = (
         f'set p to "{p}"\n'
         'do shell script "cd " & quoted form of p & " && for f in *; do '
-        "[ -e \\\"$f\\\" ] && stat -f '%Sm|%N' -t '%Y-%m-%d %H:%M' \\\"$f\\\"; done | head -200\""
+        '[ -e \\"$f\\" ] && stat -f \'%Sm|%N\' -t \'%Y-%m-%d %H:%M\' \\"$f\\"; done | head -200"'
     )
-    try:
-        raw = await macos.osascript(script, timeout_s=_FINDER_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer la carpeta: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_FINDER_TIMEOUT_S, on_error="No pude leer la carpeta"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     entries: list[dict] = []
-    for line in raw.splitlines():
+    for line in out.splitlines():
         line = line.strip()
         if not line or "|" not in line:
             continue
@@ -56,13 +57,14 @@ async def find_recent(query: str = "", days: int = 7, limit: int = 10) -> ToolRe
         f'set expr to "{expr_esc}"\n'
         f'do shell script "mdfind " & quoted form of expr & " | head -{int(limit)}"'
     )
-    try:
-        raw = await macos.osascript(script, timeout_s=_FINDER_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude buscar archivos: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_FINDER_TIMEOUT_S, on_error="No pude buscar archivos"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     files = [
         {"name": os.path.basename(p.strip()), "path": p.strip()}
-        for p in raw.splitlines()
+        for p in out.splitlines()
         if p.strip()
     ]
     if not files:
@@ -76,10 +78,11 @@ async def open_item(path: str) -> ToolResult:
     """Abre un archivo o carpeta con su aplicación predeterminada."""
     p = macos.esc_applescript(_expand(path))
     script = f'set p to "{p}"\ndo shell script "open " & quoted form of p'
-    try:
-        await macos.osascript(script, timeout_s=_FINDER_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude abrir eso: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_FINDER_TIMEOUT_S, on_error="No pude abrir eso"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"path": path}, f"Abriendo {path}.", False)
 
 
@@ -94,8 +97,9 @@ async def move_item(src: str, dst: str, confirmed: bool = False) -> ToolResult:
         f'set s to "{s}"\nset d to "{d}"\n'
         'do shell script "mv -n " & quoted form of s & " " & quoted form of d'
     )
-    try:
-        await macos.osascript(script, timeout_s=_FINDER_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude mover el elemento: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_FINDER_TIMEOUT_S, on_error="No pude mover el elemento"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"src": src, "dst": dst}, f"Movido a {dst}.", False)

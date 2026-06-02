@@ -25,21 +25,24 @@ async def recent_threads(limit: int = 5) -> ToolResult:
         'set out to ""\n'
         "set n to 0\n"
         "repeat with c in chats\n"
-        '  set out to out & (id of c) & linefeed\n'
+        "  set out to out & (id of c) & linefeed\n"
         "  set n to n + 1\n"
         f"  if n ≥ {int(limit)} then exit repeat\n"
         "end repeat\n"
         "return out\n"
         "end tell"
     )
-    try:
-        raw = await macos.osascript(script, timeout_s=_MSG_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer las conversaciones: {exc}", False)
-    handles = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MSG_TIMEOUT_S, on_error="No pude leer las conversaciones"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
+    handles = [ln.strip() for ln in out.splitlines() if ln.strip()]
     if not handles:
         return ToolResult(True, {"threads": []}, "No encontré conversaciones recientes.", False)
-    return ToolResult(True, {"threads": handles}, f"Tienes {len(handles)} conversaciones recientes.", False)
+    return ToolResult(
+        True, {"threads": handles}, f"Tienes {len(handles)} conversaciones recientes.", False
+    )
 
 
 @tool(destructive=True)
@@ -64,8 +67,9 @@ async def send_imessage(recipient: str, body: str, confirmed: bool = False) -> T
         f'  send "{b}" to targetBuddy\n'
         "end tell"
     )
-    try:
-        await macos.osascript(script, timeout_s=_MSG_TIMEOUT_S)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude enviar el mensaje: {exc}", False)
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_MSG_TIMEOUT_S, on_error="No pude enviar el mensaje"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
     return ToolResult(True, {"recipient": recipient}, f"Mensaje enviado a {recipient}.", False)
