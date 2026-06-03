@@ -8,6 +8,19 @@
 # Hot-reload: `python -m emma.dictionary reload`.
 
 # -----------------------------------------------------------------------
+# [user] — who "yo / mi / mío / mis" refers to. Garcia teaches Emma these
+# by voice (remember_user_profile); empty defaults are intentional — Emma
+# must not guess. Public-tier only; secrets stay in the Keychain.
+# -----------------------------------------------------------------------
+[user]
+display_name = ""
+full_name = ""
+github_username = ""
+linkedin = ""
+website = ""
+preferred_lang = "es"
+
+# -----------------------------------------------------------------------
 # [pages] — URL shortcuts. "Emma, abre mi <key>" → opens the url.
 # Optional fields: open_in (browser bundle id), title.
 # -----------------------------------------------------------------------
@@ -109,3 +122,7 @@ team = "<your-team-key>"
 
 [user_apps.obsidian]
 default_vault = "Notas"
+
+[terms.ELIMINAR]
+expansion = "delete"
+context = "Cuando Garcia diga 'eliminar' se interpreta como 'delete' (acción de borrar)."

@@ -62,6 +62,17 @@ _terms: dict[str, Term] = {}
 _apps: dict[str, str] = {}
 _facts: dict[str, Fact] = {}
 _user_apps: dict[str, dict[str, Any]] = {}
+_user: dict[str, str] = {}
+
+# The identity fields Emma recognises. Single source of truth for "yo/mi/mis".
+_USER_FIELDS = (
+    "display_name",
+    "full_name",
+    "github_username",
+    "linkedin",
+    "website",
+    "preferred_lang",
+)
 
 
 def _parse() -> None:
@@ -81,6 +92,12 @@ def _parse() -> None:
         _apps.clear()
         _facts.clear()
         _user_apps.clear()
+        _user.clear()
+        user_tbl = data.get("user") or {}
+        if isinstance(user_tbl, dict):
+            for fld in _USER_FIELDS:
+                val = user_tbl.get(fld, "")
+                _user[fld] = str(val) if val is not None else ""
         for k, v in (data.get("pages") or {}).items():
             _pages[k] = Page(
                 key=k, url=v.get("url", ""), title=v.get("title", ""), open_in=v.get("open_in", "")
@@ -111,7 +128,8 @@ def _parse() -> None:
 
 def reload() -> int:
     _parse()
-    total = len(_pages) + len(_contacts) + len(_terms) + len(_apps) + len(_facts)
+    user_count = 1 if any(v.strip() for v in _user.values()) else 0
+    total = len(_pages) + len(_contacts) + len(_terms) + len(_apps) + len(_facts) + user_count
     log.info(
         "dictionary_loaded",
         pages=len(_pages),
@@ -119,6 +137,7 @@ def reload() -> int:
         terms=len(_terms),
         apps=len(_apps),
         facts=len(_facts),
+        user=user_count,
     )
     return total
 
@@ -143,6 +162,72 @@ def terms() -> dict[str, Term]:
 
 def app_for(category: str) -> str:
     return _apps.get(category, "")
+
+
+def apps_preferences() -> dict[str, str]:
+    """Category → preferred app display name (Cursor, Brave Browser, …)."""
+    return dict(_apps)
+
+
+def user_profile() -> dict[str, str]:
+    """Garcia's identity fields (copy). Empty strings for anything unset.
+
+    The single source of truth for "yo/mi/mis"; secrets never live here.
+    """
+    return {fld: _user.get(fld, "") for fld in _USER_FIELDS}
+
+
+def set_user_field(field: str, value: str) -> bool:
+    """Set one identity field in the ``[user]`` block (last-write-wins).
+
+    TOML forbids redeclaring a table/key, so this rewrites the whole ``[user]``
+    block in place rather than appending. Returns False for an unknown field.
+    """
+    field = field.strip().lower()
+    if field not in _USER_FIELDS:
+        return False
+    with _LOCK:
+        current = {fld: _user.get(fld, "") for fld in _USER_FIELDS}
+        current[field] = value.strip()
+        _rewrite_user_block(current)
+        reload()
+    return True
+
+
+def _rewrite_user_block(values: dict[str, str]) -> None:
+    """Replace the ``[user]`` table in the TOML file with ``values`` (or append
+    it if absent). Only the ``[user]`` block is touched; everything else is kept
+    byte-for-byte. Values flow through :func:`_toml_escape`."""
+    block_lines = ["[user]"]
+    for fld in _USER_FIELDS:
+        block_lines.append(f'{fld} = "{_toml_escape(values.get(fld, ""))}"')
+    block = "\n".join(block_lines)
+
+    text = _DICT_PATH.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    out: list[str] = []
+    i = 0
+    replaced = False
+    while i < len(lines):
+        if lines[i].strip() == "[user]":
+            # Replace the old block: its header + its ``key = "…"`` lines. Stop at
+            # the first blank line, comment, or next section header so we never
+            # eat the following section's comments.
+            out.append(block)
+            replaced = True
+            i += 1
+            while i < len(lines):
+                s = lines[i].lstrip()
+                if s == "" or s.startswith("#") or s.startswith("["):
+                    break
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    if not replaced:
+        out.append("")
+        out.append(block)
+    _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 def user_app(name: str) -> dict[str, Any]:
