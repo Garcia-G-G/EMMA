@@ -125,9 +125,75 @@ def pronunciation_block(lang: str = "es") -> str:
     return header + "\n" + "\n".join(lines)
 
 
+# The Realtime API caps InputAudioTranscription.prompt at ~500 chars. We bound
+# the joined bias string a touch under that so the caller's [:500] trim never
+# slices a word in half.
+_BIAS_CHAR_BUDGET = 480
+
+
+def _vocab_bias_words() -> list[str]:
+    """Vocabulary canonical names + their STT aliases."""
+    out: list[str] = []
+    for entry in _entries.values():
+        out.append(entry["canonical"])
+        out.extend(entry.get("stt_aliases", []))
+    return out
+
+
 def bias_words() -> list[str]:
-    """Flat list of canonical names (for transcription hot-word bias)."""
-    return [entry["canonical"] for entry in _entries.values()]
+    """Proper nouns to seed the Whisper decoder (hot-word biasing).
+
+    Unions every proper noun Emma already knows — identity, contacts, glossary,
+    pages, apps, and the technical vocabulary — so STT stops mangling names it
+    has been taught (Bug 19.4-B12). Deduped case-insensitively (first spelling
+    wins), and length-bounded: when the union overflows the prompt budget, the
+    lowest-priority groups (pages → apps → vocabulary) truncate first so identity
+    and contacts always survive.
+
+    ``core.dictionary`` is imported lazily to avoid a circular import (both load
+    near startup); if it isn't ready, this degrades to the vocabulary-only list.
+    """
+    # Priority order: identity → contacts → glossary → pages → apps → vocabulary.
+    groups: list[list[str]] = []
+    try:
+        from core import dictionary
+
+        prof = dictionary.user_profile()
+        groups.append([prof.get(f, "") for f in ("display_name", "full_name", "github_username")])
+
+        contact_words: list[str] = []
+        for c in dictionary.contacts().values():
+            contact_words.append(c.name)
+            contact_words.extend(c.aliases)
+        groups.append(contact_words)
+
+        groups.append(list(dictionary.terms().keys()))  # glossary acronyms
+        groups.append([p.title for p in dictionary.pages().values()])
+        groups.append(list(dictionary.apps_preferences().values()))
+    except Exception:
+        # Dictionary not loaded (e.g. an isolated unit test) — vocab-only.
+        groups = []
+
+    groups.append(_vocab_bias_words())  # lowest priority: truncates first
+
+    seen: set[str] = set()
+    result: list[str] = []
+    length = 0
+    for group in groups:
+        for raw in group:
+            word = (raw or "").strip()
+            if not word:
+                continue
+            key = word.lower()
+            if key in seen:
+                continue
+            extra = len(word) + (1 if result else 0)  # +1 for the joining space
+            if length + extra > _BIAS_CHAR_BUDGET:
+                continue  # over budget — skip, but keep scanning higher-priority leftovers
+            seen.add(key)
+            result.append(word)
+            length += extra
+    return result
 
 
 def _toml_escape(value: str) -> str:
@@ -176,6 +242,68 @@ def append_entry(
     with open(_VOCAB_PATH, "a", encoding="utf-8") as fh:
         fh.write("\n".join(block) + "\n")
     reload()
+
+
+def find_canonical(text: str) -> str | None:
+    """Return the canonical name matching ``text`` (case-insensitive), or None."""
+    t = (text or "").strip().lower()
+    if not t:
+        return None
+    for entry in _entries.values():
+        if entry["canonical"].strip().lower() == t:
+            return str(entry["canonical"])
+    return None
+
+
+def add_alias(canonical: str, alias: str) -> bool:
+    """Append ``alias`` to an existing entry's ``stt_aliases`` (Bug 19.4-B15).
+
+    In-place edit (TOML forbids redeclaring the section), preserving the rest of
+    the file byte-for-byte. Returns False if no entry has that canonical. A
+    duplicate alias is a no-op success.
+    """
+    alias = (alias or "").strip()
+    if not alias:
+        return False
+    target_slug: str | None = None
+    existing: list[str] = []
+    for slug, body in _entries.items():
+        if body["canonical"].strip().lower() == canonical.strip().lower():
+            target_slug = slug
+            existing = list(body.get("stt_aliases", []))
+            break
+    if target_slug is None:
+        return False
+    if alias.lower() in [a.lower() for a in existing]:
+        return True  # already known
+
+    text = _VOCAB_PATH.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    out: list[str] = []
+    in_target = False
+    edited = False
+    for line in lines:
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            in_target = s == f"[{target_slug}]"
+        if in_target and not edited and s.startswith("stt_aliases"):
+            rendered = ", ".join(f'"{_toml_escape(a)}"' for a in [*existing, alias])
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f"{indent}stt_aliases = [{rendered}]")
+            edited = True
+            continue
+        out.append(line)
+    if not edited:
+        # Entry lacked an stt_aliases line — insert one right after its header.
+        rebuilt: list[str] = []
+        for line in out:
+            rebuilt.append(line)
+            if line.strip() == f"[{target_slug}]":
+                rebuilt.append(f'stt_aliases = ["{_toml_escape(alias)}"]')
+        out = rebuilt
+    _VOCAB_PATH.write_text("\n".join(out) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+    reload()
+    return True
 
 
 # Load once on import.
