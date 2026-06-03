@@ -1,9 +1,16 @@
 """Phase 15 closeout: destructive-action confirmation + vocabulary library.
 
-TestDestructiveConfirmation verifies the six macOS-app destructive tools gate
-their AppleScript call behind the two-phase confirmation flow: the first call
-(no ``confirmed``) returns ``requires_confirmation=True`` and never shells out;
-the second call (``confirmed=True``) does invoke ``osascript``.
+TestDestructiveConfirmation verifies the macOS-app destructive tools gate their
+AppleScript call behind the two-phase confirmation flow: the first call (no
+``confirmed``) returns ``requires_confirmation=True`` and never shells out; the
+second call (``confirmed=True``) does invoke ``osascript``.
+
+Note (19.2-B2): the disambiguating tools (delete_note, delete_event,
+complete_reminder) now *enumerate* matches read-only on the first call (to show
+dates and detect duplicates), so they no longer satisfy "never shells out".
+Their two-phase + index-disambiguation flow is covered in
+``tests/test_bug_fix_sweep.py`` instead; only the non-enumerating destructive
+tools remain in the shared parametrization here.
 
 TestVocabulary covers the vocabulary library: STT corrections, the
 pronunciation block, bias words, hot reload, and the ``add_vocabulary_word``
@@ -17,20 +24,16 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from core import vocabulary
-from tools.calendar_tool import delete_event
 from tools.finder_tool import move_item
 from tools.mail_tool import send_to
 from tools.messages_tool import send_imessage
-from tools.notes_tool import delete_note
-from tools.reminders_tool import complete_reminder
 
-# All six destructive tools route their AppleScript through actions.macos.osascript.
+# These destructive tools route their AppleScript through actions.macos.osascript.
 _OSASCRIPT = "actions.macos.osascript"
 
 # (function, kwargs) — kwargs are the first-call args; confirmed=True is added
 # for the second call. Targets are deliberately nonexistent / fake.
 _DESTRUCTIVE_CASES = [
-    pytest.param(delete_event, {"title": "EMMA_TEST_NONEXISTENT"}, id="calendar.delete_event"),
     pytest.param(
         send_to,
         {"recipient": "nobody@example.invalid", "subject": "EMMA_TEST", "body": "x"},
@@ -40,10 +43,6 @@ _DESTRUCTIVE_CASES = [
         send_imessage,
         {"recipient": "+10000000000", "body": "EMMA_TEST"},
         id="messages.send_imessage",
-    ),
-    pytest.param(delete_note, {"title": "EMMA_TEST_NONEXISTENT"}, id="notes.delete_note"),
-    pytest.param(
-        complete_reminder, {"title": "EMMA_TEST_NONEXISTENT"}, id="reminders.complete_reminder"
     ),
     pytest.param(
         move_item,
@@ -137,9 +136,12 @@ class TestVocabulary:
         # "en" has no say_en entries in the temp file → empty string.
         assert vocabulary.pronunciation_block("en") == ""
 
-    def test_bias_words_are_canonical_names(self, temp_vocab):
+    def test_bias_words_include_canonical_names(self, temp_vocab):
+        # 19.4-B12: bias_words() now unions dictionary proper nouns too, so it's a
+        # superset of the vocabulary canonicals rather than exactly equal.
         words = vocabulary.bias_words()
-        assert words == ["Claude", "Claude Code", "Pipecat", "NoHint"]
+        for name in ["Claude", "Claude Code", "Pipecat", "NoHint"]:
+            assert name in words
 
     def test_hot_reload_picks_up_new_entries(self, temp_vocab):
         assert "Letta" not in vocabulary.bias_words()

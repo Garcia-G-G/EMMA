@@ -60,11 +60,17 @@ def test_list_unread_parses() -> None:
 def test_list_notes_parses() -> None:
     from tools.notes_tool import list_notes
 
-    with _mock_osascript("Shopping|milk and eggs\nBlog ideas|post about X"):
+    # New 19.2-B4 enumeration shape: id‖modification_date‖title‖preview
+    raw = (
+        "id1‖2026-06-02T08:00:00‖Shopping‖milk and eggs\n"
+        "id2‖2026-06-02T09:30:00‖Blog ideas‖post about X"
+    )
+    with _mock_osascript(raw):
         res = _run(list_notes())
     assert res.success
     titles = [n["title"] for n in res.data["notes"]]
     assert titles == ["Shopping", "Blog ideas"]
+    assert res.data["notes"][0]["modification_date"] == "2026-06-02T08:00:00"
 
 
 def test_reminders_list_today_filters_to_today() -> None:

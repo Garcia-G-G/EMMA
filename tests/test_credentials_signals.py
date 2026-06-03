@@ -157,9 +157,12 @@ def _run_session_with(terminal_error):
             return None  # session ended (any error already handled in-pipeline)
 
     fake_watcher = SimpleNamespace(terminal_error=terminal_error)
+    # run_session now also receives the llm so it can close the WebSocket on exit (B1).
+    fake_llm = MagicMock()
+    fake_llm._disconnect = AsyncMock()
 
     async def fake_build():
-        return (None, FakeTask(), None, object(), fake_watcher)
+        return (None, FakeTask(), None, object(), fake_watcher, fake_llm)
 
     with (
         patch.object(conv, "_looks_like_openai_key", return_value=True),

@@ -9,6 +9,7 @@ import structlog
 
 from actions import macos
 from tools.base import ToolResult, tool
+from tools.disambiguation import FIELD_SEP, ISO_DATE_HANDLER, disambiguate, parse_matches
 
 log = structlog.get_logger("emma.tools.calendar")
 
@@ -176,42 +177,74 @@ async def create_event(
     return ToolResult(True, {"title": title}, f"Listo, creé '{title}'.", False)
 
 
-@tool(destructive=True)
-async def delete_event(title: str, date: str = "", confirmed: bool = False) -> ToolResult:
-    """Borra evento(s) del calendario cuyo título es `title`. Pide confirmación.
+def _enumerate_events_script(title_esc: str, limit: int) -> str:
+    """Enumerate events by summary → ``uid‖startISO‖summary‖`` per match.
 
-    `date` es opcional y solo se usa para la pregunta de confirmación.
+    Enumeration only — never deletes (Bug 19.2-B2). The disambiguation date is
+    the event's start date (more meaningful than a modification date here).
     """
+    return (
+        ISO_DATE_HANDLER + 'tell application "Calendar"\n'
+        '  set out to ""\n'
+        "  set k to 0\n"
+        "  repeat with cal in calendars\n"
+        f'    repeat with ev in (every event of cal whose summary is "{title_esc}")\n'
+        "      set out to out & (uid of ev) & "
+        f'"{FIELD_SEP}" & (my isoDate(start date of ev)) & '
+        f'"{FIELD_SEP}" & (summary of ev) & "{FIELD_SEP}" & linefeed\n'
+        "      set k to k + 1\n"
+        f"      if k ≥ {int(limit)} then exit repeat\n"
+        "    end repeat\n"
+        f"    if k ≥ {int(limit)} then exit repeat\n"
+        "  end repeat\n"
+        "  return out\n"
+        "end tell"
+    )
+
+
+@tool(destructive=True)
+async def delete_event(
+    title: str, date: str = "", index: int | None = None, confirmed: bool = False
+) -> ToolResult:
+    """Borra UN evento del calendario cuyo título es `title`. Pide confirmación.
+
+    Si hay varios con el mismo nombre, los enumera (con fecha) y pide cuál (por
+    número) — nunca borra todos (Bug 19.2-B2). `date` es informativo.
+    """
+    t = macos.esc_applescript(title)
+    try:
+        raw = await macos.osascript(_enumerate_events_script(t, limit=25), timeout_s=_CAL_TIMEOUT_S)
+    except macos.AppleScriptError as exc:
+        return ToolResult(False, None, f"No pude leer el calendario: {exc}", False)
+    matches = parse_matches(raw)
+
+    chosen, response = disambiguate(matches, index, noun="evento", title=title)
+    if response is not None:
+        return response
+    assert chosen is not None
+
     if not confirmed:
-        when = f" del {date}" if date else ""
+        when = f" ({chosen.when})" if chosen.when else (f" del {date}" if date else "")
         return ToolResult(
             True,
-            {"title": title, "date": date},
-            f"¿Borro el evento '{title}'{when}?",
+            {"title": chosen.title, "uid": chosen.id},
+            f"¿Borro el evento '{chosen.title}'{when}?",
             True,
         )
-    t = macos.esc_applescript(title)
+
+    uid = macos.esc_applescript(chosen.id)
     script = (
         'tell application "Calendar"\n'
-        "set deletedCount to 0\n"
-        "repeat with cal in calendars\n"
-        f'  repeat with ev in (every event of cal whose summary is "{t}")\n'
-        "    delete ev\n"
-        "    set deletedCount to deletedCount + 1\n"
+        "  repeat with cal in calendars\n"
+        f'    delete (every event of cal whose uid is "{uid}")\n'
         "  end repeat\n"
-        "end repeat\n"
-        "return deletedCount\n"
         "end tell"
     )
     ok, out = await macos.osascript_or_friendly(
-        script, timeout_s=15.0, on_error="No pude borrar el evento"
+        script, timeout_s=_CAL_TIMEOUT_S, on_error="No pude borrar el evento"
     )
     if not ok:
         return ToolResult(False, None, out, False)
-    try:
-        n = int((out or "0").strip())
-    except ValueError:
-        n = 0
-    if n == 0:
-        return ToolResult(True, {"deleted": 0}, f"No encontré ningún evento '{title}'.", False)
-    return ToolResult(True, {"deleted": n}, f"Listo, borré '{title}'.", False)
+    return ToolResult(
+        True, {"deleted": 1, "title": chosen.title}, f"Listo, borré '{chosen.title}'.", False
+    )

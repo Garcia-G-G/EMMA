@@ -104,6 +104,46 @@ def esc_applescript(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _process_name(app: str) -> str:
+    """Map a display app name to its running-process name for ``pgrep -x``.
+
+    Apple Music's app is "Music"/"Apple Music" but its process is "Music".
+    """
+    if app in ("Apple Music", "Music"):
+        return "Music"
+    return app
+
+
+async def app_is_running(app: str) -> bool:
+    """True if ``app`` is currently running (``pgrep -x`` on the process name).
+
+    No new dependency — shells out to the system ``pgrep`` (Bug 19.2-B3).
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "/usr/bin/pgrep",
+        "-x",
+        _process_name(app),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    return proc.returncode == 0
+
+
+async def launch_app(app: str, warmup_s: float = 1.5) -> None:
+    """Launch ``app`` via ``open -a`` and wait ``warmup_s`` for it to register
+    (so a follow-up AppleScript transport command lands on a live app). B3."""
+    proc = await asyncio.create_subprocess_exec(
+        "open",
+        "-a",
+        app,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    await asyncio.sleep(warmup_s)
+
+
 def open_url(url: str) -> None:
     _run(["open", url])
 

@@ -89,130 +89,130 @@ def _apple_music(script: str, ok_msg: str, *, ends_session: bool = False) -> Too
     return ToolResult(True, None, ok_msg, False, ends_session=ends_session)
 
 
-@tool()
-def play_track(query: str) -> ToolResult:
-    """Search for a track or artist and start playing the top result on Spotify."""
+async def _ensure_running(app: str) -> None:
+    """Launch ``app`` if it isn't already running, so AppleScript transport lands
+    on a live app (Bug 19.2-B3 — fixes Spotify "no active device")."""
+    if not await macos.app_is_running(app):
+        await macos.launch_app(app)
+
+
+def _spotify_search_uri(query: str) -> str | None:
+    """Resolve a free-text query to a Spotify track URI via the Web API (search
+    only — playback goes through AppleScript). None if unavailable / no match."""
     sp = _spotify()
     if sp is None:
-        return _apple_music(
-            f'tell application "Music" to (play (first track of (search library 1 for "{query}")))',
-            f"Reproduciendo {query} en Música.",
-            ends_session=True,
-        )
+        return None
     try:
-        results = sp.search(q=query, type="track", limit=1)
-        items = results.get("tracks", {}).get("items", [])
-        if not items:
-            return ToolResult(False, None, f"No encontré nada para '{query}'.", False)
-        track = items[0]
-        uri = track["uri"]
-        try:
-            sp.start_playback(uris=[uri])
-        except Exception:
-            return ToolResult(
-                False,
-                None,
-                "Spotify no tiene ningún dispositivo activo. "
-                "Dile al usuario que abra Spotify primero. "
-                "NO reintentes este tool — no va a funcionar hasta que el usuario abra Spotify manualmente.",
-                False,
+        items = sp.search(q=query, type="track", limit=1).get("tracks", {}).get("items", [])
+        return items[0]["uri"] if items else None
+    except Exception as exc:
+        log.error("spotify_search_failed", error=str(exc))
+        return None
+
+
+def _spotify_playlist_uri(name: str) -> str | None:
+    """Resolve a playlist name to its Spotify URI via the Web API. None if N/A."""
+    sp = _spotify()
+    if sp is None:
+        return None
+    try:
+        items = sp.current_user_playlists(limit=50).get("items", [])
+        match = next((p for p in items if p["name"].lower() == name.lower()), None)
+        return match["uri"] if match else None
+    except Exception as exc:
+        log.error("spotify_playlist_lookup_failed", error=str(exc))
+        return None
+
+
+@tool()
+async def play_track(query: str) -> ToolResult:
+    """Search for a track or artist and start playing the top result.
+
+    Drives the resolved desktop app (Spotify or Apple Music) via AppleScript,
+    launching it first if needed — so it works even with no active device."""
+    app = _music_app()
+    await _ensure_running(app)
+    if app == "Spotify":
+        uri = _spotify_search_uri(query)
+        if uri:
+            esc = macos.esc_applescript(uri)
+            return _apple_music(
+                f'tell application "Spotify" to play track "{esc}"',
+                f"Reproduciendo {query} en Spotify.",
+                ends_session=True,
             )
-        title = track["name"]
-        artist = ", ".join(a["name"] for a in track.get("artists", []))
-        return ToolResult(
-            True,
-            {"uri": uri, "title": title, "artist": artist},
-            f"Reproduciendo {title} de {artist}.",
-            False,
-            ends_session=True,
-        )
-    except Exception as exc:
-        log.error("spotify_play_failed", error=str(exc))
-        return ToolResult(False, None, f"Spotify falló: {exc}", False)
+        # No Spotify search available → fall back to Apple Music (always installed).
+        app = "Music"
+        await _ensure_running(app)
+    q = macos.esc_applescript(query)
+    return _apple_music(
+        f'tell application "{macos.esc_applescript(app)}" to '
+        f'(play (first track of (search library 1 for "{q}")))',
+        f"Reproduciendo {query} en {app}.",
+        ends_session=True,
+    )
 
 
 @tool()
-def play_playlist(name: str) -> ToolResult:
-    """Play a playlist by name from the user's Spotify library."""
-    sp = _spotify()
-    if sp is None:
-        return _apple_music(
-            f'tell application "Music" to play playlist "{name}"',
-            f"Reproduciendo la lista {name} en Música.",
-            ends_session=True,
-        )
-    try:
-        results = sp.current_user_playlists(limit=50)
-        match = next(
-            (p for p in results.get("items", []) if p["name"].lower() == name.lower()),
-            None,
-        )
-        if match is None:
-            return ToolResult(False, None, f"No tengo una lista llamada '{name}'.", False)
-        sp.start_playback(context_uri=match["uri"])
-        return ToolResult(
-            True, {"uri": match["uri"]}, f"Reproduciendo {match['name']}.", False, ends_session=True
-        )
-    except Exception as exc:
-        return ToolResult(False, None, f"Spotify falló: {exc}", False)
+async def play_playlist(name: str) -> ToolResult:
+    """Play a playlist by name (desktop AppleScript, launching the app if needed)."""
+    app = _music_app()
+    await _ensure_running(app)
+    if app == "Spotify":
+        uri = _spotify_playlist_uri(name)
+        if uri:
+            esc = macos.esc_applescript(uri)
+            return _apple_music(
+                f'tell application "Spotify" to play track "{esc}"',
+                f"Reproduciendo la lista {name} en Spotify.",
+                ends_session=True,
+            )
+        app = "Music"
+        await _ensure_running(app)
+    n = macos.esc_applescript(name)
+    return _apple_music(
+        f'tell application "{macos.esc_applescript(app)}" to play playlist "{n}"',
+        f"Reproduciendo la lista {name} en {app}.",
+        ends_session=True,
+    )
 
 
-def _spotify_transport(
-    method: str, ok_msg: str, fallback_script: str, fallback_msg: str, *, ends_session: bool = False
-) -> ToolResult:
-    sp = _spotify()
-    if sp is None:
-        return _apple_music(fallback_script, fallback_msg, ends_session=ends_session)
-    try:
-        getattr(sp, method)()
-    except Exception as exc:
-        return ToolResult(False, None, f"Spotify falló: {exc}", False)
-    return ToolResult(True, None, ok_msg, False, ends_session=ends_session)
+async def _transport(verb: str, ok_msg: str, *, ends_session: bool = False) -> ToolResult:
+    """Run a transport verb (pause/play/next track/previous track) on the resolved
+    desktop app via AppleScript, launching it first if needed. B3: no Web API —
+    that's what produced the "no active device" failures."""
+    app = _music_app()
+    await _ensure_running(app)
+    return _apple_music(
+        f'tell application "{macos.esc_applescript(app)}" to {verb}',
+        ok_msg,
+        ends_session=ends_session,
+    )
 
 
 @tool()
-def pause() -> ToolResult:
+async def pause() -> ToolResult:
     """Pause whatever is playing."""
     # pause stops the audio, so the mic no longer fights it — keep listening.
-    return _spotify_transport(
-        "pause_playback", "Pausado.", f'tell application "{_music_app()}" to pause', "Pausado."
-    )
+    return await _transport("pause", "Pausado.")
 
 
 @tool()
-def resume() -> ToolResult:
+async def resume() -> ToolResult:
     """Resume playback."""
-    return _spotify_transport(
-        "start_playback",
-        "Listo.",
-        f'tell application "{_music_app()}" to play',
-        "Listo.",
-        ends_session=True,
-    )
+    return await _transport("play", "Listo.", ends_session=True)
 
 
 @tool()
-def next_track() -> ToolResult:
+async def next_track() -> ToolResult:
     """Skip to the next track."""
-    return _spotify_transport(
-        "next_track",
-        "Siguiente.",
-        f'tell application "{_music_app()}" to next track',
-        "Siguiente.",
-        ends_session=True,
-    )
+    return await _transport("next track", "Siguiente.", ends_session=True)
 
 
 @tool()
-def previous_track() -> ToolResult:
+async def previous_track() -> ToolResult:
     """Go to the previous track."""
-    return _spotify_transport(
-        "previous_track",
-        "Anterior.",
-        f'tell application "{_music_app()}" to previous track',
-        "Anterior.",
-        ends_session=True,
-    )
+    return await _transport("previous track", "Anterior.", ends_session=True)
 
 
 @tool()

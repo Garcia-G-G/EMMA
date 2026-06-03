@@ -11,7 +11,7 @@ Garcia's real memory.db nor calls the embedding API.
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import structlog
@@ -82,18 +82,32 @@ def test_semantic_forget_no_match_returns_zero(tmp_path, monkeypatch):
 
 
 def test_delete_note_requires_confirmation_first():
-    from tools.notes_tool import delete_note
+    # 19.2-B2: enumerate matches first (read-only), then ask yes/no on the single
+    # match before any delete.
+    from tools import notes_tool
 
-    r = asyncio.run(delete_note(title="Cualquiera"))
+    one = AsyncMock(return_value="id1‖2026-06-02T10:00:00‖Cualquiera‖x")
+
+    async def run():
+        with patch.object(notes_tool.macos, "osascript", new=one):
+            return await notes_tool.delete_note(title="Cualquiera")
+
+    r = asyncio.run(run())
     assert r.success is True
     assert r.requires_confirmation is True
     assert "Borro la nota" in r.user_message
 
 
 def test_complete_reminder_requires_confirmation_first():
-    from tools.reminders_tool import complete_reminder
+    from tools import reminders_tool
 
-    r = asyncio.run(complete_reminder(title="Pagar luz"))
+    one = AsyncMock(return_value="r1‖‖Pagar luz‖")
+
+    async def run():
+        with patch.object(reminders_tool.macos, "osascript", new=one):
+            return await reminders_tool.complete_reminder(title="Pagar luz")
+
+    r = asyncio.run(run())
     assert r.requires_confirmation is True
     assert "completado" in r.user_message
 
@@ -101,15 +115,28 @@ def test_complete_reminder_requires_confirmation_first():
 # --- AppleScript dialog-blocked handling (no hang) -------------------------
 
 
-def test_applescript_dialog_blocked_returns_recovery_message():
+def _osascript_then_raise(error_msg):
+    """First call (enumerate) succeeds with one match; the next call (the actual
+    delete) raises — exercising the dialog/error path on the destructive step."""
     from actions import macos
+
+    seq = ["id1‖2026-06-02T10:00:00‖X‖p"]
+
+    async def osa(script, timeout_s=15.0):
+        if seq:
+            return seq.pop(0)
+        raise macos.AppleScriptError(error_msg)
+
+    return osa
+
+
+def test_applescript_dialog_blocked_returns_recovery_message():
     from tools import notes_tool
 
-    async def boom(script, timeout_s=15.0):
-        raise macos.AppleScriptError("app_dialog_blocked: osascript timed out after 15.0s")
+    osa = _osascript_then_raise("app_dialog_blocked: osascript timed out after 15.0s")
 
     async def run():
-        with patch.object(notes_tool.macos, "osascript", new=boom):
+        with patch.object(notes_tool.macos, "osascript", new=osa):
             return await notes_tool.delete_note(title="X", confirmed=True)
 
     r = asyncio.run(run())
@@ -118,14 +145,12 @@ def test_applescript_dialog_blocked_returns_recovery_message():
 
 
 def test_applescript_generic_error_distinct_from_dialog():
-    from actions import macos
     from tools import notes_tool
 
-    async def boom(script, timeout_s=15.0):
-        raise macos.AppleScriptError("some other failure")
+    osa = _osascript_then_raise("some other failure")
 
     async def run():
-        with patch.object(notes_tool.macos, "osascript", new=boom):
+        with patch.object(notes_tool.macos, "osascript", new=osa):
             return await notes_tool.delete_note(title="X", confirmed=True)
 
     r = asyncio.run(run())

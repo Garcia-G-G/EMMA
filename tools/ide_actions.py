@@ -21,7 +21,18 @@ from pathlib import Path
 
 from actions import macos
 from core.apps import resolve
+from tools.app_control import app_keystroke
 from tools.base import ToolResult, tool
+
+# Per-IDE "toggle integrated terminal" shortcut (Bug 19.2-B6).
+# VS Code / Cursor: Ctrl+` (code.visualstudio.com/docs/terminal/basics).
+# Zed: Cmd+J (zed.dev/docs).
+_TERMINAL_SHORTCUT = {
+    "VS Code": "Ctrl+`",
+    "Visual Studio Code": "Ctrl+`",
+    "Cursor": "Ctrl+`",
+    "Zed": "Cmd+J",
+}
 
 # Display name → CLI binary. Includes both VS Code display variants.
 _CLI_FOR_APP = {
@@ -93,6 +104,25 @@ async def new_file_in_ide(path: str, content: str = "", ide: str = "") -> ToolRe
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     return await open_in_ide(str(p), ide=ide)
+
+
+@tool()
+async def toggle_ide_terminal(ide: str = "") -> ToolResult:
+    """Abre/cierra la terminal integrada del IDE (Bug 19.2-B6).
+
+    Úsalo cuando Garcia diga 'abre la terminal', 'muéstrame la terminal',
+    'abre una terminal en Cursor'."""
+    app = ide or resolve("editor")
+    if not app:
+        return ToolResult(False, None, "No tengo un IDE configurado.", False)
+    keys = _TERMINAL_SHORTCUT.get(app)
+    if not keys:
+        return ToolResult(False, None, f"No sé cómo abrir la terminal en {app}.", False)
+    # UI toggle, not a data write → auto-confirm the (destructive-flagged) keystroke.
+    res = await app_keystroke(app, keys, confirmed=True)
+    if not res.success:
+        return ToolResult(False, None, f"No pude abrir la terminal en {app}.", False)
+    return ToolResult(True, {"app": app, "keys": keys}, f"Listo, terminal de {app}.", False)
 
 
 @tool()
