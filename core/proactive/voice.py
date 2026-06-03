@@ -48,11 +48,12 @@ async def speak_unprompted(text: str) -> None:
     task = None
     transport = None
     runner = None
+    llm = None
     try:
         from pipecat.frames.frames import LLMContextFrame
         from pipecat.pipeline.runner import PipelineRunner
 
-        _pipeline, task, transport, context, _auth = await conversation.build_pipeline()
+        _pipeline, task, transport, context, _auth, llm = await conversation.build_pipeline()
         context.messages.append(
             {"role": "user", "content": f"<UNPROMPTED_SPEECH>{text}</UNPROMPTED_SPEECH>"}
         )
@@ -71,3 +72,6 @@ async def speak_unprompted(text: str) -> None:
         if transport is not None:
             with suppress(Exception):
                 await transport.cleanup()  # type: ignore[no-untyped-call]
+        if llm is not None:
+            with suppress(Exception):
+                await llm._disconnect()  # type: ignore[no-untyped-call]  # close WebSocket (B1)

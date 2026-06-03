@@ -57,6 +57,51 @@ async def web_search_in_browser(query: str) -> ToolResult:
     return await open_url(f"https://www.google.com/search?q={q}")
 
 
+# Chromium-family browsers share Chrome's AppleScript dictionary
+# ("close active tab of front window"). Verified for Brave in Garcia's own use.
+_CHROME_SYNTAX = ("Google Chrome", "Chrome", "Brave Browser", "Microsoft Edge")
+
+
+@tool()
+async def close_current_tab(browser: str = "") -> ToolResult:
+    """Cierra la pestaña activa del navegador. Directo y rápido (Bug 19.2-B5).
+
+    Úsalo cuando Garcia diga 'cierra esta pestaña' / 'cierra la pestaña'."""
+    app = browser or resolve("browser") or "Safari"
+    if app == "Safari":
+        script = 'tell application "Safari" to close current tab of front window'
+    elif app in _CHROME_SYNTAX:
+        script = (
+            f'tell application "{macos.esc_applescript(app)}" to close active tab of front window'
+        )
+    else:
+        # No direct dictionary verb — fall back to ⌘W via System Events, and say so.
+        a = macos.esc_applescript(app)
+        script = (
+            f'tell application "{a}" to activate\n'
+            "delay 0.15\n"
+            'tell application "System Events" to keystroke "w" using {command down}'
+        )
+        ok, _ = await macos.osascript_or_friendly(
+            script, timeout_s=4.0, on_error="No pude cerrar la pestaña"
+        )
+        msg = (
+            f"Cerré la pestaña en {app} con un atajo (no tiene control directo, puede ser menos preciso)."
+            if ok
+            else f"No pude cerrar la pestaña en {app}."
+        )
+        return ToolResult(ok, {"browser": app, "via": "keystroke"}, msg, False)
+
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=4.0, on_error="No pude cerrar la pestaña"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
+    return ToolResult(
+        True, {"browser": app, "via": "applescript"}, "Listo, cerré la pestaña.", False
+    )
+
+
 @tool()
 async def current_tab_url(browser: str = "") -> ToolResult:
     """Devuelve la URL de la pestaña activa del navegador preferido.

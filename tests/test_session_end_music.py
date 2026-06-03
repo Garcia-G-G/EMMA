@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from tools.base import ToolResult
-from tools.music import pause, play_track
 
 
 @pytest.fixture(autouse=True)
@@ -33,34 +32,42 @@ def test_toolresult_ends_session_defaults_false():
 # --- music tools set the signal correctly ----------------------------------
 
 
-def test_play_track_ends_session():
-    fake = MagicMock()
-    fake.search.return_value = {
-        "tracks": {
-            "items": [{"uri": "spotify:track:1", "name": "Song", "artists": [{"name": "Artist"}]}]
-        }
-    }
-    with patch("tools.music._spotify", return_value=fake):
-        r = play_track("a song")
-    assert r.success
-    assert r.ends_session is True
-    fake.start_playback.assert_called_once()
+@pytest.mark.asyncio
+async def test_play_track_ends_session(monkeypatch):
+    # 19.2-B3: playback is AppleScript on the (already-running) desktop app.
+    import tools.music as music
 
-
-def test_play_track_apple_music_fallback_ends_session():
-    with (
-        patch("tools.music._spotify", return_value=None),
-        patch("tools.music.macos.run_applescript"),
-    ):
-        r = play_track("a song")
+    monkeypatch.setattr(music, "_music_app", lambda: "Spotify")
+    monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
+    monkeypatch.setattr(music.macos, "launch_app", AsyncMock())
+    monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
+    monkeypatch.setattr(music, "_spotify_search_uri", lambda q: "spotify:track:1")
+    r = await music.play_track("a song")
     assert r.success
     assert r.ends_session is True
 
 
-def test_pause_keeps_session_open():
-    fake = MagicMock()
-    with patch("tools.music._spotify", return_value=fake):
-        r = pause()
+@pytest.mark.asyncio
+async def test_play_track_apple_music_fallback_ends_session(monkeypatch):
+    import tools.music as music
+
+    monkeypatch.setattr(music, "_music_app", lambda: "Music")
+    monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
+    monkeypatch.setattr(music.macos, "launch_app", AsyncMock())
+    monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
+    r = await music.play_track("a song")
+    assert r.success
+    assert r.ends_session is True
+
+
+@pytest.mark.asyncio
+async def test_pause_keeps_session_open(monkeypatch):
+    import tools.music as music
+
+    monkeypatch.setattr(music, "_music_app", lambda: "Spotify")
+    monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
+    monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
+    r = await music.pause()
     assert r.success
     assert r.ends_session is False
 

@@ -29,6 +29,7 @@ package source:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import math
 import time
 from collections.abc import Awaitable, Callable
@@ -71,7 +72,7 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import events_bus, vocabulary
+from core import capability_gaps, events_bus, vocabulary
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -321,7 +322,12 @@ async def _build_instructions() -> str:
         "operation and say 'Listo, lo dejo' / 'Got it, leaving it' (rotate).\n"
         "- If the user says something else, treat it as 'no' for safety — say "
         "'No te entendí, cancelo por si acaso' / 'Didn't catch that, cancelling to "
-        "be safe'.\n\n"
+        "be safe'.\n"
+        "- EXCEPTION — pick by number: if the confirmation question enumerated "
+        "several matches ('encontré 2: …, ¿a cuál te refieres? Dime el número') "
+        "and the user answers with a number ('el 2', 'la segunda'), re-call the "
+        "SAME tool with that 1-based `index` PLUS `confirmed: true`. This is a "
+        "selection, not a yes/no — do not treat it as cancel.\n\n"
         "# Defaults & apps\n"
         "- You CAN set and change Garcia's preferred app per category "
         "(editor/ide, terminal, music, browser) and read it back. When he asks "
@@ -348,6 +354,14 @@ async def _build_instructions() -> str:
         "content in his preferred language (default Spanish), naturally, then "
         "STOP. Do not invite a follow-up or append questions unless the "
         "directive itself contains one.\n"
+        "\n# Vague search guard (mandatory)\n"
+        "- Before calling search_github or search_web with a user-supplied "
+        "query: if the query has fewer than 2 distinct content words, no proper "
+        "noun, or no clear intent, DO NOT search. Ask Garcia to specify in "
+        "Spanish first.\n"
+        "- Examples to ask: '¿de qué quieres el repo?', '¿de quién?', '¿qué "
+        "lenguaje?'.\n"
+        "- Once Garcia clarifies, proceed with the search.\n"
         "\n# Repo cloning flow (mandatory)\n"
         "- When Garcia asks to 'buscar un repo', call search_github. Read the "
         "top 1-3 matches by name + star count. If he names one (a number or "
@@ -488,6 +502,14 @@ def _make_function_handler(
             elapsed = int((time.monotonic() - t_start) * 1000)
             log.error("tool_timed_out", name=name, elapsed_ms=elapsed)
             events_bus.publish("tool_timed_out", name=name, elapsed_ms=elapsed)
+            capability_gaps.record(
+                name=name,
+                args_keys=list(args.keys()),
+                success=False,
+                user_message="Esa acción se quedó pegada (timeout 20s).",
+                elapsed_ms=elapsed,
+                timed_out=True,
+            )
             await params.result_callback(
                 {
                     "success": False,
@@ -501,6 +523,14 @@ def _make_function_handler(
             elapsed = int((time.monotonic() - t_start) * 1000)
             log.error("tool_failed", name=name, elapsed_ms=elapsed, error=str(exc))
             events_bus.publish("tool_failed", name=name, elapsed_ms=elapsed)
+            capability_gaps.record(
+                name=name,
+                args_keys=list(args.keys()),
+                success=False,
+                user_message=str(exc),
+                elapsed_ms=elapsed,
+                errored=True,
+            )
             await params.result_callback(
                 {
                     "success": False,
@@ -513,6 +543,14 @@ def _make_function_handler(
         elapsed = int((time.monotonic() - t_start) * 1000)
         log.info("tool_completed", name=name, elapsed_ms=elapsed, success=result.success)
         events_bus.publish("tool_completed", name=name, elapsed_ms=elapsed, success=result.success)
+        capability_gaps.record(
+            name=name,
+            args_keys=list(args.keys()),
+            success=result.success,
+            user_message=result.user_message,
+            data=result.data,
+            elapsed_ms=elapsed,
+        )
         payload: dict[str, Any] = {
             "success": result.success,
             "user_message": result.user_message,
@@ -562,15 +600,21 @@ async def _build_session_properties() -> SessionProperties:
 
 
 async def build_pipeline() -> tuple[
-    Pipeline, PipelineTask, LocalAudioTransport, LLMContext, AuthErrorWatcher
+    Pipeline,
+    PipelineTask,
+    LocalAudioTransport,
+    LLMContext,
+    AuthErrorWatcher,
+    OpenAIRealtimeLLMService,
 ]:
     """Wire transport + Realtime LLM + tool handlers into a Pipecat pipeline.
 
-    Returns (pipeline, task, transport, context, auth_watcher) so the
+    Returns (pipeline, task, transport, context, auth_watcher, llm) so the
     orchestrator can manage their lifecycle. The transport opens the
     mic + speaker streams when the pipeline starts and closes them on
     cancel / idle-timeout. The auth_watcher lets run_session detect a
-    terminal auth error and exit non-zero instead of reconnecting.
+    terminal auth error and exit non-zero instead of reconnecting. The llm is
+    returned so run_session can explicitly close its WebSocket on exit (B1).
     """
     # barge_in_rms must sit ABOVE Emma's own speaker echo or she self-interrupts
     # after ~1 word. Measured echo on this MacBook ranged 4000-12600 RMS
@@ -640,7 +684,7 @@ async def build_pipeline() -> tuple[
     )
     auth_watcher.set_task(task)
     session_control.set_task(task)
-    return pipeline, task, transport, context, auth_watcher
+    return pipeline, task, transport, context, auth_watcher, llm
 
 
 async def run_session() -> None:
@@ -664,13 +708,22 @@ async def run_session() -> None:
         )
         raise SystemExit(2)  # non-zero exit; launchd KeepAlive treats as real failure
 
-    _pipeline, task, _transport, context, auth_watcher = await build_pipeline()
+    _pipeline, task, _transport, context, auth_watcher, llm = await build_pipeline()
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:
         await task.queue_frame(LLMContextFrame(context=context))
         await runner.run(task)
     finally:
+        # Explicitly close the Realtime WebSocket. Pipecat's idle-cancel usually
+        # closes it, but on the orchestrator's outer-timeout path the task is
+        # abandoned mid-flight and the socket can linger half-open, blocking the
+        # next session's mic. _disconnect() is idempotent (no-ops if already
+        # closed). Best-effort: never let cleanup mask the real exit (B1).
+        with contextlib.suppress(Exception):
+            # _disconnect is Pipecat-internal (untyped) but the public surface
+            # (reset_conversation) reconnects, which we don't want on teardown.
+            await asyncio.wait_for(llm._disconnect(), timeout=3.0)  # type: ignore[no-untyped-call]
         log.info("conversation_end")
 
     if auth_watcher.terminal_error is not None:

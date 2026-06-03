@@ -29,6 +29,11 @@ log = structlog.get_logger("emma.orchestrator")
 _shutdown = asyncio.Event()
 _simulate_crash = False
 _last_turn_id: str = ""
+# Monotonic clock at the moment the previous session ended. The watchdog (B1)
+# flags `daemon_stuck` if the loop doesn't get back to wake-word listening
+# within this many seconds — surfacing a wedged mic/socket in the logs.
+_last_session_end_mono: float = 0.0
+_LOOPBACK_WATCHDOG_S = 30.0
 
 
 def _now_iso() -> str:
@@ -65,11 +70,17 @@ def preflight() -> None:
 
 async def _one_session() -> None:
     """Wake → Pipecat session → return. One iteration of the main loop."""
-    global _last_turn_id
+    global _last_turn_id, _last_session_end_mono
     turn_id = uuid.uuid4().hex[:8]
     _last_turn_id = turn_id
     structlog.contextvars.bind_contextvars(turn_id=turn_id)
     try:
+        # Watchdog (B1): how long since the prior session ended? Normally ~0.
+        # A large gap means the loop was wedged before it could resume listening.
+        if _last_session_end_mono:
+            gap = time.monotonic() - _last_session_end_mono
+            if gap > _LOOPBACK_WATCHDOG_S:
+                log.error("daemon_stuck", reason="slow_loopback_to_wake", gap_s=round(gap, 1))
         events_bus.publish("state", state="waiting_for_wake")
         t_start = time.monotonic()
         await listen_for_wake_word()
@@ -90,12 +101,17 @@ async def _one_session() -> None:
                 timeout=float(settings.SESSION_MAX_S) + 30.0,
             )
         except TimeoutError:
+            # The Pipecat session overran even its grace window. Reset fast so the
+            # next iteration is back listening within ~1s (B1).
             log.info("session_timeout")
+            log.info("session_reset", reason="outer_timeout")
+            await asyncio.sleep(0.5)
         duration_s = round(time.monotonic() - t_wake, 1)
         log.info("session_close", duration_s=int(duration_s))
         events_bus.publish("session_ended", id=turn_id, duration_s=duration_s)
         events_bus.publish("state", state="waiting_for_wake")
     finally:
+        _last_session_end_mono = time.monotonic()
         structlog.contextvars.unbind_contextvars("turn_id")
 
 
