@@ -28,10 +28,34 @@ lets the model re-call with the chosen number. See PR 19.2 notes.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 
 from tools.base import ToolResult
+
+# 19.6-B23: title normalization. Separators become spaces (so "a:b" ≠ "ab");
+# quotes/apostrophes vanish. Built ONCE at module load (anti-pattern: no
+# per-call table building).
+_PUNCT_TO_SPACE = str.maketrans(dict.fromkeys(":;,.!?()[]{}", " "))
+_PUNCT_DROP = str.maketrans("", "", "\"'")
+# ñ is a DISTINCT letter in Spanish, not "n with decoration" — protect it
+# through the NFD pass with a sentinel that survives casefolding.
+_ENYE_SENTINEL = "\x00"
+
+
+def normalize_title(s: str) -> str:
+    """Punctuation/diacritics/whitespace-tolerant form for title comparison.
+
+    'Limitación: terminal Cursor' ≡ 'limitación terminal Cursor'. Accents are
+    stripped (NFD, drop combining marks) but ñ is preserved. Pure stdlib."""
+    s = s.lower().replace("ñ", _ENYE_SENTINEL)
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = s.replace(_ENYE_SENTINEL, "ñ")
+    s = s.translate(_PUNCT_TO_SPACE).translate(_PUNCT_DROP)
+    return " ".join(s.split())
+
 
 # Day/time words that make a "¿para cuándo?" question feel natural when notes are
 # distinguished by date suffixes ("Pendientes para hoy" / "… el miércoles").
@@ -150,6 +174,14 @@ async def find_by_title(
         matches = await enumerate_fn(f' whose name {op} "{title_esc}"', limit)
         if matches:
             return matches, strategy
+    # Last tier (19.6-B23): punctuation/diacritics-tolerant equality, so
+    # "Limitación: terminal Cursor" finds "Limitación terminal Cursor".
+    want = normalize_title(title_esc)
+    if want:
+        candidates = await enumerate_fn("", limit)
+        normalized = [m for m in candidates if normalize_title(m.title) == want]
+        if normalized:
+            return normalized, "normalized"
     return [], "none"
 
 

@@ -30,6 +30,7 @@ from tools.disambiguation import (
     Match,
     disambiguate,
     find_by_title,
+    normalize_title,
     parse_matches,
     suffix_prompt,
     word_common_prefix,
@@ -209,12 +210,43 @@ async def search_notes(query: str, limit: int = 10) -> ToolResult:
     return ToolResult(True, {"notes": notes}, f"Encontré: {spoken}.", False)
 
 
+async def _find_normalized_duplicate(title: str) -> Match | None:
+    """A note whose title equals `title` after punctuation/diacritics
+    normalization (19.6-B23). Cheap scan — titles only, no bodies."""
+    raw = await macos.osascript(_enumerate_light_script(200), timeout_s=_NOTES_TIMEOUT_S)
+    want = normalize_title(title)
+    for m in parse_matches(raw):
+        if normalize_title(m.title) == want:
+            return m
+    return None
+
+
 @tool()
-async def create_note(title: str, body: str, folder: str = "") -> ToolResult:
+async def create_note(
+    title: str, body: str, folder: str = "", confirmed: bool = False
+) -> ToolResult:
     """Crea una nota nueva en Apple Notes con `title` y `body`.
 
+    Si ya existe una nota cuyo título solo difiere en puntuación/acentos
+    ('Limitación: terminal Cursor' vs 'Limitación terminal Cursor'), pregunta
+    primero: con el sí de Garcia para crear de todos modos, re-llama con
+    confirmed=true; si prefiere agregar a la existente, usa append_to_note.
     `folder` es opcional; si se omite, usa la carpeta por defecto.
     """
+    if not confirmed:
+        try:
+            near = await _find_normalized_duplicate(title)
+        except macos.AppleScriptError:
+            near = None  # the guard is best-effort; creation must not break
+        if near is not None and near.title != title:
+            return ToolResult(
+                True,
+                {"existing": near.title, "proposed": title},
+                f"Ya tengo una nota llamada '{near.title}'. ¿Quieres agregar a "
+                f"esa o crear una nueva con el título '{title}'?",
+                requires_confirmation=True,
+            )
+
     t = macos.esc_applescript(title)
     b = macos.esc_applescript(body)
     # HTML body so Notes keeps the title (first line) clean and SEPARATE from the
@@ -261,8 +293,9 @@ async def _append_to_match(match: Match, text: str) -> ToolResult:
 
 async def _create_with_text(new_title: str, text: str, *, existed: bool) -> ToolResult:
     """Create a note titled ``new_title`` with ``text`` as the body (reusing
-    create_note's HTML-body fix), with an append-flavored message."""
-    res = await create_note(new_title, text)
+    create_note's HTML-body fix), with an append-flavored message. Garcia
+    already confirmed the creation upstream — skip the near-dup guard."""
+    res = await create_note(new_title, text, confirmed=True)
     if not res.success:
         return res
     msg = (
