@@ -73,12 +73,13 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import audio_devices, capability_gaps, dictionary, events_bus, vocabulary
+from core import audio_devices, capability_gaps, dictionary, events_bus, session_memory, vocabulary
+from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
-from tools.registry import dispatch, openai_tool_specs
+from tools.registry import dispatch, get_tool, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
 
@@ -169,40 +170,63 @@ class TranscriptCollector(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-class _TestTranscriptTap(FrameProcessor):
-    """EMMA_TEST_MODE only (19.7-VAH3): surface STT + bot text as JSON logs.
+class _UserSpeechTap(FrameProcessor):
+    """ALWAYS-ON tap between transport.input and the LLM (21-B24).
 
-    The production ``TranscriptCollector`` never actually receives these
-    frames: user ``TranscriptionFrame``s are pushed UPSTREAM of the LLM
-    (toward transport.input), and assistant ``LLMTextFrame``s are absorbed
-    by ``LLMAssistantAggregator`` before the collector — the long-standing
-    reflection gap (CLAUDE.md "not yet implemented"; root-caused during
-    19.7, fix is its own prompt). The harness taps the stream at the two
-    spots where the frames DO exist. Never constructed in production.
+    This is the only spot where user ``TranscriptionFrame``s exist — they
+    travel UPSTREAM from the Realtime LLM, so the downstream
+    ``TranscriptCollector`` never sees them (root-caused in 19.7; the 21
+    spec's "hook TranscriptCollector" is therefore adapted to here).
 
-    role="user": sits between transport.input and the LLM; sees the
-    upstream TranscriptionFrames → ``stt_user_test`` per utterance.
-    role="bot": sits right after the LLM; accumulates downstream
-    LLMTextFrames and flushes ``bot_text_test`` on BotStoppedSpeaking.
+    Feeds ``session_memory`` ("user"/"speech" events drive the destructive-
+    confirmation invariant + anaphora) and flags low-confidence transcripts
+    (B28). In test mode also logs ``stt_user_test`` for the voice harness.
     """
 
-    def __init__(self, role: str) -> None:
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TranscriptionFrame) and frame.text:
+            session_memory.push_event("user", "speech", frame.text)
+            if is_low_confidence(frame.text, _last_assistant_speech()):
+                session_memory.push_event("user", "low_confidence", frame.text)
+                log.info("low_confidence_transcript", text=frame.text[:80])
+            if settings.EMMA_TEST_MODE:
+                log.info("stt_user_test", text=frame.text)
+        await self.push_frame(frame, direction)
+
+
+class _BotTextTap(FrameProcessor):
+    """ALWAYS-ON tap right after the LLM (21-B24).
+
+    Accumulates assistant ``LLMTextFrame``s BEFORE the aggregator absorbs
+    them and flushes one "assistant"/"speech" session-memory event per bot
+    utterance (on BotStoppedSpeaking). In test mode also logs
+    ``bot_text_test`` for the voice harness.
+    """
+
+    def __init__(self) -> None:
         super().__init__()
-        self._role = role
         self._bot_text = ""
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
-        if self._role == "user":
-            if isinstance(frame, TranscriptionFrame) and frame.text:
-                log.info("stt_user_test", text=frame.text)
-        elif isinstance(frame, LLMTextFrame) and frame.text:
+        if isinstance(frame, LLMTextFrame) and frame.text:
             self._bot_text += frame.text
         elif isinstance(frame, BotStoppedSpeakingFrame):
-            if self._bot_text.strip():
-                log.info("bot_text_test", text=self._bot_text.strip())
+            text = self._bot_text.strip()
+            if text:
+                session_memory.push_event("assistant", "speech", text)
+                if settings.EMMA_TEST_MODE:
+                    log.info("bot_text_test", text=text)
             self._bot_text = ""
         await self.push_frame(frame, direction)
+
+
+def _last_assistant_speech() -> str:
+    for ev in reversed(session_memory.recent(20)):
+        if ev.role == "assistant" and ev.kind == "speech":
+            return ev.content
+    return ""
 
 
 class _AudioLevelTap(FrameProcessor):
@@ -336,6 +360,15 @@ async def _build_instructions() -> str:
         "- NEVER switch mid-response. NEVER use any other language.\n"
         "- Spanish: use 'tú', Mexican colloquialisms are fine.\n"
         "- If unsure, default to Spanish.\n\n"
+        "# Language mirror (strict)\n"
+        "- The language of the most recent USER turn governs your next reply "
+        "ALWAYS. The language of tool results does NOT govern. If Garcia "
+        "asked in Spanish and a tool replied in English, you reply in "
+        "Spanish.\n"
+        "- If a tool's user_message is in a different language from Garcia's "
+        "last turn, TRANSLATE it into Garcia's language before speaking. "
+        "Keep the substance, change the tongue. Identifiers (URLs, repo and "
+        "app names) stay verbatim.\n\n"
         "# Response Length\n"
         "- 1 sentence for confirmations: 'Listo.', 'Done.'\n"
         "- 1-2 sentences for answers.\n"
@@ -376,7 +409,11 @@ async def _build_instructions() -> str:
         "several matches ('encontré 2: …, ¿a cuál te refieres? Dime el número') "
         "and the user answers with a number ('el 2', 'la segunda'), re-call the "
         "SAME tool with that 1-based `index` PLUS `confirmed: true`. This is a "
-        "selection, not a yes/no — do not treat it as cancel.\n\n"
+        "selection, not a yes/no — do not treat it as cancel.\n"
+        "- If you just emitted a tool call with `requires_confirmation: true`, "
+        "STOP and wait for Garcia's literal voice answer. Do NOT in the same "
+        "turn generate the user's consent — the runtime enforces this "
+        "invariant and your tool call will be refused.\n\n"
         "# Defaults & apps\n"
         "- You CAN set and change Garcia's preferred app per category "
         "(editor/ide, terminal, music, browser) and read it back. When he asks "
@@ -446,9 +483,26 @@ async def _build_instructions() -> str:
         "'mis repos' y aún no sabes su usuario de GitHub, pregúntale UNA vez "
         "('¿cuál es tu usuario de GitHub?') y llama remember_user_profile. No "
         "adivines su usuario a partir de su nombre.\n"
-        "- Si transcribes un nombre y Garcia te corrige de inmediato ('no, es X'), "
-        "llama remember_stt_correction(wrong=lo_que_oíste, right=lo_que_dijo). No "
-        "pidas permiso — ya te lo dio al corregirte.\n"
+        '- When a tool answers "no encontré X. ¿Quisiste decir A, B, o C?", '
+        "WAIT for Garcia's pick. Re-call the same tool with `picked=<his "
+        "answer>` and `confirmed=true`. Don't guess.\n"
+        "\n# Learn from corrections (mandatory, not optional)\n"
+        "- Whenever Garcia corrects something you transcribed or named, call "
+        "remember_stt_correction(wrong=<what you heard>, right=<what he said>) "
+        "BEFORE replying.\n"
+        "- Examples that MUST trigger the call:\n"
+        "  - You: 'abro el video de Nill Ojeda' → Garcia: 'no, es Neil, con E' "
+        "→ call remember_stt_correction('Nill Ojeda', 'Neil Ojeda'), THEN open.\n"
+        "  - You: 'no encontré Pendientes' → Garcia: 'es Pendientes para hoy' "
+        "→ call remember_stt_correction('Pendientes', 'Pendientes para hoy'), "
+        "THEN read.\n"
+        "  - You: 'tu usuario es gilbergaciata' → Garcia: 'gilbergarciata, con "
+        "r antes de la t' → call remember_stt_correction('gilbergaciata', "
+        "'gilbergarciata'), THEN proceed.\n"
+        "- DO NOT ask for permission to remember. Garcia gave it by correcting.\n"
+        "- The trigger is a correction of something YOU said or transcribed — "
+        "NOT a change to the request itself ('agrega leche… no, mejor queso' "
+        "is a new instruction, not a correction to record).\n"
         "\n# Smart note append (mandatory)\n"
         "- 'Agrega X a <título>' → llama append_to_note(title=<título>, text=X). "
         "NO desambigües tú antes; la herramienta devuelve requires_confirmation "
@@ -490,6 +544,14 @@ async def _build_instructions() -> str:
         "open_application — don't reinvent it.\n"
         "- If Garcia teaches you a new app ('recuerda que X usa el esquema Y'), "
         "use remember_app.\n"
+        "\n# Anaphora resolution\n"
+        "- When Garcia says 'otra vez', 'como antes', 'como ayer', 'lo de "
+        "hace rato', 'eso', 'lo mismo' — call recall_last_action FIRST, "
+        "confirm with Garcia ('¿te refieres a [esto]?'), then re-call the "
+        "original tool with the same args.\n"
+        "- If the last action was destructive, ask explicit confirmation "
+        "before repeating — a fresh requires_confirmation cycle, never a "
+        "silent replay.\n"
         "\n# In-app resources (mandatory)\n"
         "- 'Emma, abre la conexión X' (TablePlus, bases de datos) → "
         "open_in_app(target=X, kind='connection'). The dictionary resolves "
@@ -639,6 +701,54 @@ def _make_function_handler(
             # the redaction processor still scrubs PII patterns from this line.
             with contextlib.suppress(Exception):  # never let the hook break a call
                 log.info("tool_args_test", name=name, args=json.dumps(args, default=str)[:500])
+
+        # ---- Self-talk protection (21-B24, CRITICAL). A confirmed=True call
+        # is only honored if Garcia actually SPOKE after the tool asked its
+        # question. Event ORDER decides, never elapsed time — the LLM must not
+        # be able to ask "¿borro?" and answer itself in one generation (V13).
+        if args.get("confirmed"):
+            t_req = session_memory.last_tool_request_confirmation_ts(name)
+            if t_req is not None:
+                t_user = session_memory.last_user_turn_ts()
+                if t_user is None or t_user <= t_req:
+                    log.warning("confirmation_violation", tool=name, args_keys=list(args.keys()))
+                    events_bus.publish("confirmation_violation", name=name)
+                    await params.result_callback(
+                        {
+                            "success": False,
+                            "user_message": "Necesito que me lo confirmes tú con tu voz; "
+                            "no procedo sin oírte después de preguntarte.",
+                            "data": None,
+                            "requires_confirmation": False,
+                        }
+                    )
+                    return
+                session_memory.consume_confirmation_request(name)
+
+        # ---- Low-confidence guard (21-B28). If the latest transcript smells
+        # like noise/echo and the tool is destructive (first call), hedge: ask
+        # Garcia to confirm what he said instead of acting on a guess.
+        entry = get_tool(name)
+        if (
+            entry is not None
+            and entry.destructive
+            and not args.get("confirmed")
+            and session_memory.last_user_turn_low_confidence()
+        ):
+            heard = session_memory.last_user_speech_text()
+            log.info("low_confidence_guard", tool=name, heard=heard[:80])
+            session_memory.push_event("tool", f"requires_confirmation:{name}")
+            await params.result_callback(
+                {
+                    "success": True,
+                    "user_message": f"Te entendí '{heard}', pero no estoy segura de "
+                    "haber oído bien. ¿Eso pediste?",
+                    "data": {"low_confidence": True, "heard": heard},
+                    "requires_confirmation": True,
+                }
+            )
+            return
+
         t_start = time.monotonic()
         try:
             result = await asyncio.wait_for(dispatch(name, args), timeout=20.0)
@@ -695,6 +805,14 @@ def _make_function_handler(
             data=result.data,
             elapsed_ms=elapsed,
         )
+        # Session-memory bookkeeping (21-B24/B29): a question opens a pending
+        # confirmation; a success lands in the anaphora-resolvable action tail.
+        if result.requires_confirmation:
+            session_memory.push_event("tool", f"requires_confirmation:{name}")
+        elif result.success:
+            session_memory.record_completed_action(
+                name, args, user_text=session_memory.last_user_speech_text()
+            )
         payload: dict[str, Any] = {
             "success": result.success,
             "user_message": result.user_message,
@@ -808,22 +926,21 @@ async def build_pipeline() -> tuple[
     end_watcher = EndSessionWatcher(session_control)
     audio_tap = _AudioLevelTap()  # publishes output RMS for the visualizer core pulse
 
-    stages: list[FrameProcessor] = [transport.input()]
-    if settings.EMMA_TEST_MODE:
-        stages.append(_TestTranscriptTap("user"))  # upstream STT frames (19.7)
-    stages.append(llm)
-    if settings.EMMA_TEST_MODE:
-        stages.append(_TestTranscriptTap("bot"))  # bot text before the aggregator eats it
-    stages += [
-        auth_watcher,  # right after the LLM so it sees its ErrorFrames first
-        end_watcher,  # closes the session after playback tools finish speaking
-        assistant_aggregator,
-        transcript_collector,
-        gate_proc,
-        audio_tap,  # just before output: taps the bot's outgoing audio RMS
-        transport.output(),
-    ]
-    pipeline = Pipeline(stages)
+    pipeline = Pipeline(
+        [
+            transport.input(),
+            _UserSpeechTap(),  # session memory + low-confidence flags (21-B24/B28)
+            llm,
+            _BotTextTap(),  # assistant text before the aggregator eats it (21-B24)
+            auth_watcher,  # right after the LLM so it sees its ErrorFrames first
+            end_watcher,  # closes the session after playback tools finish speaking
+            assistant_aggregator,
+            transcript_collector,
+            gate_proc,
+            audio_tap,  # just before output: taps the bot's outgoing audio RMS
+            transport.output(),
+        ]
+    )
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
