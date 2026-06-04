@@ -125,6 +125,66 @@ async def toggle_ide_terminal(ide: str = "") -> ToolResult:
     return ToolResult(True, {"app": app, "keys": keys}, f"Listo, terminal de {app}.", False)
 
 
+def _terminal_paste_script(app: str, text: str, enter: bool) -> str:
+    """Activate the IDE, clipboard-paste ``text`` into its terminal, optional Return."""
+    q = macos.esc_applescript(text)
+    a = macos.esc_applescript(app)
+    lines = [
+        f'tell application "{a}" to activate',
+        "delay 0.2",
+        f'set the clipboard to "{q}"',
+        'tell application "System Events"',
+        '    keystroke "v" using {command down}',
+    ]
+    if enter:
+        lines.append("    keystroke return")
+    lines.append("end tell")
+    return "\n".join(lines)
+
+
+@tool()
+async def ide_terminal_send(text: str, enter: bool = True, ide: str = "") -> ToolResult:
+    """Escribe `text` en la terminal integrada del IDE y opcionalmente da Enter.
+
+    Úsalo cuando Garcia diga "Emma, en la terminal de Cursor corre 'npm test'"
+    o "escribe X en la terminal". Abre/enfoca la terminal primero (Bug 19.6-B18).
+
+    Limitación conocida: TUIs interactivas estilo Ink (p. ej. los prompts de
+    Claude Code) tratan el salto de línea programático como newline, NO como
+    submit — solo la tecla Return física dispara el envío en esos prompts
+    (github.com/anthropics/claude-code/issues/15553, Approach 7). Si el
+    destino es una de esas, usa enter=false y que Garcia presione Enter.
+    Nota: si la terminal ya estaba abierta Y enfocada, el toggle puede
+    cerrarla (sin señal fiable de visibilidad entre IDEs); re-pedirlo la
+    reabre.
+    """
+    app = ide or resolve("editor")
+    if not app:
+        return ToolResult(False, None, "No tengo un IDE configurado.", False)
+    if not (text or "").strip():
+        return ToolResult(False, None, "¿Qué escribo en la terminal?", False)
+
+    opened = await toggle_ide_terminal(ide=app)
+    if not opened.success:
+        return opened
+    await asyncio.sleep(0.3)  # let the panel grab focus before pasting
+
+    ok, _ = await macos.osascript_or_friendly(
+        _terminal_paste_script(app, text, enter),
+        timeout_s=5.0,
+        on_error="No pude escribir en la terminal",
+    )
+    if not ok:
+        return ToolResult(False, None, f"No pude escribir en la terminal de {app}.", False)
+    action = "y lo ejecuté" if enter else "(sin Enter, tú lo lanzas)"
+    return ToolResult(
+        True,
+        {"app": app, "text": text, "enter": enter},
+        f"Listo, escribí el comando en la terminal de {app} {action}.",
+        False,
+    )
+
+
 @tool()
 async def search_in_ide(query: str, ide: str = "") -> ToolResult:
     """Lanza 'Buscar en archivos' (Cmd+Shift+F) en el IDE con `query`.
