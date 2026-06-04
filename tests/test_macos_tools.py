@@ -57,6 +57,33 @@ def test_list_unread_parses() -> None:
     assert len(msgs) == 2
 
 
+def test_create_note_uses_html_body_and_creates_folder() -> None:
+    # Followup fix: HTML body keeps the title clean; folder is created on demand.
+    from tools.notes_tool import create_note
+
+    captured = AsyncMock(return_value="")
+    with patch("actions.macos.osascript", new=captured):
+        res = _run(create_note(title="Idea", body="cuerpo", folder="Feedback"))
+    assert res.success
+    script = captured.call_args[0][0]
+    assert "<div>Idea</div><div>cuerpo</div>" in script  # clean title, separate body
+    assert 'if not (exists folder "Feedback")' in script  # create-on-demand
+
+
+def test_read_note_falls_back_to_contains() -> None:
+    # Exact title misses (legacy flattened note) → contains fallback resolves it.
+    from tools.notes_tool import read_note
+
+    # 1st enumerate (exact) → empty; 2nd (contains) → one match; 3rd → body read.
+    seq = ["", "id1‖2026-06-02T10:00:00‖Errores de Emma Bitácora‖p", "el cuerpo"]
+    osa = AsyncMock(side_effect=seq)
+    with patch("actions.macos.osascript", new=osa):
+        res = _run(read_note(title="Errores de Emma"))
+    assert res.success
+    assert res.data["body"] == "el cuerpo"
+    assert "contains" in osa.call_args_list[1][0][0]  # 2nd call used a contains match
+
+
 def test_list_notes_parses() -> None:
     from tools.notes_tool import list_notes
 

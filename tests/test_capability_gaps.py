@@ -49,6 +49,35 @@ class TestRecord:
         )
         assert _lines(_ledger) == []
 
+    def test_echo_tool_success_not_flagged(self, _ledger):
+        # list_notes echoes note titles that may contain obstacle words; a
+        # SUCCESS from an echo tool must never be heuristically recorded.
+        capability_gaps.record(
+            name="list_notes",
+            args_keys=["query"],
+            success=True,
+            user_message="Tus notas: 'No pude completar X'; 'Errores de Emma'.",
+            elapsed_ms=20,
+        )
+        capability_gaps.record(
+            name="remember_fact",
+            args_keys=["text"],
+            success=True,
+            user_message="Anotado: abre la app cuando diga 'anota'.",
+            elapsed_ms=5,
+        )
+        assert _lines(_ledger) == []
+
+    def test_echo_tool_real_failure_still_recorded(self, _ledger):
+        capability_gaps.record(
+            name="search_github",
+            args_keys=["query"],
+            success=False,
+            user_message="No pude buscar en GitHub: rate limit.",
+            elapsed_ms=400,
+        )
+        assert len(_lines(_ledger)) == 1
+
     def test_no_device_failure_is_recorded_and_classified(self, _ledger):
         capability_gaps.record(
             name="play_track",

@@ -32,27 +32,39 @@ log = structlog.get_logger("emma.capability_gaps")
 
 _LEDGER: Path = settings.EMMA_HOME / "capability_gaps.jsonl"
 
-# Phrases a tool may return with success=True that nonetheless signal an
-# unmet goal (an obstacle the user must clear, or a fallback that didn't act).
-# Matched case-insensitively against the user-facing message.
+# HIGH-CONFIDENCE phrases that, even on a success=True result, signal an unmet
+# goal (an obstacle the user must clear). Kept deliberately narrow: broad hints
+# like "no" / "no encontré" / "abra " produced false positives because tools
+# that ECHO content (remember_*, list_*, read_*) repeat those words in benign
+# messages. Matched case-insensitively against the user-facing message.
 _OBSTACLE_HINTS: tuple[str, ...] = (
-    "abra spotify",
-    "abra ",
-    "open spotify",
     "no tiene ningún dispositivo",
     "no active device",
     "no hay ningún dispositivo",
-    "necesito",  # "necesito un editor instalado..."
-    "i need ",
-    "instala",
-    "install",
-    "no tengo",
-    "no encontré",
-    "no encontre",
-    "no pude",
-    "no respondió",
-    "no responded",
+    "abra spotify",
+    "open spotify",
+    "necesito un",  # "necesito un editor instalado..."
+    "i need a ",
+    "instala spotify",
+    "no tengo un ide",
+    "no tengo configurado",
 )
+
+# Tools whose SUCCESS message echoes user/world content (note titles, facts,
+# search results) and so must never be flagged by the obstacle heuristic. A
+# real failure still records via success=False. Matched by name prefix.
+_ECHO_PREFIXES: tuple[str, ...] = (
+    "remember_",
+    "list_",
+    "search_",
+    "read_",
+    "get_",
+    "describe_",
+)
+
+
+def _is_echo_tool(name: str) -> bool:
+    return name.startswith(_ECHO_PREFIXES)
 
 
 def _classify(success: bool, message: str, *, timed_out: bool, errored: bool) -> str:
@@ -104,8 +116,14 @@ def record(
     """
     try:
         message = user_message or ""
-        if not (timed_out or errored) and not is_gap(success, message):
-            return  # the tool did its job — nothing to learn here
+        if not (timed_out or errored):
+            # A success message from an echo tool (it repeats note titles / facts /
+            # search hits) must never be heuristically flagged — only a real
+            # success=False failure from it counts.
+            if success and _is_echo_tool(name):
+                return
+            if not is_gap(success, message):
+                return  # the tool did its job — nothing to learn here
 
         data_keys: list[str] = []
         if isinstance(data, dict):
