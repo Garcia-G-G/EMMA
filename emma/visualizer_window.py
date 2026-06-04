@@ -98,11 +98,11 @@ class _RenderWatchdog(NSObject):  # type: ignore[misc]  # PyObjC base is Any
         self._retried = False
         return self
 
-    @objc.python_method
+    @objc.python_method  # type: ignore[untyped-decorator]  # PyObjC decorator
     def start(self) -> None:
         self._schedule(_FIRST_CHECK_S)
 
-    @objc.python_method
+    @objc.python_method  # type: ignore[untyped-decorator]
     def _schedule(self, delay: float) -> None:
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             delay, self, "tick:", None, False
