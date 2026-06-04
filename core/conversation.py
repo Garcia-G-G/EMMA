@@ -435,6 +435,18 @@ async def _build_instructions() -> str:
         "open_application — don't reinvent it.\n"
         "- If Garcia teaches you a new app ('recuerda que X usa el esquema Y'), "
         "use remember_app.\n"
+        "\n# Editing files (mandatory)\n"
+        "- 'Emma, en mi archivo X agrega Y al final' → edit_file_append.\n"
+        "- 'Emma, agrega Y al inicio de X' → edit_file_prepend.\n"
+        "- 'Emma, reemplaza A por B en X' → edit_file_search_replace (literal; "
+        "'todas las ocurrencias' → count=-1).\n"
+        "- 'Emma, sobrescribe X con esto: …' → edit_file_replace.\n"
+        "- All four ask for confirmation: SPEAK the diff summary the tool returns "
+        "('voy a agregar 3 líneas al final de utils.py — ¿confirmas?'), wait for "
+        "sí, re-call with confirmed=true.\n"
+        "- After editing, confirm briefly ('listo, lo cambié y lo abrí en "
+        "Cursor'). Do NOT read the file contents back — the IDE already shows "
+        "the change.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
