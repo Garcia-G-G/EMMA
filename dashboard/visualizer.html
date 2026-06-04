@@ -22,6 +22,13 @@ body.idle { cursor: none; }
 .status-block .state { font-size: 12px; letter-spacing: 0.5em; color: #ffffff; opacity: 0.95; }
 .status-block .meta { font-size: 9.5px; letter-spacing: 0.28em; color: #5cf2ff; opacity: 0.55; margin-top: 6px; }
 </style>
+<script>
+/* 19.6-B22: paint sentinel. The native window's render watchdog polls
+   window.__emma_painted via evaluateJavaScript; if WebKit's cold process
+   lost the race and never painted, the watchdog fires ONE reload. */
+window.__emma_painted = false;
+document.addEventListener('DOMContentLoaded', function () { window.__emma_painted = true; });
+</script>
 </head>
 <body>
 <div class="jb-stage">
