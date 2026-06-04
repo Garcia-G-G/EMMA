@@ -72,7 +72,7 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import capability_gaps, events_bus, vocabulary
+from core import capability_gaps, dictionary, events_bus, vocabulary
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -271,8 +271,20 @@ def _adapt_tool_specs_for_realtime(chat_specs: list[dict[str, Any]]) -> list[dic
 
 
 async def _build_instructions() -> str:
-    """System prompt for the Realtime session, with memory priming."""
+    """System prompt for the Realtime session, with memory priming.
+
+    The session-language pin (19.6-B20) is read FIRST from
+    ``user_profile.preferred_lang`` (source of truth — never hard-code "es")
+    and injected at the very top: the model must NOT pick the greeting
+    language itself; mirroring starts on turn 2.
+    """
+    preferred_lang = dictionary.user_profile().get("preferred_lang", "es") or "es"
+    lang_name = "English" if preferred_lang == "en" else "Spanish"
     base = (
+        "# Session language\n"
+        f"Your first sentence MUST be in {lang_name}. Do NOT decide the "
+        "language from any future user turn until you have spoken the "
+        "greeting. After the greeting, mirror Garcia's language per turn.\n\n"
         "# Role\n"
         "You are Emma, Garcia's personal AI assistant on his Mac. "
         "You are like Jarvis — sharp, warm, capable. You control his "
@@ -483,6 +495,25 @@ async def _build_instructions() -> str:
     if memory:
         base += f"\n# Memory\n{memory}\n"
     return base
+
+
+def _session_seed_messages() -> list[Any]:
+    """Synthetic context seed pinning the language bias (19.6-B20).
+
+    For a Spanish profile, one developer message rides in the LLMContext so
+    context replays (after history grows or a reconnect) keep the bias even
+    when the greeting is long gone. English profiles need no seed — English
+    is the model's natural default.
+    """
+    lang = dictionary.user_profile().get("preferred_lang", "es") or "es"
+    if lang == "es":
+        return [
+            {
+                "role": "system",
+                "content": "Speak Spanish by default — see the Session language directive.",
+            }
+        ]
+    return []
 
 
 class SessionControl:
@@ -718,7 +749,7 @@ async def build_pipeline() -> tuple[
         if name:
             llm.register_function(name, function_handler)
 
-    context = LLMContext(messages=[])
+    context = LLMContext(messages=_session_seed_messages())
     assistant_aggregator = LLMAssistantAggregator(context)
     transcript_collector = TranscriptCollector()
     auth_watcher = AuthErrorWatcher()
