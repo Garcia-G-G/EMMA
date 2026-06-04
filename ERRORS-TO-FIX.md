@@ -38,6 +38,10 @@ pane in the permissions bootstrap (`core/permissions.py`) per the mandatory
 permissions convention. Also benefits `tools/calendar_tool.py`, whose voice
 queries hit the same 20s timeout (`_CAL_TIMEOUT_S`) against a 57s scan —
 i.e. "¿qué tengo hoy?" currently fails too.
+**Confirmed live 2026-06-04 20:57:** asked Emma "qué tengo en el calendario
+hoy" by voice → `today_events` → `tool_timed_out` at exactly 20000ms, twice
+(she auto-retried, doubling the stall to 40s). `capability_gap_recorded`
+fired. The voice calendar read path is effectively dead until EventKit.
 
 ## 2. 🟡 "She doesn't listen" — diagnosis 2026-06-04
 
