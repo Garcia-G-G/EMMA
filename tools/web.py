@@ -17,6 +17,15 @@ from actions import macos
 from config.settings import settings
 from tools.base import ToolResult, tool
 
+
+def _user_lang_name() -> str:
+    """Garcia's configured language as a prompt-friendly name (21-B26)."""
+    from core import dictionary
+
+    lang = dictionary.user_profile().get("preferred_lang", "es") or "es"
+    return "English" if lang == "en" else "Spanish"
+
+
 log = structlog.get_logger("emma.tools.web")
 
 _BRAVE = "https://api.search.brave.com/res/v1/web/search"
@@ -178,9 +187,12 @@ async def summarize_page(url: str) -> ToolResult:
             messages=[
                 {
                     "role": "system",
+                    # 21-B26: the USER's language governs, never the article's —
+                    # an English page summarized for a Spanish ask answers in Spanish.
                     "content": (
                         "Summarize the article in three short spoken sentences. "
-                        "Match the article's language."
+                        f"Answer in {_user_lang_name()}, regardless of the "
+                        "article's language. Keep names and URLs verbatim."
                     ),
                 },
                 {"role": "user", "content": excerpt},
