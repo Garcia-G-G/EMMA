@@ -5,15 +5,19 @@ Modes:
   scenario from ``expected_actions`` + ``mock_spoken_text``. Verifies
   that the YAML loads, the runner machinery works, and the report
   renders. Exits 0 only if every scenario passes.
+- ``--voice`` (19.7). ElevenLabs-synthesized audio played at a REAL Emma
+  subprocess through a virtual cable (or the speaker→mic fallback);
+  events collected from her structlog JSON stream. See
+  ``VOICE_HARNESS_README.md``.
 - live (default). Drives ``core.llm.converse`` with the scenario's
   utterance, captures real tool calls via a monkey-patched
   ``tools.registry.dispatch``, and matches the assistant's accumulated
-  text against ``expected_spoken_pattern``.
+  text against ``expected_spoken_pattern``. (Disabled post-Prompt-13;
+  voice mode is the live path now.)
 
-Live mode requires the full Emma runtime to be installed (uv sync) and
-real API keys in ``.env``. Several scenarios are marked
-``live_blocked_by`` so the runner reports them as SKIP with a clear
-reason rather than FAIL.
+Live/voice modes require the full Emma runtime (uv sync) and real API
+keys in ``.env``. Several scenarios are marked ``live_blocked_by`` so
+the runner reports them as SKIP with a clear reason rather than FAIL.
 """
 
 from __future__ import annotations
@@ -368,6 +372,168 @@ def render_report(mode: str, outcomes: list[ScenarioOutcome]) -> str:
     )
 
 
+# ---------- voice mode (19.7-VAH3) ---------------------------------------
+
+
+def _run_all_voice(
+    scenarios: list[dict[str, Any]], input_device: str, output_device: str
+) -> tuple[list[ScenarioOutcome], dict[str, Any], int]:
+    """Sequential voice run. Returns (outcomes, extras_by_id, chars_synthesized).
+
+    ``follows`` scenarios reuse the previous scenario's live subprocess so
+    pending confirmations survive; everything else gets a fresh daemon.
+    Never parallel — the virtual cable / mic is a singleton resource.
+    """
+    from tests.acceptance import voice_driver
+
+    outcomes: list[ScenarioOutcome] = []
+    extras_by_id: dict[str, Any] = {}
+    chars_synth = 0
+    open_proc: Any = None
+    open_id: str | None = None
+
+    def _close_open() -> None:
+        nonlocal open_proc, open_id
+        if open_proc is not None:
+            open_proc.stop()
+            open_proc = None
+            open_id = None
+
+    for s in scenarios:
+        skip = _should_skip_live(s)
+        if skip:
+            outcomes.append(ScenarioOutcome(s, TurnResult(), False, [skip], "SKIP"))
+            continue
+
+        proc = None
+        if s.get("follows") and s["follows"] == open_id and open_proc is not None:
+            proc = open_proc  # continue the live session
+        else:
+            _close_open()
+
+        try:
+            summary, extras, proc = voice_driver.run_voice_scenario(
+                s, input_device=input_device, output_device=output_device, proc=proc
+            )
+        except Exception as exc:  # harness bug or environment failure
+            _close_open()
+            result = TurnResult(error=f"{type(exc).__name__}: {exc}")
+            outcomes.append(ScenarioOutcome(s, result, False, [str(exc)], "ERROR"))
+            continue
+
+        open_proc, open_id = proc, s["id"]
+        chars_synth += extras.chars_synthesized
+        extras_by_id[s["id"]] = extras
+
+        result = TurnResult(
+            spoken_text=summary.get("spoken_text", ""),
+            tool_calls=[
+                ToolCallRecord(
+                    name=c["name"], args=c["args"], success=c["success"], user_message=None
+                )
+                for c in summary.get("tool_calls", [])
+            ],
+            latency_ms=int(summary.get("turn_ms", 0)),
+            error=extras.error or None,
+        )
+        # Text-mode latency budgets (direct dispatch) can't apply to a voice
+        # turn (wake + VAD + model speech dominate). Voice budgets are opt-in
+        # via max_latency_ms_voice; turn time is always REPORTED either way.
+        s_check = {k: v for k, v in s.items() if k != "max_latency_ms"}
+        if "max_latency_ms_voice" in s:
+            s_check["max_latency_ms"] = s["max_latency_ms_voice"]
+        passed, issues = check_scenario(s_check, result)
+        issues += voice_driver.check_voice_extras(s, extras)
+        if extras.error and "daemon never reached" in extras.error:
+            status = "ERROR"
+        else:
+            status = "PASS" if passed and not issues else "FAIL"
+        outcomes.append(ScenarioOutcome(s, result, status == "PASS", issues, status))
+
+    _close_open()
+    return outcomes, extras_by_id, chars_synth
+
+
+def render_voice_report(
+    outcomes: list[ScenarioOutcome], extras_by_id: dict[str, Any], chars_synth: int
+) -> str:
+    from tests.acceptance.audio_gen import USD_PER_CHAR
+
+    counts = {"PASS": 0, "FAIL": 0, "ERROR": 0, "SKIP": 0}
+    for o in outcomes:
+        counts[o.status] = counts.get(o.status, 0) + 1
+    cost = chars_synth * USD_PER_CHAR
+    lines = [
+        "# Emma voice acceptance run",
+        "",
+        f"- Timestamp: {dt.datetime.now().isoformat(timespec='seconds')}",
+        "- Mode: voice (ElevenLabs → Emma subprocess)",
+        "",
+        "| passed | failed | errored | skipped | total | cost this run |",
+        "|---|---|---|---|---|---|",
+        f"| {counts['PASS']} | {counts['FAIL']} | {counts['ERROR']} | {counts['SKIP']} "
+        f"| {len(outcomes)} | ${cost:.3f} ({chars_synth} fresh chars @ "
+        f"$0.11/1k, Flash v2.5 = 0.5 credits/char) |",
+        "",
+        "## Scenarios",
+        "",
+    ]
+    for o in outcomes:
+        x = extras_by_id.get(o.id)
+        lines.append(f"### {o.id} — {o.scenario['name']} ({o.status})")
+        lines.append("")
+        lines.append(f"- Utterance: `{o.scenario['utterance']}`")
+        if x is not None:
+            lines.append(f"- Audio: `{x.audio_path}`")
+            wake = f"yes ({x.wake_latency_ms} ms after playback start)" if x.wake_detected else "NO"
+            lines.append(f"- Wake detected: {wake}")
+            stt = x.transcript or "<none>"
+            lines.append(f"- STT heard: {stt}")
+            if x.transcript and x.transcript.strip().lower() not in o.scenario[
+                "utterance"
+            ].strip().lower().replace("hey emma, ", ""):
+                lines.append(f"  - (input was: `{o.scenario['utterance']}`)")
+            if x.capability_gaps:
+                lines.append(
+                    f"- Capability gaps: {json.dumps(x.capability_gaps, ensure_ascii=False)}"
+                )
+            if x.exit_code is not None:
+                lines.append(f"- Subprocess exit code: {x.exit_code}")
+        if o.result.tool_calls:
+            lines.append("- Tool calls:")
+            for c in o.result.tool_calls:
+                ok = "✓" if c.success else "✗"
+                lines.append(f"  - {ok} `{c.name}({json.dumps(c.args, ensure_ascii=False)})`")
+        else:
+            lines.append("- Tool calls: none")
+        lines.append(f"- Spoken: {(o.result.spoken_text or '<empty>').strip()}")
+        lines.append(f"- Turn time: {o.result.latency_ms} ms")
+        if o.issues:
+            lines.append("- Issues:")
+            lines.extend(f"  - {i}" for i in o.issues)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _confirm_cost_or_exit(skip_prewarm: bool, assume_yes: bool) -> None:
+    """Cost guard (19.7-VAH5.2): estimate re-synthesis before any HTTP."""
+    from tests.acceptance.audio_gen import USD_PER_CHAR, estimate_missing
+
+    n, chars = estimate_missing()
+    cost = chars * USD_PER_CHAR
+    if n:
+        print(f"cache miss: {n} clips, {chars} chars ≈ ${cost:.2f} (Flash v2.5)")
+    if cost > 1.0 and not assume_yes:
+        answer = input(f"Re-synthesis will cost ≈ ${cost:.2f}. Continue? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes", "s", "sí", "si"):
+            raise SystemExit("aborted by cost guard")
+    if not skip_prewarm and n:
+        from tests.acceptance.audio_gen import prewarm
+
+        generated, reused = prewarm()
+        print(f"prewarm: generated {generated}, reused {reused}")
+
+
 # ---------- orchestration ----------------------------------------------
 
 
@@ -414,13 +580,77 @@ def main() -> int:
         help="run in mock mode (CI smoke). Bypasses real APIs.",
     )
     parser.add_argument(
+        "--voice",
+        action="store_true",
+        help="voice mode (19.7): play ElevenLabs audio at a real Emma subprocess.",
+    )
+    parser.add_argument("--filter", default="", help="id glob, e.g. 'A0*' or 'V07'")
+    parser.add_argument(
+        "--input-device",
+        default=None,
+        help="Emma's input device substring (default: settings.EMMA_TEST_INPUT_DEVICE; "
+        "empty = system default mic, i.e. speaker→mic fallback)",
+    )
+    parser.add_argument(
+        "--output-device",
+        default=None,
+        help="harness playback device substring (default: settings.EMMA_TEST_OUTPUT_DEVICE; "
+        "empty = default speakers)",
+    )
+    parser.add_argument("--skip-prewarm", action="store_true", help="don't pre-generate audio")
+    parser.add_argument(
+        "--max-parallel",
+        type=int,
+        default=1,
+        help="must stay 1 — Emma's audio pipeline is a singleton resource",
+    )
+    parser.add_argument("--yes", action="store_true", help="skip the cost-guard confirmation")
+    parser.add_argument(
         "--output",
         default=None,
         help="path to write the report (default: tests/acceptance/run_<timestamp>.md)",
     )
     args = parser.parse_args()
 
+    if args.max_parallel != 1:
+        parser.error("--max-parallel must be 1: the mic/virtual-cable is a singleton")
+
     scenarios = load_scenarios()
+    if args.filter:
+        import fnmatch
+
+        scenarios = [s for s in scenarios if fnmatch.fnmatch(s["id"], args.filter)]
+        if not scenarios:
+            parser.error(f"no scenario id matches {args.filter!r}")
+
+    if args.voice:
+        from config.settings import settings
+
+        in_dev = (
+            args.input_device if args.input_device is not None else settings.EMMA_TEST_INPUT_DEVICE
+        )
+        out_dev = (
+            args.output_device
+            if args.output_device is not None
+            else settings.EMMA_TEST_OUTPUT_DEVICE
+        )
+        _confirm_cost_or_exit(args.skip_prewarm, args.yes)
+        outcomes, extras_by_id, chars = _run_all_voice(scenarios, in_dev, out_dev)
+        out_path = (
+            Path(args.output)
+            if args.output
+            else REPORT_DIR / f"voice_run_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        )
+        out_path.write_text(render_voice_report(outcomes, extras_by_id, chars))
+        counts = {"PASS": 0, "FAIL": 0, "ERROR": 0, "SKIP": 0}
+        for o in outcomes:
+            counts[o.status] = counts.get(o.status, 0) + 1
+        print(
+            f"[voice] {counts['PASS']} passed, {counts['FAIL']} failed, "
+            f"{counts['ERROR']} errored, {counts['SKIP']} skipped. Report: {out_path}"
+        )
+        return 0 if not (counts["FAIL"] or counts["ERROR"]) else 1
+
     mode = "mock" if args.mock_external else "live"
     outcomes = asyncio.run(_run_all_mock(scenarios) if mode == "mock" else _run_all_live(scenarios))
 

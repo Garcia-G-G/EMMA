@@ -135,45 +135,41 @@ def synthesize(
     return path
 
 
-# ---- wake-word prefixing (shared with the voice runner) --------------------
+# ---- wake clip (shared with the voice runner) -------------------------------
 
 WAKE_PHRASE = "Hey Jarvis."  # what the active openWakeWord model listens for
 
+# 19.7 spec deviation (measured): the spec wanted one combined
+# "Hey Jarvis, <utterance>" clip, but (a) the ES voice saying "Hey Jarvis"
+# peaks at 0.385 on the wake model vs 0.989 for the EN voice, and (b) Emma's
+# chime + Realtime connect (~1s) after wake would swallow a concatenated
+# utterance. The runner therefore plays TWO clips: this EN wake clip, waits
+# for `conversation_start`, then the bare utterance in the scenario's voice.
 
-def wake_prefixed(utterance: str) -> str:
-    """Prepend the wake phrase unless the utterance already carries it.
 
-    The corpus says "Hey Emma, …" (how Garcia talks); the deployed model only
-    fires on "hey jarvis", so the playback form gets the real wake phrase in
-    front — a period gives the detector a beat before the content starts.
-    """
-    if utterance.strip().lower().startswith("hey jarvis"):
-        return utterance
-    return f"{WAKE_PHRASE} {utterance}"
+def wake_clip() -> Path:
+    """The shared English 'Hey Jarvis.' clip (cached once, used by every run)."""
+    return synthesize(WAKE_PHRASE, lang="en", scenario_id="wake-prefix")
 
 
 # ---- bulk pre-warm + cost estimate ------------------------------------------
 
 
 def _corpus_texts() -> list[tuple[str, str, str | None, str]]:
-    """(text, lang, voice_id, scenario_id) for every playable corpus entry."""
+    """(text, lang, voice_id, scenario_id) for every playable corpus entry.
+
+    Bare utterances — the wake phrase is its own shared clip (see wake_clip).
+    """
     from tests.acceptance.runner import load_scenarios
 
-    out: list[tuple[str, str, str | None, str]] = []
+    out: list[tuple[str, str, str | None, str]] = [(WAKE_PHRASE, "en", None, "wake-prefix")]
     for s in load_scenarios():
-        out.append(
-            (
-                wake_prefixed(s["utterance"]),
-                s.get("language", "es"),
-                s.get("voice_id"),
-                s["id"],
-            )
-        )
+        out.append((s["utterance"], s.get("language", "es"), s.get("voice_id"), s["id"]))
         follow = s.get("followup")
         if follow:
             out.append(
                 (
-                    wake_prefixed(follow["utterance"]),
+                    follow["utterance"],
                     follow.get("language", "es"),
                     follow.get("voice_id"),
                     f"{s['id']}+followup",

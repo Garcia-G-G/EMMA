@@ -1,10 +1,226 @@
 {
+ "087b64b8e02916dd": {
+  "chars": 51,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A01",
+  "text": "Hey Emma, abre el video más reciente de Nill Ojeda.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "0b9771af890b4d19": {
+  "chars": 39,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A07",
+  "text": "Hey Jarvis. Hey Emma, ¿qué sabes de mí?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "14b89bdf4c7406b9": {
+  "chars": 34,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A12",
+  "text": "Hey Jarvis. Hey Emma, ¿cómo estás?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "20d2fcdbc79450da": {
+  "chars": 41,
+  "lang": "en",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A12+followup",
+  "text": "Hey Jarvis. Hey Emma, what's the weather?",
+  "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "2718c6426a278949": {
+  "chars": 53,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A06",
+  "text": "Hey Emma, recuérdame que soy alérgico a los mariscos.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "2f68a1830ae321e7": {
+  "chars": 22,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A11",
+  "text": "Hey Emma, qué hora es.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "3573827f3507509e": {
+  "chars": 46,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A02",
+  "text": "Hey Jarvis. Hey Emma, pon música de Bad Bunny.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "3ba039724f49fc56": {
+  "chars": 40,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A08",
+  "text": "Hey Jarvis. Hey Emma, ¿qué puedes hacer?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "3bf17baf0e4234a0": {
+  "chars": 31,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A03",
+  "text": "Hey Emma, sube el volumen a 70.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "3d28641716f3bc22": {
+  "chars": 34,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A02",
+  "text": "Hey Emma, pon música de Bad Bunny.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "4b88481b9f84dc1a": {
+  "chars": 44,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A05",
+  "text": "Hey Jarvis. Hey Emma, ¿qué hora es en Tokio?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "4da4739de764f0ae": {
+  "chars": 29,
+  "lang": "en",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A12+followup",
+  "text": "Hey Emma, what's the weather?",
+  "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "51c4f681070381db": {
+  "chars": 28,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A08",
+  "text": "Hey Emma, ¿qué puedes hacer?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "567844479f5ba230": {
+  "chars": 69,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A09",
+  "text": "Hey Jarvis. Hey Emma, busca en Amazon unos audífonos Sony WH-1000XM5.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "5828b2e7fc265212": {
+  "chars": 34,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A11",
+  "text": "Hey Jarvis. Hey Emma, qué hora es.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "59bc117e44658d24": {
   "chars": 15,
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "sanity",
   "text": "Hola, soy Emma.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "64b0e0b9e080cbf9": {
+  "chars": 11,
+  "lang": "en",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "wake-prefix-test",
+  "text": "Hey Jarvis.",
+  "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "853ec38ce19e338d": {
+  "chars": 37,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A10",
+  "text": "Hey Jarvis. sí, agrégalos al carrito.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "8a03f921a21fc4d9": {
+  "chars": 32,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A05",
+  "text": "Hey Emma, ¿qué hora es en Tokio?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "9d663ca5007dd052": {
+  "chars": 43,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A03",
+  "text": "Hey Jarvis. Hey Emma, sube el volumen a 70.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "9ef78a9decd90e65": {
+  "chars": 25,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A10",
+  "text": "sí, agrégalos al carrito.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "bbfbd63608d4865e": {
+  "chars": 27,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A07",
+  "text": "Hey Emma, ¿qué sabes de mí?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "d4601b7c85a2618a": {
+  "chars": 63,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A01",
+  "text": "Hey Jarvis. Hey Emma, abre el video más reciente de Nill Ojeda.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "e235aee75c6587b0": {
+  "chars": 75,
+  "lang": "en",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A04",
+  "text": "Hey Jarvis. Hey Emma, search the web for the weather in Monterrey tomorrow.",
+  "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "e49ce86f8b2b95f3": {
+  "chars": 63,
+  "lang": "en",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A04",
+  "text": "Hey Emma, search the web for the weather in Monterrey tomorrow.",
+  "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "efd93d175aaa5181": {
+  "chars": 22,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A12",
+  "text": "Hey Emma, ¿cómo estás?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "effd922bca7c6b43": {
+  "chars": 57,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A09",
+  "text": "Hey Emma, busca en Amazon unos audífonos Sony WH-1000XM5.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "f78b94c9167c07f7": {
+  "chars": 65,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "A06",
+  "text": "Hey Jarvis. Hey Emma, recuérdame que soy alérgico a los mariscos.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  }
 }
