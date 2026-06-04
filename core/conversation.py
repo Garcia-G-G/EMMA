@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import math
 import time
 from collections.abc import Awaitable, Callable
@@ -72,7 +73,7 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import capability_gaps, dictionary, events_bus, vocabulary
+from core import audio_devices, capability_gaps, dictionary, events_bus, vocabulary
 from core.echo_gate import EchoGateFilter
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -163,6 +164,10 @@ class TranscriptCollector(FrameProcessor):
                 append_turn(user, assistant)
                 schedule_reflection(last_turns(4))
                 log.debug("transcript_captured", user=user[:80], assistant=assistant[:80])
+                if settings.EMMA_TEST_MODE:
+                    # Voice-harness hook (19.7-VAH3): untruncated transcripts so
+                    # the runner can diff STT vs the synthesized input.
+                    log.info("transcript_full_test", user=user, assistant=assistant)
             self._user_text = ""
             self._assistant_text = ""
         await self.push_frame(frame, direction)
@@ -596,6 +601,12 @@ def _make_function_handler(
         # tokens) must not reach the logs even before the redaction processor.
         log.info("tool_started", name=name, args_keys=list(args.keys()))
         events_bus.publish("tool_started", name=name)
+        if settings.EMMA_TEST_MODE:
+            # Voice-harness hook (19.7-VAH3): the runner asserts on argument
+            # VALUES, which production logs deliberately omit. Test-mode only;
+            # the redaction processor still scrubs PII patterns from this line.
+            with contextlib.suppress(Exception):  # never let the hook break a call
+                log.info("tool_args_test", name=name, args=json.dumps(args, default=str)[:500])
         t_start = time.monotonic()
         try:
             result = await asyncio.wait_for(dispatch(name, args), timeout=20.0)
@@ -733,6 +744,9 @@ async def build_pipeline() -> tuple[
             audio_out_sample_rate=SAMPLE_RATE_HZ,
             audio_in_filter=echo_gate,
             vad_analyzer=SileroVADAnalyzer(),
+            # None in production (system default). The voice acceptance
+            # harness points this at a virtual cable (19.7-VAH2).
+            input_device_index=audio_devices.test_input_device_index(),
         )
     )
 

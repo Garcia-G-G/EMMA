@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     EMMA_HOME: Path = Path.home() / ".emma"
 
+    # ---- Voice acceptance harness gates (19.7-VAH2). ALL off in production —
+    # the harness subprocess sets these via env. When EMMA_TEST_MODE is true
+    # and EMMA_TEST_INPUT_DEVICE names a device (substring match, e.g.
+    # "BlackHole"), the wake listener AND the Pipecat transport read from it
+    # instead of the system default mic. EMMA_TEST_OUTPUT_DEVICE is only used
+    # by the harness's own playback, never by Emma.
+    EMMA_TEST_MODE: bool = False
+    EMMA_TEST_INPUT_DEVICE: str = ""
+    EMMA_TEST_OUTPUT_DEVICE: str = ""
+
     # Real-time dashboard / JARVIS visualizer HTTP port (WebSocket runs on +1).
     # The native visualizer window and the daemon's opt-in dashboard read this.
     DASHBOARD_PORT: int = 3200
