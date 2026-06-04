@@ -25,3 +25,7 @@ _planning/
 emma-debug-session.log
 tmp.txt
 picovoice-support-email-v2.md
+# 19.7 voice harness: cached TTS audio is binary + regenerable; manifest stays in git
+tests/acceptance/audio_cache/**/*.wav
+tests/acceptance/voice_run_*.md
+tests/acceptance/run_*.md
