@@ -110,6 +110,71 @@ async def _enumerate_by_title(title_esc: str, limit: int) -> list[Match]:
     return matches
 
 
+def _enumerate_light_script(scan_cap: int) -> str:
+    """Cheap enumeration: id‖iso-mod-date‖title only — NO plaintext reads.
+
+    Notes' AppleScript dictionary has no sort verb (19.6-B21 deviation from
+    the spec's assumption), so finding "la última nota" scans these three
+    cheap fields and picks the max in Python. Bodies are never touched."""
+    return (
+        ISO_DATE_HANDLER + 'tell application "Notes"\n'
+        '  set out to ""\n'
+        "  set k to 0\n"
+        "  repeat with f in folders\n"
+        f"    if (name of f) is not in {_TRASH_FOLDERS} then\n"
+        "      repeat with nt in (notes of f)\n"
+        "        set out to out & (id of nt) & "
+        f'"{FIELD_SEP}" & (my isoDate(modification date of nt)) & '
+        f'"{FIELD_SEP}" & (name of nt) & linefeed\n'
+        "        set k to k + 1\n"
+        f"        if k ≥ {int(scan_cap)} then exit repeat\n"
+        "      end repeat\n"
+        "    end if\n"
+        f"    if k ≥ {int(scan_cap)} then exit repeat\n"
+        "  end repeat\n"
+        "  return out\n"
+        "end tell"
+    )
+
+
+async def _most_recent_note(scan_cap: int = 500) -> Match | None:
+    """The most recently MODIFIED note (what Garcia means by 'la última nota').
+
+    Modification date, not creation date — "last touched" is what he
+    experiences in the Notes UI."""
+    raw = await macos.osascript(_enumerate_light_script(scan_cap), timeout_s=_NOTES_TIMEOUT_S)
+    matches = parse_matches(raw)
+    if not matches:
+        return None
+    return max(matches, key=lambda m: m.when)
+
+
+@tool()
+async def resolve_recent_note() -> ToolResult:
+    """Devuelve el título y un vistazo de la nota MÁS RECIENTE (última modificada).
+
+    Úsalo para confirmar antes de actuar cuando Garcia diga 'la última nota' /
+    'esa nota que acabo de crear' y no estés seguro de cuál es."""
+    try:
+        m = await _most_recent_note()
+    except macos.AppleScriptError as exc:
+        return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+    if m is None:
+        return ToolResult(True, {"title": None}, "No tienes notas todavía.", False)
+    preview = ""
+    try:
+        body = await _read_body(m.id)
+        preview = " ".join(body.split())[:120]
+    except macos.AppleScriptError:
+        pass  # the title alone is still useful
+    return ToolResult(
+        True,
+        {"title": m.title, "modified": m.when, "preview": preview},
+        f"Tu última nota es '{m.title}'.",
+        False,
+    )
+
+
 @tool()
 async def list_notes(query: str = "", limit: int = 10) -> ToolResult:
     """Lista tus notas de Apple Notes (título, fecha de modificación y un fragmento).
@@ -215,13 +280,24 @@ async def append_to_note(
     index: int | None = None,
     suffix: str = "",
     create_if_missing: bool = False,
+    recent: bool = False,
     confirmed: bool = False,
 ) -> ToolResult:
     """Agrega `text` a la nota `title`, con búsqueda flexible (Bug 19.5-B3).
 
-    1 coincidencia (exacta / empieza-con / contiene) → agrega directo.
-    Varias → pregunta por el sufijo distintivo ('¿para cuándo? Tengo hoy y…').
-    Ninguna → ofrece crearla. Nunca agrega a la nota equivocada en silencio."""
+    `recent=true` (19.6-B21): ignora `title` y agrega a la nota MÁS RECIENTE
+    ('la última nota'). 1 coincidencia (exacta / empieza-con / contiene) →
+    agrega directo. Varias → pregunta por el sufijo distintivo. Ninguna →
+    ofrece crearla. Nunca agrega a la nota equivocada en silencio."""
+    if recent:
+        try:
+            m = await _most_recent_note()
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+        if m is None:
+            return ToolResult(False, None, "No tienes notas todavía; ¿creo una?", False)
+        return await _append_to_match(m, text)
+
     t = macos.esc_applescript(title)
     try:
         matches, _strategy = await find_by_title(_enumerate, t, limit=25)
@@ -284,18 +360,27 @@ async def _read_body(note_id: str) -> str:
 
 
 @tool()
-async def read_note(title: str, index: int | None = None) -> ToolResult:
+async def read_note(title: str, index: int | None = None, recent: bool = False) -> ToolResult:
     """Lee el contenido de la nota cuyo título es `title`.
 
-    Si hay varias con el mismo nombre, pide cuál (por número)."""
-    t = macos.esc_applescript(title)
-    try:
-        matches = await _enumerate_by_title(t, limit=25)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
-    chosen, response = disambiguate(matches, index, noun="nota", title=title)
-    if response is not None:
-        return response
+    `recent=true` ignora `title` y lee la nota MÁS RECIENTE ('la última
+    nota', 19.6-B21). Si hay varias con el mismo nombre, pide cuál."""
+    if recent:
+        try:
+            chosen = await _most_recent_note()
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+        if chosen is None:
+            return ToolResult(True, {"notes": []}, "No tienes notas todavía.", False)
+    else:
+        t = macos.esc_applescript(title)
+        try:
+            matches = await _enumerate_by_title(t, limit=25)
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+        chosen, response = disambiguate(matches, index, noun="nota", title=title)
+        if response is not None:
+            return response
     assert chosen is not None
     try:
         body = await _read_body(chosen.id)
@@ -313,23 +398,33 @@ async def merge_notes(
     separator: str = "\n\n---\n\n",
     source_index: int | None = None,
     target_index: int | None = None,
+    recent: bool = False,
     confirmed: bool = False,
 ) -> ToolResult:
     """Fusiona dos notas: agrega el contenido de `source_title` al final de
     `target_title` y borra la nota origen. Pide confirmación.
 
-    Si algún título coincide con varias notas, pide cuál (por número)."""
-    st = macos.esc_applescript(source_title)
+    `recent=true` (19.6-B21): la nota ORIGEN es la más reciente ('fusiona la
+    última nota con X'). Si algún título coincide con varias, pide cuál."""
     tt = macos.esc_applescript(target_title)
     try:
-        src_matches = await _enumerate_by_title(st, limit=25)
+        if recent:
+            src = await _most_recent_note()
+            if src is None:
+                return ToolResult(True, {"matches": 0}, "No tienes notas todavía.", False)
         tgt_matches = await _enumerate_by_title(tt, limit=25)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
 
-    src, resp = disambiguate(src_matches, source_index, noun="nota origen", title=source_title)
-    if resp is not None:
-        return resp
+    if not recent:
+        st = macos.esc_applescript(source_title)
+        try:
+            src_matches = await _enumerate_by_title(st, limit=25)
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+        src, resp = disambiguate(src_matches, source_index, noun="nota origen", title=source_title)
+        if resp is not None:
+            return resp
     tgt, resp = disambiguate(tgt_matches, target_index, noun="nota destino", title=target_title)
     if resp is not None:
         return resp
@@ -370,20 +465,31 @@ async def merge_notes(
 
 
 @tool(destructive=True)
-async def delete_note(title: str, index: int | None = None, confirmed: bool = False) -> ToolResult:
+async def delete_note(
+    title: str, index: int | None = None, recent: bool = False, confirmed: bool = False
+) -> ToolResult:
     """Borra la nota de Apple Notes cuyo título es `title`. Pide confirmación.
 
+    `recent=true` ignora `title` y apunta a la nota MÁS RECIENTE (19.6-B21).
     Si hay varias con el mismo nombre, las enumera y pide cuál (por número) —
     nunca borra todas (Bug 19.2-B2)."""
-    t = macos.esc_applescript(title)
-    try:
-        matches = await _enumerate_by_title(t, limit=25)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+    if recent:
+        try:
+            chosen = await _most_recent_note()
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+        if chosen is None:
+            return ToolResult(True, {"matches": 0}, "No tienes notas todavía.", False)
+    else:
+        t = macos.esc_applescript(title)
+        try:
+            matches = await _enumerate_by_title(t, limit=25)
+        except macos.AppleScriptError as exc:
+            return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
 
-    chosen, response = disambiguate(matches, index, noun="nota", title=title)
-    if response is not None:
-        return response
+        chosen, response = disambiguate(matches, index, noun="nota", title=title)
+        if response is not None:
+            return response
     assert chosen is not None
 
     if not confirmed:
