@@ -31,6 +31,7 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
+from difflib import SequenceMatcher
 
 from tools.base import ToolResult
 
@@ -55,6 +56,42 @@ def normalize_title(s: str) -> str:
     s = s.replace(_ENYE_SENTINEL, "ñ")
     s = s.translate(_PUNCT_TO_SPACE).translate(_PUNCT_DROP)
     return " ".join(s.split())
+
+
+def suggest_similar(
+    query: str, candidates: list[str], k: int = 3, threshold: float = 0.55
+) -> list[tuple[str, float]]:
+    """Up to ``k`` candidates fuzzily matching ``query``, ratio ≥ threshold,
+    sorted best-first (21-B25).
+
+    THE transversal "¿quisiste decir…?" helper: one mechanism for TablePlus
+    connections, saved pages, contacts, repos — never per-tool fuzzy logic.
+    Comparison runs over :func:`normalize_title` forms (lowercase, accents
+    stripped, ñ preserved, punctuation collapsed) with stdlib
+    ``difflib.SequenceMatcher`` — voice mistranscriptions drop the ratio
+    fast, so 0.55 catches "learning-rots"→"learning-roots" while staying
+    out of nonsense territory.
+    """
+    want = normalize_title(query)
+    if not want:
+        return []
+    scored: list[tuple[str, float]] = []
+    for cand in candidates:
+        ratio = SequenceMatcher(None, want, normalize_title(cand)).ratio()
+        if ratio >= threshold:
+            scored.append((cand, round(ratio, 3)))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[:k]
+
+
+def suggestion_question(query: str, suggestions: list[tuple[str, float]], *, noun: str) -> str:
+    """Spanish '¿quisiste decir…?' line for a near-miss (21-B25)."""
+    names = [s for s, _ in suggestions]
+    if len(names) == 1:
+        opts = f"'{names[0]}'"
+    else:
+        opts = ", ".join(f"'{n}'" for n in names[:-1]) + f" o '{names[-1]}'"
+    return f"No encontré {noun} '{query}'. ¿Quisiste decir {opts}?"
 
 
 # Day/time words that make a "¿para cuándo?" question feel natural when notes are

@@ -88,12 +88,29 @@ class TestOpenInAppRouting:
         _open_mock.assert_awaited_once_with("tableplus://connect/scratch-db")
 
     @pytest.mark.asyncio
-    async def test_unknown_connection_offers_to_learn_it(self, _open_mock):
+    async def test_near_miss_connection_suggests(self, _open_mock):
+        """21-B25: a close mistranscription gets '¿quisiste decir…?', not a dead end."""
         res = await aut.open_in_app("learning-rots-prod", kind="connection")
+        assert res.requires_confirmation is True
+        assert "learning-rots-local" in res.user_message
+        assert res.data["suggestions"] == ["learning-rots-local"]
+        _open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_total_miss_offers_to_learn_it(self, _open_mock):
+        res = await aut.open_in_app("zzz-warehouse-nine", kind="connection")
         assert res.success is False
-        assert "learning-rots-prod" in res.user_message
         assert "anoto" in res.user_message
         _open_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_picked_recall_opens_the_suggestion(self, _open_mock):
+        """The pick re-call: picked overrides target and opens for real."""
+        res = await aut.open_in_app(
+            "learning-rots-prod", kind="connection", picked="learning-rots-local", confirmed=True
+        )
+        assert res.success
+        _open_mock.assert_awaited_once_with("tableplus://connect/learning-rots-local")
 
     @pytest.mark.asyncio
     async def test_missing_placeholder_friendly_error(self, _open_mock, monkeypatch):
