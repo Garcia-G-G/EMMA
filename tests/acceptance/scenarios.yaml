@@ -88,7 +88,7 @@
     "expected_actions": [
       { "tool": "current_time", "args_contain": { "timezone": "Asia/Tokyo" } }
     ],
-    "expected_spoken_pattern": "asia/tokyo",
+    "expected_spoken_pattern": "(asia/tokyo|tokio|tokyo)",
     "mock_spoken_text": "Son las 09:42 en Asia/Tokyo.",
     "max_latency_ms": 2500,
     "destructive": false

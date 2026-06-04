@@ -164,12 +164,44 @@ class TranscriptCollector(FrameProcessor):
                 append_turn(user, assistant)
                 schedule_reflection(last_turns(4))
                 log.debug("transcript_captured", user=user[:80], assistant=assistant[:80])
-                if settings.EMMA_TEST_MODE:
-                    # Voice-harness hook (19.7-VAH3): untruncated transcripts so
-                    # the runner can diff STT vs the synthesized input.
-                    log.info("transcript_full_test", user=user, assistant=assistant)
             self._user_text = ""
             self._assistant_text = ""
+        await self.push_frame(frame, direction)
+
+
+class _TestTranscriptTap(FrameProcessor):
+    """EMMA_TEST_MODE only (19.7-VAH3): surface STT + bot text as JSON logs.
+
+    The production ``TranscriptCollector`` never actually receives these
+    frames: user ``TranscriptionFrame``s are pushed UPSTREAM of the LLM
+    (toward transport.input), and assistant ``LLMTextFrame``s are absorbed
+    by ``LLMAssistantAggregator`` before the collector — the long-standing
+    reflection gap (CLAUDE.md "not yet implemented"; root-caused during
+    19.7, fix is its own prompt). The harness taps the stream at the two
+    spots where the frames DO exist. Never constructed in production.
+
+    role="user": sits between transport.input and the LLM; sees the
+    upstream TranscriptionFrames → ``stt_user_test`` per utterance.
+    role="bot": sits right after the LLM; accumulates downstream
+    LLMTextFrames and flushes ``bot_text_test`` on BotStoppedSpeaking.
+    """
+
+    def __init__(self, role: str) -> None:
+        super().__init__()
+        self._role = role
+        self._bot_text = ""
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if self._role == "user":
+            if isinstance(frame, TranscriptionFrame) and frame.text:
+                log.info("stt_user_test", text=frame.text)
+        elif isinstance(frame, LLMTextFrame) and frame.text:
+            self._bot_text += frame.text
+        elif isinstance(frame, BotStoppedSpeakingFrame):
+            if self._bot_text.strip():
+                log.info("bot_text_test", text=self._bot_text.strip())
+            self._bot_text = ""
         await self.push_frame(frame, direction)
 
 
@@ -776,19 +808,22 @@ async def build_pipeline() -> tuple[
     end_watcher = EndSessionWatcher(session_control)
     audio_tap = _AudioLevelTap()  # publishes output RMS for the visualizer core pulse
 
-    pipeline = Pipeline(
-        [
-            transport.input(),
-            llm,
-            auth_watcher,  # right after the LLM so it sees its ErrorFrames first
-            end_watcher,  # closes the session after playback tools finish speaking
-            assistant_aggregator,
-            transcript_collector,
-            gate_proc,
-            audio_tap,  # just before output: taps the bot's outgoing audio RMS
-            transport.output(),
-        ]
-    )
+    stages: list[FrameProcessor] = [transport.input()]
+    if settings.EMMA_TEST_MODE:
+        stages.append(_TestTranscriptTap("user"))  # upstream STT frames (19.7)
+    stages.append(llm)
+    if settings.EMMA_TEST_MODE:
+        stages.append(_TestTranscriptTap("bot"))  # bot text before the aggregator eats it
+    stages += [
+        auth_watcher,  # right after the LLM so it sees its ErrorFrames first
+        end_watcher,  # closes the session after playback tools finish speaking
+        assistant_aggregator,
+        transcript_collector,
+        gate_proc,
+        audio_tap,  # just before output: taps the bot's outgoing audio RMS
+        transport.output(),
+    ]
+    pipeline = Pipeline(stages)
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
