@@ -159,3 +159,30 @@ class TestPorcupineBranch:
         with pytest.raises(SystemExit) as exc:
             await wake_word._listen_porcupine()
         assert "pvporcupine" in str(exc.value)
+
+
+class TestNearMissLogger:
+    """Sub-threshold wake scores must be visible in debug logs (accent tuning)."""
+
+    def test_logs_near_miss_between_floor_and_threshold(self, monkeypatch):
+        calls: list[float] = []
+        monkeypatch.setattr(wake_word.log, "info", lambda event, **kw: calls.append(kw["score"]))
+        note = wake_word._make_near_miss_logger(threshold=0.5, floor=0.1, interval_s=0.0)
+        note(0.30)
+        assert calls == [0.3]
+
+    def test_ignores_floor_noise_and_hits(self, monkeypatch):
+        calls: list[float] = []
+        monkeypatch.setattr(wake_word.log, "info", lambda event, **kw: calls.append(kw["score"]))
+        note = wake_word._make_near_miss_logger(threshold=0.5, floor=0.1, interval_s=0.0)
+        note(0.05)  # below floor: ambient noise, stay quiet
+        note(0.80)  # above threshold: that's a detection, not a near miss
+        assert calls == []
+
+    def test_rate_limited(self, monkeypatch):
+        calls: list[float] = []
+        monkeypatch.setattr(wake_word.log, "info", lambda event, **kw: calls.append(kw["score"]))
+        note = wake_word._make_near_miss_logger(threshold=0.5, floor=0.1, interval_s=60.0)
+        note(0.30)
+        note(0.40)  # within the rate-limit window: dropped
+        assert calls == [0.3]
