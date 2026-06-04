@@ -63,6 +63,7 @@ _apps: dict[str, str] = {}
 _facts: dict[str, Fact] = {}
 _user_apps: dict[str, dict[str, Any]] = {}
 _user: dict[str, str] = {}
+_connections: dict[str, dict[str, Any]] = {}
 
 # The identity fields Emma recognises. Single source of truth for "yo/mi/mis".
 _USER_FIELDS = (
@@ -93,6 +94,7 @@ def _parse() -> None:
         _facts.clear()
         _user_apps.clear()
         _user.clear()
+        _connections.clear()
         user_tbl = data.get("user") or {}
         if isinstance(user_tbl, dict):
             for fld in _USER_FIELDS:
@@ -117,6 +119,12 @@ def _parse() -> None:
         for k, v in (data.get("user_apps") or {}).items():
             if isinstance(v, dict):
                 _user_apps[k.lower()] = dict(v)
+        for k, v in (data.get("connections") or {}).items():
+            if isinstance(v, dict):
+                entry = dict(v)
+                entry.setdefault("name", k)
+                entry.setdefault("kind", "connection")
+                _connections[k] = entry
         for k, v in (data.get("facts") or {}).items():
             _facts[k] = Fact(
                 key=k,
@@ -235,6 +243,25 @@ def user_app(name: str) -> dict[str, Any]:
     return dict(_user_apps.get(name.strip().lower(), {}))
 
 
+def connections() -> dict[str, dict[str, Any]]:
+    """Per-user in-app resources (TablePlus connections, Slack channels…).
+
+    Each entry carries at least ``app``, ``kind`` and ``name`` (19.6-B17).
+    """
+    return {k: dict(v) for k, v in _connections.items()}
+
+
+def find_connection(query: str) -> dict[str, Any] | None:
+    """Case-insensitive lookup by section key or ``name`` field."""
+    q = query.strip().lower()
+    if not q:
+        return None
+    for k, v in _connections.items():
+        if q == k.lower() or q == str(v.get("name", "")).lower():
+            return dict(v)
+    return None
+
+
 def facts() -> list[Fact]:
     return list(_facts.values())
 
@@ -321,3 +348,22 @@ def append_term(key: str, expansion: str, context: str = "") -> None:
 
 def append_fact(slug: str, text: str, kind: str = "general", confidence: float = 0.85) -> None:
     _append_block("facts", slug, {"text": text, "kind": kind, "confidence": confidence})
+
+
+def append_connection(name: str, app: str, kind: str = "connection", **fields: str) -> str:
+    """Append a ``[connections.<slug>]`` block. Keeps dashes in the slug —
+    TablePlus connection names like ``learning-rots-local`` are valid TOML
+    bare keys and must round-trip verbatim (19.6-B17)."""
+    import re
+
+    slug = re.sub(r"[^A-Za-z0-9_-]", "-", name.strip().lower()).strip("-") or "connection"
+    lines = [f"\n[connections.{slug}]"]
+    payload: dict[str, str] = {"app": app, "kind": kind, "name": name, **fields}
+    for k, v in payload.items():
+        if v:
+            lines.append(f'{k} = "{_toml_escape(str(v))}"')
+    with _LOCK:
+        with _DICT_PATH.open("a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        reload()
+    return slug
