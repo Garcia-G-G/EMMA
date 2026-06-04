@@ -29,6 +29,7 @@ import sounddevice as sd
 import structlog
 
 from config.settings import settings
+from core import audio_devices
 from core.audio import play_wake_chime
 
 log = structlog.get_logger("emma.wake_word")
@@ -204,6 +205,9 @@ async def _listen_openwakeword() -> None:
         dtype="int16",
         blocksize=_CHUNK_SAMPLES,
         callback=_cb,
+        # None in production (default mic); virtual cable under the voice
+        # acceptance harness (19.7-VAH2) so synthesized wake words are heard.
+        device=audio_devices.test_input_device_index(),
     )
     stream.start()
     try:
@@ -301,6 +305,7 @@ async def _listen_porcupine() -> None:
         dtype="int16",
         blocksize=porcupine.frame_length,
         callback=_cb,
+        device=audio_devices.test_input_device_index(),  # None in production
     )
     stream.start()
     try:

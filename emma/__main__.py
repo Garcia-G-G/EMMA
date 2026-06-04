@@ -81,6 +81,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="raise after the first wake word (exercises the crash handler)",
     )
+    p.add_argument(
+        "--test",
+        action="store_true",
+        help="voice-acceptance harness mode (19.7): forces EMMA_TEST_MODE on, "
+        "activating test-only hooks (input-device override, arg/transcript "
+        "logging). Equivalent to env EMMA_TEST_MODE=true. Never set by launchd.",
+    )
     return p.parse_args()
 
 
@@ -159,7 +166,14 @@ def main() -> int:
     args = _parse_args()
     _setup_logging(args.debug)
     log = structlog.get_logger("emma")
-    log.info("starting", debug=args.debug, simulate_crash=args.simulate_crash)
+    if args.test:
+        settings.EMMA_TEST_MODE = True  # same switch the harness env sets
+    log.info(
+        "starting",
+        debug=args.debug,
+        simulate_crash=args.simulate_crash,
+        test_mode=settings.EMMA_TEST_MODE,
+    )
 
     # Credential pre-flight FIRST: fail fast on a bad OpenAI key (exit 2) before
     # any permission probe, mic open, or wake-word wait.
