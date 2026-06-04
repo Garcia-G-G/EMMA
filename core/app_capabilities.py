@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import threading
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import structlog
@@ -29,6 +29,10 @@ class Capabilities:
     cli: str = ""
     category: str = ""
     notes: str = ""
+    # kind → URL template with {placeholders} (19.6-B17). Placeholder names
+    # match the keys stored in dictionary [user_apps.<app>] / [connections.*],
+    # e.g. "tableplus://connect/{name}", "slack://channel?team={workspace}&id={channel}".
+    resource_url: dict[str, str] = field(default_factory=dict)
 
 
 _caps: dict[str, Capabilities] = {}
@@ -53,6 +57,12 @@ def _parse() -> None:
         for app, v in data.items():
             if not isinstance(v, dict):
                 continue
+            raw_res = v.get("resource_url") or {}
+            resource_url = (
+                {str(k): str(u) for k, u in raw_res.items() if isinstance(u, str)}
+                if isinstance(raw_res, dict)
+                else {}
+            )
             _caps[app] = Capabilities(
                 app=app,
                 url_scheme=v.get("url_scheme", ""),
@@ -60,6 +70,7 @@ def _parse() -> None:
                 cli=v.get("cli", ""),
                 category=v.get("category", ""),
                 notes=v.get("notes", ""),
+                resource_url=resource_url,
             )
 
 

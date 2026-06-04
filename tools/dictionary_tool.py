@@ -81,6 +81,24 @@ async def remember_user_profile(field: str, value: str) -> ToolResult:
 
 
 @tool()
+async def remember_connection(name: str, app: str, kind: str = "connection") -> ToolResult:
+    """Recuerda un recurso DENTRO de una app: conexión de TablePlus, canal, etc.
+
+    Úsalo cuando Garcia diga "Emma, recuerda la conexión <name> de TablePlus"
+    o cuando intente abrir una conexión que aún no conozco y me dicte el
+    nombre exacto. `kind` ∈ connection, channel, dm, note (19.6-B17).
+    """
+    n = (name or "").strip()
+    a = (app or "").strip().lower()
+    if not n or not a:
+        return ToolResult(False, None, "Necesito el nombre del recurso y la app.", False)
+    slug = dictionary.append_connection(n, app=a, kind=kind.strip() or "connection")
+    return ToolResult(
+        True, {"slug": slug, "app": a}, f"Listo, anoté la conexión '{n}' de {app}.", False
+    )
+
+
+@tool()
 async def remember_stt_correction(wrong: str, right: str, section: str = "auto") -> ToolResult:
     """Aprende de una corrección de pronunciación/transcripción.
 

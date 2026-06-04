@@ -109,6 +109,19 @@ kind = "preference"
 confidence = 0.9
 
 # -----------------------------------------------------------------------
+# [connections] — Garcia's in-app resources (19.6-B17): TablePlus
+# connections, Slack channels, Obsidian notes. Each entry names the app,
+# the resource kind (matches a resource_url template in
+# app_capabilities.toml) and the fields the template needs. Added by
+# voice via remember_connection. NO credentials here — TablePlus etc.
+# keep those in their own Keychain entries.
+# -----------------------------------------------------------------------
+[connections.learning-rots-local]
+app = "tableplus"
+kind = "connection"
+name = "learning-rots-local"
+
+# -----------------------------------------------------------------------
 # [user_apps] — per-user app config the capabilities registry can't know
 # (workspace/team/vault IDs). Replace these placeholders with your real
 # values. Used by tools/app_url_tool to build deep links.

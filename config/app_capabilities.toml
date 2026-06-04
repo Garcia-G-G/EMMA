@@ -18,6 +18,10 @@
 url_scheme = "slack"
 category = "chat"
 notes = "Deep link: slack://channel?team=TEAM_ID&id=CHANNEL_ID (real IDs)."
+# 19.6-B17: resource templates. Placeholders = keys from dictionary
+# [user_apps.slack] (workspace) and/or [connections.*] entries (channel, user).
+resource_url.channel = "slack://channel?team={workspace}&id={channel}"
+resource_url.dm = "slack://user?team={workspace}&id={user}"
 
 [discord]
 url_scheme = "discord"
@@ -48,6 +52,17 @@ notes = "notion://www.notion.so/<workspace>/<page-id>."
 url_scheme = "obsidian"
 category = "notes"
 notes = "obsidian://open?vault=<vault>&file=<path>."
+resource_url.note = "obsidian://open?vault={default_vault}&file={file}"
+
+# TablePlus opens a SAVED connection by name; credentials stay in TablePlus's
+# own Keychain entry — never in the URL (19.6-B17).
+# Sources: docs.tableplus.com/gui-tools/manage-connections,
+# github.com/TablePlus/TablePlus/issues/1593.
+[tableplus]
+url_scheme = "tableplus"
+category = "dev"
+notes = "tableplus://connect/<name> opens the saved connection by name."
+resource_url.connection = "tableplus://connect/{name}"
 
 [bear]
 url_scheme = "bear"

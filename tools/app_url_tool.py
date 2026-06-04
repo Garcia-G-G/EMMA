@@ -15,6 +15,7 @@ obsidian://open?vault&file (obsidian.md/help/uri).
 from __future__ import annotations
 
 import asyncio
+import re
 import urllib.parse
 from typing import Any
 
@@ -24,6 +25,46 @@ from tools.base import ToolResult, tool
 
 def _q(s: str) -> str:
     return urllib.parse.quote(s, safe="")
+
+
+# {placeholder} names inside resource_url templates (19.6-B17).
+_PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
+
+
+def _fill_template(template: str, data: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Substitute {placeholders} from `data`, URL-escaping each value.
+
+    Returns ``(url, None)`` or ``(None, missing_key)`` — a missing placeholder
+    must NEVER substitute silently as empty (B17 anti-pattern)."""
+    missing: str | None = None
+
+    def sub(m: re.Match[str]) -> str:
+        nonlocal missing
+        key = m.group(1)
+        val = data.get(key)
+        if val in (None, ""):
+            missing = missing or key
+            return ""
+        return _q(str(val))
+
+    url = _PLACEHOLDER_RE.sub(sub, template)
+    return (None, missing) if missing else (url, None)
+
+
+def _resource_url(app_slug: str, kind: str, data: dict[str, Any]) -> tuple[str | None, str]:
+    """Build a resource deep link from the capabilities template.
+
+    Returns ``(url, "")`` on success or ``(None, spanish_error)``."""
+    caps = app_capabilities.caps_for(app_slug)
+    if not caps or kind not in caps.resource_url:
+        return None, f"No sé abrir un recurso tipo '{kind}' en {app_slug}."
+    url, missing = _fill_template(caps.resource_url[kind], data)
+    if url is None:
+        return (
+            None,
+            f"Me falta el dato '{missing}' para abrir eso en {app_slug}. Dímelo y lo anoto.",
+        )
+    return url, ""
 
 
 def _qp(s: str) -> str:
@@ -56,13 +97,18 @@ async def _open(*args: str) -> None:
 
 
 @tool()
-async def open_in_app(target: str, app: str = "") -> ToolResult:
-    """Abre algo en una app: una URL/esquema directo, o un destino + app.
+async def open_in_app(
+    target: str, app: str = "", kind: str = "", fields: dict[str, str] | None = None
+) -> ToolResult:
+    """Abre algo en una app: una URL directa, un recurso guardado, o destino + app.
 
     Úsalo cuando Garcia diga:
-    - "Emma, abre el canal general en Slack"
+    - "Emma, abre la conexión learning-rots-local" → kind="connection"
+    - "Emma, abre el canal general en Slack" → app="slack", kind="channel"
     - "Emma, crea una tarea en Things: comprar leche"
     - "Emma, abre <url>"
+    `kind` es el tipo de recurso (connection/channel/dm/note); `fields` aporta
+    datos extra para la plantilla cuando Garcia los dicta.
     """
     target = (target or "").strip()
     if not target and not app:
@@ -76,7 +122,60 @@ async def open_in_app(target: str, app: str = "") -> ToolResult:
             return ToolResult(False, None, f"No pude abrir eso: {exc}", False)
         return ToolResult(True, {"opened": target}, "Abriendo.", False)
 
-    # 2. Plain target needs an app.
+    # 2. Saved resource? [connections] knows Garcia's in-app resource names
+    #    (19.6-B17): "abre la conexión learning-rots-local" → TablePlus deep link.
+    conn = dictionary.find_connection(target)
+    if conn:
+        conn_app = str(conn.get("app", app))
+        conn_kind = str(conn.get("kind", kind or "connection"))
+        data: dict[str, Any] = {
+            **dictionary.user_app(conn_app),
+            **conn,
+            **(fields or {}),
+        }
+        url, err = _resource_url(conn_app, conn_kind, data)
+        if url is None:
+            return ToolResult(False, None, err, False)
+        try:
+            await _open(url)
+        except Exception as exc:
+            return ToolResult(False, None, f"No pude abrir eso en {conn_app}: {exc}", False)
+        return ToolResult(
+            True,
+            {"url": url, "app": conn_app, "kind": conn_kind},
+            f"Abriendo {conn.get('name', target)} en {conn_app}.",
+            False,
+        )
+
+    # 3. Explicit app + kind → template with the dictated name.
+    if app and kind:
+        data = {
+            **dictionary.user_app(app),
+            **(fields or {}),
+        }
+        data.setdefault("name", target)
+        url, err = _resource_url(app, kind, data)
+        if url is None:
+            return ToolResult(False, None, err, False)
+        try:
+            await _open(url)
+        except Exception as exc:
+            return ToolResult(False, None, f"No pude abrir eso en {app}: {exc}", False)
+        return ToolResult(
+            True, {"url": url, "app": app, "kind": kind}, f"Abriendo {target} en {app}.", False
+        )
+
+    # A resource was named (kind given) but nothing matched → offer to learn it.
+    if kind and not app:
+        return ToolResult(
+            False,
+            None,
+            f"No tengo una conexión llamada '{target}'. Si me dictas el nombre "
+            "exacto que usas en la app, la anoto.",
+            False,
+        )
+
+    # 4. Plain target needs an app.
     if not app:
         return ToolResult(False, None, "¿En qué app lo abro?", False)
     caps = app_capabilities.caps_for(app)
