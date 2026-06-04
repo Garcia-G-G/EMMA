@@ -23,3 +23,5 @@ playwright-profile/
 tests/acceptance/run_*.md
 _planning/
 emma-debug-session.log
+tmp.txt
+picovoice-support-email-v2.md

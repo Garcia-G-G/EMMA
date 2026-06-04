@@ -74,8 +74,10 @@ context = "Producto mínimo viable — versión más pequeña que entrega valor.
 [apps.editor]
 default = "Cursor"
 
+# 19.6 smoke fix: "Arc" was a scaffold placeholder — Garcia's detected
+# browser is Brave (environment_cache.json); Arc isn't even installed.
 [apps.browser]
-default = "Arc"
+default = "Brave Browser"
 
 [apps.terminal]
 default = "iTerm"
