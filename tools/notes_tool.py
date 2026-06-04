@@ -17,16 +17,22 @@ AppleScript facts pinned during 19.2 (macOS Notes, iCloud account):
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import structlog
 
 from actions import macos
+from core import dictionary
 from tools.base import ToolResult, tool
 from tools.disambiguation import (
     FIELD_SEP,
     ISO_DATE_HANDLER,
     Match,
     disambiguate,
+    find_by_title,
     parse_matches,
+    suffix_prompt,
+    word_common_prefix,
 )
 
 log = structlog.get_logger("emma.tools.notes")
@@ -96,16 +102,11 @@ async def _enumerate(match_clause: str, limit: int) -> list[Match]:
 
 
 async def _enumerate_by_title(title_esc: str, limit: int) -> list[Match]:
-    """Find notes by exact title, falling back to a ``contains`` match.
-
-    Notes created before the HTML-body fix have their title flattened together
-    with their body (e.g. name = "Errores de Emma Bitácora…"), so an exact
-    ``name is`` lookup misses them. The ``contains`` fallback lets read/delete
-    still resolve those; disambiguation handles any extra matches it surfaces.
-    """
-    matches = await _enumerate(f' whose name is "{title_esc}"', limit)
-    if not matches:
-        matches = await _enumerate(f' whose name contains "{title_esc}"', limit)
+    """Find notes by title via the shared tiered strategy (exact → starts-with →
+    contains). Lets read/delete/merge resolve legacy flattened-title notes;
+    disambiguation gates any extra matches it surfaces (Bug 19.5 converges this
+    onto find_by_title so the match strategy lives in one place)."""
+    matches, _strategy = await find_by_title(_enumerate, title_esc, limit=limit)
     return matches
 
 
@@ -173,24 +174,106 @@ async def create_note(title: str, body: str, folder: str = "") -> ToolResult:
     return ToolResult(True, {"title": title}, f"Listo, creé la nota '{title}'.", False)
 
 
-@tool()
-async def append_to_note(title: str, text: str) -> ToolResult:
-    """Agrega `text` al final de la nota cuyo título es `title`."""
-    t = macos.esc_applescript(title)
+def _lang() -> str:
+    return dictionary.user_profile().get("preferred_lang", "es") or "es"
+
+
+async def _append_to_match(match: Match, text: str) -> ToolResult:
+    """Append ``text`` to one specific note (addressed by id, HTML-wrapped)."""
     x = macos.esc_applescript(text)
+    nid = macos.esc_applescript(match.id)
     script = (
-        'tell application "Notes"\n'
-        f'  set matches to (notes whose name is "{t}")\n'
-        '  if (count of matches) is 0 then error "no encontré esa nota"\n'
-        "  set theNote to item 1 of matches\n"
-        f'  set body of theNote to (body of theNote) & "<div>{x}</div>"\n'
-        "end tell"
+        f'tell application "Notes" to set body of (note id "{nid}") to '
+        f'(body of (note id "{nid}")) & "<div>{x}</div>"'
     )
+    ok, out = await macos.osascript_or_friendly(
+        script, timeout_s=_NOTES_TIMEOUT_S, on_error="No pude agregar a la nota"
+    )
+    if not ok:
+        return ToolResult(False, None, out, False)
+    return ToolResult(True, {"title": match.title}, f"Agregado a '{match.title}'.", False)
+
+
+async def _create_with_text(new_title: str, text: str, *, existed: bool) -> ToolResult:
+    """Create a note titled ``new_title`` with ``text`` as the body (reusing
+    create_note's HTML-body fix), with an append-flavored message."""
+    res = await create_note(new_title, text)
+    if not res.success:
+        return res
+    msg = (
+        f"No existía '{new_title}', la creé y agregué tu texto."
+        if not existed
+        else f"Creé '{new_title}' con tu texto."
+    )
+    return ToolResult(True, {"title": new_title, "created": True}, msg, False)
+
+
+@tool()
+async def append_to_note(
+    title: str,
+    text: str,
+    index: int | None = None,
+    suffix: str = "",
+    create_if_missing: bool = False,
+    confirmed: bool = False,
+) -> ToolResult:
+    """Agrega `text` a la nota `title`, con búsqueda flexible (Bug 19.5-B3).
+
+    1 coincidencia (exacta / empieza-con / contiene) → agrega directo.
+    Varias → pregunta por el sufijo distintivo ('¿para cuándo? Tengo hoy y…').
+    Ninguna → ofrece crearla. Nunca agrega a la nota equivocada en silencio."""
+    t = macos.esc_applescript(title)
     try:
-        await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
+        matches, _strategy = await find_by_title(_enumerate, t, limit=25)
     except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude agregar a la nota: {exc}", False)
-    return ToolResult(True, {"title": title}, f"Agregado a '{title}'.", False)
+        return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
+
+    # An explicit suffix narrows a previously-ambiguous set ("el miércoles").
+    if suffix and len(matches) > 1:
+        s = suffix.strip().lower()
+        survivors = [m for m in matches if m.title.lower().endswith(s)]
+        if len(survivors) == 1:
+            return await _append_to_match(survivors[0], text)
+        if not survivors:
+            prefix = word_common_prefix([m.title for m in matches])
+            new_title = f"{prefix} {suffix}".strip()
+            if create_if_missing and confirmed:
+                return await _create_with_text(new_title, text, existed=False)
+            return ToolResult(
+                True,
+                {"create_title": new_title},
+                f"No tengo '{new_title}'. ¿La creo nueva?",
+                requires_confirmation=True,
+            )
+        matches = survivors  # still >1 → fall through to a fresh suffix prompt
+
+    # Explicit numeric pick (compat fallback).
+    if index is not None and 1 <= index <= len(matches):
+        return await _append_to_match(matches[index - 1], text)
+
+    # 0 matches → offer to create (never invent silently).
+    if not matches:
+        if create_if_missing and confirmed:
+            return await _create_with_text(title, text, existed=False)
+        return ToolResult(
+            True,
+            {"title": title},
+            f"No encontré una nota llamada '{title}'. ¿La creo nueva?",
+            requires_confirmation=True,
+        )
+
+    # Exactly one → append (Garcia already said "agrega"; no extra confirm).
+    if len(matches) == 1:
+        return await _append_to_match(matches[0], text)
+
+    # >1 → ask by distinguishing suffix.
+    prefix = word_common_prefix([m.title for m in matches])
+    return ToolResult(
+        True,
+        {"matches": [asdict(m) for m in matches], "prefix": prefix},
+        suffix_prompt(matches, prefix, lang=_lang()),
+        requires_confirmation=True,
+    )
 
 
 async def _read_body(note_id: str) -> str:

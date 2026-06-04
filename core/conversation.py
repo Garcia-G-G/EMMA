@@ -400,6 +400,18 @@ async def _build_instructions() -> str:
         "- Si transcribes un nombre y Garcia te corrige de inmediato ('no, es X'), "
         "llama remember_stt_correction(wrong=lo_que_oíste, right=lo_que_dijo). No "
         "pidas permiso — ya te lo dio al corregirte.\n"
+        "\n# Smart note append (mandatory)\n"
+        "- 'Agrega X a <título>' → llama append_to_note(title=<título>, text=X). "
+        "NO desambigües tú antes; la herramienta devuelve requires_confirmation "
+        "cuando necesita tu ayuda.\n"
+        "- Si responde con '¿para cuándo?' (o te pide elegir un sufijo), repite la "
+        "pregunta a Garcia tal cual. Cuando conteste ('miércoles'), re-llama con "
+        "suffix=<respuesta> y confirmed=true.\n"
+        "- Si responde 'no encontré… ¿la creo nueva?', transmítelo; con el sí de "
+        "Garcia re-llama con create_if_missing=true y confirmed=true.\n"
+        "- Si Garcia pide explícitamente 'crea una nueva <título>', llama "
+        "append_to_note con el título completo, create_if_missing=true y "
+        "confirmed=true desde la primera llamada (sin confirmación intermedia).\n"
         "\n# App control layering (mandatory)\n"
         "- For IDE actions prefer the specialized tools: open_in_ide, "
         "new_file_in_ide, search_in_ide. Don't hand-roll AppleScript when these "
@@ -591,13 +603,11 @@ async def _build_session_properties() -> SessionProperties:
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
                 transcription=InputAudioTranscription(
-                    model=settings.REALTIME_TRANSCRIBE_MODEL,
-                    # Hot-word bias: nudge transcription toward every proper noun
-                    # Emma knows (identity, contacts, glossary, apps, vocab — see
-                    # vocabulary.bias_words). Trimmed to ≤500 chars per the API.
-                    # NOTE: `prompt` is honored by whisper-1; the gpt-realtime-whisper
-                    # successor ignores it (move to a keyword list when migrating).
-                    prompt=" ".join(vocabulary.bias_words())[:500],
+                    model=settings.REALTIME_TRANSCRIPTION_MODEL,
+                    # Hot-word bias toward every proper noun Emma knows (identity,
+                    # contacts, glossary, apps, vocab — see vocabulary.bias_render),
+                    # rendered for the active model's format and ≤500 chars.
+                    prompt=vocabulary.bias_render(settings.REALTIME_BIAS_MODE),
                 ),
                 noise_reduction=InputAudioNoiseReduction(type="far_field"),
                 turn_detection=TurnDetection(

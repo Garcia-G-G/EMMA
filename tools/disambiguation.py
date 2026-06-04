@@ -28,9 +28,47 @@ lets the model re-call with the chosen number. See PR 19.2 notes.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 
 from tools.base import ToolResult
+
+# Day/time words that make a "¿para cuándo?" question feel natural when notes are
+# distinguished by date suffixes ("Pendientes para hoy" / "… el miércoles").
+_TEMPORAL_WORDS = frozenset(
+    {
+        "hoy",
+        "mañana",
+        "manana",
+        "ayer",
+        "lunes",
+        "martes",
+        "miércoles",
+        "miercoles",
+        "jueves",
+        "viernes",
+        "sábado",
+        "sabado",
+        "domingo",
+        "semana",
+        "mes",
+        "día",
+        "dia",
+        "today",
+        "tomorrow",
+        "yesterday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "week",
+        "month",
+        "day",
+    }
+)
 
 # AppleScript field/record separators. U+2016 (‖) is vanishingly unlikely to
 # appear in a note title or event summary, so it survives round-tripping.
@@ -91,6 +129,83 @@ def _enumerate_es(matches: list[Match]) -> str:
         when = f" ({m.when})" if m.when else ""
         bits.append(f"{i}{when}")
     return "; ".join(bits)
+
+
+async def find_by_title(
+    enumerate_fn: Callable[[str, int], Awaitable[list[Match]]],
+    title_esc: str,
+    *,
+    limit: int = 25,
+) -> tuple[list[Match], str]:
+    """Find notes by title with a tiered strategy, short-circuiting on the first
+    tier that yields anything (Bug 19.5-B1).
+
+    Tiers: exact ``name is`` → ``name starts with`` → ``name contains``.
+    ``enumerate_fn`` runs an AppleScript ``name``-filter clause and returns
+    Matches (e.g. ``notes_tool._enumerate``); ``title_esc`` is already escaped
+    via ``macos.esc_applescript``. Returns ``(matches, strategy)`` so the caller
+    can phrase its reply per strategy ("exact" can skip the "did you mean" tone).
+    """
+    for strategy, op in (("exact", "is"), ("starts_with", "starts with"), ("contains", "contains")):
+        matches = await enumerate_fn(f' whose name {op} "{title_esc}"', limit)
+        if matches:
+            return matches, strategy
+    return [], "none"
+
+
+def word_common_prefix(titles: list[str]) -> str:
+    """Longest prefix shared by all titles, trimmed to whole words (never mid-word).
+
+    'Pendientes para hoy' + 'Pendientes para el miércoles' → 'Pendientes para'.
+    """
+    if not titles:
+        return ""
+    word_lists = [t.split() for t in titles]
+    common: list[str] = []
+    for group in zip(*word_lists, strict=False):
+        if all(w == group[0] for w in group):
+            common.append(group[0])
+        else:
+            break
+    return " ".join(common)
+
+
+def _suffix_after(title: str, prefix: str) -> str:
+    if prefix and title.lower().startswith(prefix.lower()):
+        return title[len(prefix) :].strip()
+    return title.strip()
+
+
+def _looks_temporal(suffixes: list[str]) -> bool:
+    for s in suffixes:
+        for w in s.lower().replace("'", " ").split():
+            if w in _TEMPORAL_WORDS:
+                return True
+    return False
+
+
+def suffix_prompt(matches: list[Match], common_prefix: str, *, lang: str = "es") -> str:
+    """Ask which match by their distinguishing suffix, not by number (Bug 19.5-B2).
+
+    "Pendientes, ¿para cuándo? Tengo 'hoy' y 'el miércoles'." Falls back to a
+    numeric prompt when the shared prefix is trivial, a suffix is empty, or there
+    are more than 4 options (too many to read out conversationally).
+    """
+    prefix = common_prefix.strip()
+    suffixes = [_suffix_after(m.title, prefix) for m in matches]
+    if not prefix or len(matches) > 4 or any(not s for s in suffixes):
+        listing = _enumerate_es(matches)
+        if lang == "en":
+            return f"I found {len(matches)}: {listing}. Which number?"
+        return f"Encontré {len(matches)}: {listing}. ¿Cuál número?"
+    temporal = _looks_temporal(suffixes)
+    if lang == "en":
+        q = "when for?" if temporal else "which one?"
+        quoted = " and ".join(f"'{s}'" for s in suffixes)
+        return f"{prefix} — {q} I have {quoted}."
+    q = "¿para cuándo?" if temporal else "¿cuál?"
+    quoted = " y ".join(f"'{s}'" for s in suffixes)
+    return f"{prefix}, {q} Tengo {quoted}."
 
 
 def disambiguate(
