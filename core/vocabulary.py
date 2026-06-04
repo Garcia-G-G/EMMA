@@ -196,6 +196,35 @@ def bias_words() -> list[str]:
     return result
 
 
+def bias_render(mode: str, budget_chars: int = 500) -> str:
+    """Render the bias words for the transcription model's expected format (19.5-A2).
+
+    - ``mode == "prompt"`` (whisper-1): space-joined free text, hard-capped at
+      ``budget_chars`` — byte-for-byte today's behavior.
+    - ``mode == "keywords"`` (gpt-realtime-whisper): a ``"Keywords: a, b, c"``
+      list, accumulated whole-word so it never exceeds ``budget_chars``. This is
+      the format the Realtime transcription docs recommend for the streaming
+      model, which ignores the free-text ``prompt``.
+
+    Priority order (identity → contacts → glossary → pages → apps → vocab) and
+    the dedup come from :func:`bias_words`; this only reformats + bounds.
+    """
+    words = bias_words()
+    if mode == "keywords":
+        prefix = "Keywords: "
+        picked: list[str] = []
+        length = len(prefix)
+        for w in words:
+            extra = len(w) + (2 if picked else 0)  # ", " separator
+            if length + extra > budget_chars:
+                break
+            picked.append(w)
+            length += extra
+        return prefix + ", ".join(picked)
+    # "prompt" (default): preserve today's exact rendering.
+    return " ".join(words)[:budget_chars]
+
+
 def _toml_escape(value: str) -> str:
     """Escape a string for a TOML basic (double-quoted) value.
 

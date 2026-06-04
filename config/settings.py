@@ -187,14 +187,14 @@ class Settings(BaseSettings):
     # Alternatives: `shimmer`, `sage`, `alloy` (female), `ash`, `cedar` (male).
     REALTIME_MODEL: str = "gpt-realtime-2"
     REALTIME_VOICE: str = "coral"
-    # Server-side transcription model for the input audio (drives the Whisper
-    # hot-word `prompt` biasing in core.vocabulary.bias_words).
-    # NOTE: `whisper-1` is slated for retirement in 2026. The streaming
-    # successor is `gpt-realtime-whisper`, BUT it does NOT support the `prompt`
-    # field — migrating there means moving the bias words to a comma-separated
-    # keyword list (see core/conversation.py:_build_session_properties). Kept as
-    # a setting so the swap is one line, not a code change.
-    REALTIME_TRANSCRIBE_MODEL: str = "whisper-1"
+    # Server-side transcription model for the input audio + how we render the
+    # hot-word bias (core.vocabulary.bias_render). `whisper-1` retires ~June 2026;
+    # its streaming successor `gpt-realtime-whisper` ignores the free-text
+    # `prompt` and wants a short "Keywords: a, b, c" list instead. Both are
+    # config so the migration is a one-line flip once Garcia A/B-tests his accent.
+    # Docs: https://developers.openai.com/api/docs/guides/realtime-transcription
+    REALTIME_TRANSCRIPTION_MODEL: str = "whisper-1"
+    REALTIME_BIAS_MODE: str = "prompt"  # "prompt" (whisper-1) | "keywords" (gpt-realtime-whisper)
     # Idle close: shut the Realtime WebSocket when no user/assistant
     # activity has been observed for this many seconds. Wake word
     # re-arms after each idle close.

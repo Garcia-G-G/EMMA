@@ -71,17 +71,18 @@ def test_create_note_uses_html_body_and_creates_folder() -> None:
 
 
 def test_read_note_falls_back_to_contains() -> None:
-    # Exact title misses (legacy flattened note) → contains fallback resolves it.
+    # Exact title misses (legacy flattened note); the tiered strategy
+    # (exact → starts-with → contains) resolves it on the contains tier.
     from tools.notes_tool import read_note
 
-    # 1st enumerate (exact) → empty; 2nd (contains) → one match; 3rd → body read.
-    seq = ["", "id1‖2026-06-02T10:00:00‖Errores de Emma Bitácora‖p", "el cuerpo"]
+    # enumerate: exact "" → starts-with "" → contains one match; then body read.
+    seq = ["", "", "id1‖2026-06-02T10:00:00‖Errores de Emma Bitácora‖p", "el cuerpo"]
     osa = AsyncMock(side_effect=seq)
     with patch("actions.macos.osascript", new=osa):
         res = _run(read_note(title="Errores de Emma"))
     assert res.success
     assert res.data["body"] == "el cuerpo"
-    assert "contains" in osa.call_args_list[1][0][0]  # 2nd call used a contains match
+    assert "contains" in osa.call_args_list[2][0][0]  # 3rd call used a contains match
 
 
 def test_list_notes_parses() -> None:
