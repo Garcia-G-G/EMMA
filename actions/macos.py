@@ -130,11 +130,16 @@ async def app_is_running(app: str) -> bool:
     return proc.returncode == 0
 
 
-async def launch_app(app: str, warmup_s: float = 1.5) -> None:
+async def launch_app(app: str, warmup_s: float = 1.5, *, background: bool = False) -> None:
     """Launch ``app`` via ``open -a`` and wait ``warmup_s`` for it to register
-    (so a follow-up AppleScript transport command lands on a live app). B3."""
+    (so a follow-up AppleScript transport command lands on a live app). B3.
+
+    ``background=True`` adds ``-g -j`` (don't steal focus, launch hidden) — for
+    daemon-side launches like the proactive calendar poll, where popping a
+    window in Garcia's face would be rude."""
     proc = await asyncio.create_subprocess_exec(
         "open",
+        *(("-g", "-j") if background else ()),
         "-a",
         app,
         stdout=asyncio.subprocess.DEVNULL,

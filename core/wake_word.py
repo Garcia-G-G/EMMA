@@ -19,6 +19,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -127,6 +129,30 @@ def _reset_model(model: Any) -> None:
         log.warning("wake_model_reset_failed", error=str(exc))
 
 
+def _make_near_miss_logger(
+    threshold: float, floor: float = 0.10, interval_s: float = 1.0
+) -> Callable[[float], None]:
+    """Rate-limited logger for sub-threshold wake scores.
+
+    Garcia's Spanish-accented "hey jarvis" often scores well below the
+    English-TTS ~0.99 — without seeing those scores we can't tune
+    WAKE_WORD_THRESHOLD with data. Scores in [floor, threshold) are logged at
+    most once per ``interval_s``; ambient noise (< floor) stays silent.
+    """
+    last = 0.0
+
+    def note(score: float) -> None:
+        nonlocal last
+        if score < floor or score >= threshold:
+            return
+        now = time.monotonic()
+        if now - last >= interval_s:
+            last = now
+            log.info("wake_score_near_miss", score=round(score, 3), threshold=threshold)
+
+    return note
+
+
 def _close_stream_background(stream: Any) -> None:
     """Abort + close a PortAudio stream off the event loop.
 
@@ -156,6 +182,7 @@ async def _listen_openwakeword() -> None:
     loop = asyncio.get_running_loop()
     threshold = settings.WAKE_WORD_THRESHOLD
     name = settings.WAKE_WORD_NAME
+    note_near_miss = _make_near_miss_logger(threshold)
 
     def _cb(indata: object, frames: int, _t: object, status: object) -> None:
         if status:
@@ -166,6 +193,8 @@ async def _listen_openwakeword() -> None:
             score = float(predictions.get(name, 0.0))
             if score >= threshold:
                 loop.call_soon_threadsafe(detected.set)
+            else:
+                note_near_miss(score)
         except Exception as exc:
             log.warning("wake_predict_failed", error=str(exc))
 

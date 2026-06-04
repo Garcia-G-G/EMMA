@@ -22,3 +22,4 @@ config/wake_words/*.onnx
 playwright-profile/
 tests/acceptance/run_*.md
 _planning/
+emma-debug-session.log
