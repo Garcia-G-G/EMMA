@@ -591,9 +591,12 @@ async def _build_session_properties() -> SessionProperties:
             input=AudioInput(
                 format=PCMAudioFormat(type="audio/pcm", rate=SAMPLE_RATE_HZ),
                 transcription=InputAudioTranscription(
-                    model="whisper-1",
-                    # Hot-word bias: nudge Whisper toward our technical
-                    # vocabulary. Trimmed to ≤500 chars per the Realtime API.
+                    model=settings.REALTIME_TRANSCRIBE_MODEL,
+                    # Hot-word bias: nudge transcription toward every proper noun
+                    # Emma knows (identity, contacts, glossary, apps, vocab — see
+                    # vocabulary.bias_words). Trimmed to ≤500 chars per the API.
+                    # NOTE: `prompt` is honored by whisper-1; the gpt-realtime-whisper
+                    # successor ignores it (move to a keyword list when migrating).
                     prompt=" ".join(vocabulary.bias_words())[:500],
                 ),
                 noise_reduction=InputAudioNoiseReduction(type="far_field"),

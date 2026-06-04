@@ -95,6 +95,20 @@ async def _enumerate(match_clause: str, limit: int) -> list[Match]:
     return parse_matches(raw)
 
 
+async def _enumerate_by_title(title_esc: str, limit: int) -> list[Match]:
+    """Find notes by exact title, falling back to a ``contains`` match.
+
+    Notes created before the HTML-body fix have their title flattened together
+    with their body (e.g. name = "Errores de Emma Bitácora…"), so an exact
+    ``name is`` lookup misses them. The ``contains`` fallback lets read/delete
+    still resolve those; disambiguation handles any extra matches it surfaces.
+    """
+    matches = await _enumerate(f' whose name is "{title_esc}"', limit)
+    if not matches:
+        matches = await _enumerate(f' whose name contains "{title_esc}"', limit)
+    return matches
+
+
 @tool()
 async def list_notes(query: str = "", limit: int = 10) -> ToolResult:
     """Lista tus notas de Apple Notes (título, fecha de modificación y un fragmento).
@@ -137,10 +151,18 @@ async def create_note(title: str, body: str, folder: str = "") -> ToolResult:
     """
     t = macos.esc_applescript(title)
     b = macos.esc_applescript(body)
-    note_props = f'{{body:"{t}" & linefeed & "{b}"}}'
+    # HTML body so Notes keeps the title (first line) clean and SEPARATE from the
+    # body. A plain "title\nbody" flattens into one title, which then breaks
+    # exact-title lookup in read_note/delete_note (19.4-followup fix).
+    html_body = f"<div>{t}</div><div>{b}</div>" if body else f"<div>{t}</div>"
+    note_props = f'{{body:"{html_body}"}}'
     if folder:
         f = macos.esc_applescript(folder)
-        make = f'tell folder "{f}" to make new note with properties {note_props}'
+        # Create the folder on demand instead of failing with -1728.
+        make = (
+            f'if not (exists folder "{f}") then make new folder with properties {{name:"{f}"}}\n'
+            f'tell folder "{f}" to make new note with properties {note_props}'
+        )
     else:
         make = f"make new note with properties {note_props}"
     script = f'tell application "Notes"\n{make}\nend tell'
@@ -185,7 +207,7 @@ async def read_note(title: str, index: int | None = None) -> ToolResult:
     Si hay varias con el mismo nombre, pide cuál (por número)."""
     t = macos.esc_applescript(title)
     try:
-        matches = await _enumerate(f' whose name is "{t}"', limit=25)
+        matches = await _enumerate_by_title(t, limit=25)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
     chosen, response = disambiguate(matches, index, noun="nota", title=title)
@@ -217,8 +239,8 @@ async def merge_notes(
     st = macos.esc_applescript(source_title)
     tt = macos.esc_applescript(target_title)
     try:
-        src_matches = await _enumerate(f' whose name is "{st}"', limit=25)
-        tgt_matches = await _enumerate(f' whose name is "{tt}"', limit=25)
+        src_matches = await _enumerate_by_title(st, limit=25)
+        tgt_matches = await _enumerate_by_title(tt, limit=25)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
 
@@ -272,7 +294,7 @@ async def delete_note(title: str, index: int | None = None, confirmed: bool = Fa
     nunca borra todas (Bug 19.2-B2)."""
     t = macos.esc_applescript(title)
     try:
-        matches = await _enumerate(f' whose name is "{t}"', limit=25)
+        matches = await _enumerate_by_title(t, limit=25)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude leer las notas: {exc}", False)
 
