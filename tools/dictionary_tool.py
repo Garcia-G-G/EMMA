@@ -6,6 +6,7 @@ import subprocess
 
 from core import dictionary, vocabulary
 from tools.base import ToolResult, tool
+from tools.disambiguation import suggest_similar, suggestion_question
 
 
 @tool()
@@ -129,13 +130,26 @@ async def remember_stt_correction(wrong: str, right: str, section: str = "auto")
 
 
 @tool()
-async def open_my_page(name: str) -> ToolResult:
+async def open_my_page(name: str, picked: str = "", confirmed: bool = False) -> ToolResult:
     """Abre una de las páginas guardadas de Garcia por nombre.
 
     Úsalo cuando diga "Emma, abre mi <name>" (GitHub, calendar, portfolio, ...).
+    Si sugerí opciones y Garcia eligió, re-llámame con `picked=<su elección>`
+    y confirmed=true (21-B25).
     """
-    p = dictionary.find_page(name)
+    query = (picked or name or "").strip()
+    p = dictionary.find_page(query)
     if not p:
-        return ToolResult(False, None, f"No conozco una página llamada '{name}'.", False)
+        pages = dictionary.pages()
+        candidates = sorted({k for k in pages} | {pg.title for pg in pages.values() if pg.title})
+        suggestions = suggest_similar(query, candidates)
+        if suggestions:
+            return ToolResult(
+                True,
+                {"query": query, "suggestions": [s for s, _ in suggestions]},
+                suggestion_question(query, suggestions, noun="una página llamada"),
+                requires_confirmation=True,
+            )
+        return ToolResult(False, None, f"No conozco una página llamada '{query}'.", False)
     subprocess.Popen(["open", p.url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return ToolResult(True, {"url": p.url}, f"Abriendo {p.title}.", False)

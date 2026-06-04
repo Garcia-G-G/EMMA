@@ -21,6 +21,7 @@ from typing import Any
 
 from core import app_capabilities, dictionary
 from tools.base import ToolResult, tool
+from tools.disambiguation import suggest_similar, suggestion_question
 
 
 def _q(s: str) -> str:
@@ -98,7 +99,12 @@ async def _open(*args: str) -> None:
 
 @tool()
 async def open_in_app(
-    target: str, app: str = "", kind: str = "", fields: dict[str, str] | None = None
+    target: str,
+    app: str = "",
+    kind: str = "",
+    fields: dict[str, str] | None = None,
+    picked: str = "",
+    confirmed: bool = False,
 ) -> ToolResult:
     """Abre algo en una app: una URL directa, un recurso guardado, o destino + app.
 
@@ -108,9 +114,10 @@ async def open_in_app(
     - "Emma, crea una tarea en Things: comprar leche"
     - "Emma, abre <url>"
     `kind` es el tipo de recurso (connection/channel/dm/note); `fields` aporta
-    datos extra para la plantilla cuando Garcia los dicta.
+    datos extra. Si sugerí opciones ("¿quisiste decir…?") y Garcia eligió,
+    re-llámame con `picked=<su elección>` y confirmed=true (21-B25).
     """
-    target = (target or "").strip()
+    target = (picked or target or "").strip()
     if not target and not app:
         return ToolResult(False, None, "¿Qué abro y en qué app?", False)
 
@@ -165,8 +172,22 @@ async def open_in_app(
             True, {"url": url, "app": app, "kind": kind}, f"Abriendo {target} en {app}.", False
         )
 
-    # A resource was named (kind given) but nothing matched → offer to learn it.
+    # A resource was named (kind given) but nothing matched → fuzzy-suggest
+    # from the saved connections (21-B25: the TablePlus mistranscription fix);
+    # only when nothing is even close, offer to learn it.
     if kind and not app:
+        conns = dictionary.connections()
+        names = sorted(
+            {k for k in conns} | {str(v.get("name", "")) for v in conns.values() if v.get("name")}
+        )
+        suggestions = suggest_similar(target, names)
+        if suggestions:
+            return ToolResult(
+                True,
+                {"query": target, "suggestions": [s for s, _ in suggestions]},
+                suggestion_question(target, suggestions, noun="una conexión"),
+                requires_confirmation=True,
+            )
         return ToolResult(
             False,
             None,

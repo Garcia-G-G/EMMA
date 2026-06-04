@@ -46,11 +46,22 @@ async def recent_threads(limit: int = 5) -> ToolResult:
 
 
 @tool(destructive=True)
-async def send_imessage(recipient: str, body: str, confirmed: bool = False) -> ToolResult:
+async def send_imessage(
+    recipient: str, body: str, picked: str = "", confirmed: bool = False
+) -> ToolResult:
     """Envía un iMessage a `recipient`. Pide confirmación antes de enviar.
 
-    `recipient` es un número de teléfono o correo asociado a iMessage.
+    `recipient` puede ser número/correo O el nombre de un contacto guardado
+    ('mi mamá'). Si sugerí contactos parecidos y Garcia eligió, re-llámame
+    con `picked=<su elección>` (21-B25).
     """
+    from tools.contact_resolve import resolve_recipient
+
+    resolved, miss = resolve_recipient(picked or recipient)
+    if miss is not None:
+        return miss
+    assert resolved is not None
+    recipient = resolved
     if not confirmed:
         return ToolResult(
             True,

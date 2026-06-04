@@ -102,8 +102,21 @@ async def draft_to(recipient: str, subject: str, body: str) -> ToolResult:
 
 
 @tool(destructive=True)
-async def send_to(recipient: str, subject: str, body: str, confirmed: bool = False) -> ToolResult:
-    """Envía un correo a `recipient`. Pide confirmación antes de enviarlo."""
+async def send_to(
+    recipient: str, subject: str, body: str, picked: str = "", confirmed: bool = False
+) -> ToolResult:
+    """Envía un correo a `recipient`. Pide confirmación antes de enviarlo.
+
+    `recipient` puede ser un correo O un contacto guardado ('mi mamá'). Si
+    sugerí contactos parecidos y Garcia eligió, re-llámame con
+    `picked=<su elección>` (21-B25)."""
+    from tools.contact_resolve import resolve_recipient
+
+    resolved, miss = resolve_recipient(picked or recipient)
+    if miss is not None:
+        return miss
+    assert resolved is not None
+    recipient = resolved
     if not confirmed:
         return ToolResult(
             True,

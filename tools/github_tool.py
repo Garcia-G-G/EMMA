@@ -177,6 +177,22 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
                             return _matches_result(
                                 matches, f"Encontré {len(matches)} repos del usuario {q}:"
                             )
+                # 21-B25: before giving up, check whether the query is a
+                # mistranscription of Garcia's OWN username (the most common
+                # case: "gilbergaciata" → his handle). One mechanism — the
+                # transversal suggest_similar — never bespoke fuzzy logic.
+                from core import dictionary
+                from tools.disambiguation import suggest_similar
+
+                own = dictionary.user_profile().get("github_username", "")
+                if own and suggest_similar(q, [own], threshold=0.6):
+                    return ToolResult(
+                        True,
+                        {"matches": [], "suggestions": [own]},
+                        f"No encontré '{q}', pero se parece a tu usuario '{own}'. "
+                        "¿Te enseño tus repos?",
+                        requires_confirmation=True,
+                    )
                 return ToolResult(
                     True,
                     {"matches": []},
