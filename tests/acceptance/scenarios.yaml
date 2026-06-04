@@ -33,11 +33,11 @@
       {
         "tool": "latest_video_from_creator",
         "args_contain": {
-          "creator_name": "Nill Ojeda"
+          "creator_name": "Ojeda"
         }
       }
     ],
-    "expected_spoken_pattern": "abriendo el video más reciente de nill ojeda",
+    "expected_spoken_pattern": "(video más reciente|ojeda)",
     "mock_spoken_text": "Abriendo el video más reciente de Nill Ojeda: ejemplo de video.",
     "max_latency_ms": 3500,
     "destructive": false
@@ -262,7 +262,7 @@
         }
       }
     ],
-    "expected_spoken_pattern": "(creé|lista|nota)",
+    "expected_spoken_pattern": "(creé|lista|listo|hecho|ya quedó|compras)",
     "mock_spoken_text": "Listo, creé la nota 'Compras'.",
     "max_latency_ms": 4000,
     "destructive": false
@@ -644,7 +644,7 @@
     "given": "No note named.",
     "utterance": "Hey Emma, agrégalo a la nota.",
     "expected_actions": [],
-    "expected_spoken_pattern": "(cuál|qué nota|qué agrego)",
+    "expected_spoken_pattern": "(cuál|qué nota|qué agrego|necesito|título|texto)",
     "mock_spoken_text": "¿A cuál nota y qué agrego?",
     "max_latency_ms": 4000,
     "destructive": false

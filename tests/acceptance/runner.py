@@ -619,7 +619,8 @@ def main() -> int:
     if args.filter:
         import fnmatch
 
-        scenarios = [s for s in scenarios if fnmatch.fnmatch(s["id"], args.filter)]
+        globs = [g.strip() for g in args.filter.split(",") if g.strip()]
+        scenarios = [s for s in scenarios if any(fnmatch.fnmatch(s["id"], g) for g in globs)]
         if not scenarios:
             parser.error(f"no scenario id matches {args.filter!r}")
 

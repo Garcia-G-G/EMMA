@@ -62,9 +62,33 @@ Not one bug — three stacked causes, confirmed from the session log:
    ("after_speech") — by design, but combined with (1) it reads as "she
    stopped listening". Revisit once wake is reliable.
 
-**Observability gap:** input audio transcription is NOT enabled on the
-Realtime session — the log never shows what Emma *heard*. Worth enabling
-in debug mode for future diagnosis.
+**Observability gap:** ~~input audio transcription is NOT enabled~~ —
+WRONG, it IS enabled (19.5); the websockets trace just truncates the event
+names. Real gap found in 19.7 (see §3).
+
+## 3. 🔴 Findings from the 19.7 voice harness (2026-06-04) — for the next bug-fix prompt
+
+1. **SAFETY — destructive self-confirmation from STT noise.** Voice run
+   V13: Whisper transcribed a trailing artifact as "See" ("…borra mi nota
+   compras See"), and Emma chained `delete_note` →
+   `delete_note(confirmed=true)` in the SAME turn ("¿Borro…? Hecho.") —
+   the question was asked and self-answered. Confirmation of destructive
+   tools must require assent from a SEPARATE user turn.
+2. **Reflection gap root-caused.** `transcript_captured` has fired 0 times
+   in ALL history: user `TranscriptionFrame`s travel UPSTREAM of the LLM
+   (never reach the downstream `TranscriptCollector`), and assistant
+   `LLMTextFrame`s are absorbed by `LLMAssistantAggregator` before the
+   collector. Fix = move/duplicate the collector taps (the 19.7
+   `_TestTranscriptTap` shows exactly where the frames exist) — then
+   memory reflection finally runs.
+3. **Language-mirroring violation.** V46 (Spanish ask) → Emma's decline
+   drifted into English mid-response ("I can't post to Twitter…").
+   B20 pinned the greeting; per-turn mirroring still slips after tools.
+4. **STT proper-noun snapshot.** "Nill Ojeda" → "Neil Ojeda" (A01);
+   wake+content in one breath risks artifacts (V13's "See"). Candidates
+   for `remember_stt_correction` / vocabulary aliases.
+5. **Brittle corpus patterns** (fixed in 19.7): exact phrasing asserts
+   fail against the Variety rule — assert intent, not wording.
 
 **When:** Startup, fired 3× within ~2s (20:17:11–20:17:12)
 
