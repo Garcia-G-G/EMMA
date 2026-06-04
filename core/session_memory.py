@@ -62,10 +62,15 @@ def clear() -> None:
 
 
 def last_user_turn_ts() -> float | None:
-    """Timestamp of the most recent real user speech, or None."""
+    """Timestamp of the most recent real user speech, or None.
+
+    Both signals count: ``speech_started`` (VAD onset — arrives immediately,
+    what the confirmation invariant needs) and ``speech`` (the transcription,
+    which can lag the model's own reaction to the audio).
+    """
     with _lock:
         for ev in reversed(_events):
-            if ev.role == "user" and ev.kind == "speech":
+            if ev.role == "user" and ev.kind in ("speech", "speech_started"):
                 return ev.ts
     return None
 

@@ -61,6 +61,8 @@ _INTERESTING = {
     "conversation_start",
     "session_close",
     "conversation_end",
+    "echo_gate_on",  # bot started speaking — holds the quiet-window open
+    "echo_gate_off",  # bot (and its 600ms tail) finished
 }
 
 _AFTER_BOT_SILENCE_S = 8.0  # bot already answered + this much quiet → turn over
@@ -167,11 +169,17 @@ def _collect_turn(proc: EmmaProcess, t_play: float) -> tuple[list[dict[str, Any]
     deadline = time.monotonic() + _SCENARIO_CAP_S
     last_interesting = time.monotonic()
     bot_answered = False
+    bot_speaking = False
     end_reason = "cap"
     while time.monotonic() < deadline:
         ev = proc.next_event(timeout=1.0)
         now = time.monotonic()
         if ev is None:
+            # While Emma is mid-utterance no events arrive at all — a long
+            # answer must NOT trip the quiet windows (real bug: V56's reply
+            # was cut after the preamble). The echo gate holds them open.
+            if bot_speaking:
+                continue
             # A turn can hold several bot utterances (preamble → tool →
             # answer), so "first bot text" isn't the end — quiet after one is.
             if bot_answered and now - last_interesting > _AFTER_BOT_SILENCE_S:
@@ -184,7 +192,11 @@ def _collect_turn(proc: EmmaProcess, t_play: float) -> tuple[list[dict[str, Any]
         name = ev.get("event", "")
         if name in _INTERESTING:
             last_interesting = now
-        if name == "bot_text_test":
+        if name == "echo_gate_on":
+            bot_speaking = True
+        elif name == "echo_gate_off":
+            bot_speaking = False
+        elif name == "bot_text_test":
             bot_answered = True
         elif name in ("session_close", "conversation_end"):
             end_reason = "session_close"

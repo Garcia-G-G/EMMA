@@ -66,7 +66,39 @@ Not one bug — three stacked causes, confirmed from the session log:
 WRONG, it IS enabled (19.5); the websockets trace just truncates the event
 names. Real gap found in 19.7 (see §3).
 
-## 3. 🔴 Findings from the 19.7 voice harness (2026-06-04) — for the next bug-fix prompt
+## 3. Findings from the 19.7 voice harness (2026-06-04) — STATUS post-Prompt 21
+
+1. ✅ **FIXED (21-B24):** self-confirmation — confirmation invariant in the
+   function handler (event-ordered, VAD-onset user-turn marker). V13/V14
+   voice-verified: question + silence → no delete; real "sí" → delete.
+2. 🟡 **PARTIALLY ADDRESSED (21-B24):** session-memory taps now capture
+   user/assistant text in production — but the REFLECTION pipeline still
+   reads the old dead collector. Wiring reflection onto the taps = next.
+3. ✅ **FIXED (21-B26):** strict-mirror prompt rule + web.py summarize
+   answers in preferred_lang. V56 voice-verified (full Spanish reply).
+4. ✅ **FIXED (21-B27):** correction directive with 3 examples — V57
+   voice-verified: Emma called remember_stt_correction unprompted and
+   vocabulary.toml now carries [NillOjeda] learned from voice.
+5. ✅ **FIXED (19.7/21):** brittle corpus patterns loosened to intent.
+
+## 4. 🔴 New findings from the Prompt 21 voice runs — for the next prompt
+
+1. **Realtime-acts-before-transcript race (root-caused + worked around).**
+   The model reacts to AUDIO; `input_audio_transcription.completed` lands
+   AFTER the resulting tool call. Anything keyed on transcripts (reflection,
+   future features) must treat them as trailing metadata, never as the
+   action trigger. The B24 invariant uses VAD onset for this reason.
+2. **Speaker→mic fallback is noise-vulnerable.** Two runs were contaminated
+   by real notification sounds (STT heard "iMessage iMessage iMessage…").
+   BlackHole install removes the whole class. Until then, runs need Do Not
+   Disturb.
+3. **Repeated voice runs pollute real app state** (3 duplicate 'Compras'
+   notes accumulated). The harness needs per-scenario setup/teardown hooks
+   (e.g. `setup_script` / `teardown_script` fields) — next harness prompt.
+4. **Emma greets on wake now** ("Hola, soy ema…"), consuming a turn before
+   the utterance. Harmless for humans, adds latency for the harness; the
+   B20 first-sentence pin made it more consistent. Consider a no-greeting
+   directive when the session opens from a barge-in-style immediate command.
 
 1. **SAFETY — destructive self-confirmation from STT noise.** Voice run
    V13: Whisper transcribed a trailing artifact as "See" ("…borra mi nota

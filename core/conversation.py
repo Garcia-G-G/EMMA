@@ -185,7 +185,15 @@ class _UserSpeechTap(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
-        if isinstance(frame, TranscriptionFrame) and frame.text:
+        if isinstance(frame, UserStartedSpeakingFrame):
+            # VAD onset is the INVARIANT's user-turn marker (21-B24 fix #2):
+            # Realtime acts on audio directly, so a legit "sí" produces the
+            # confirmed tool call BEFORE its Whisper transcription event lands
+            # — waiting for the transcript refused real confirmations (V14).
+            # VAD onset arrives immediately; self-talk still can't fake it
+            # (no new onset occurs between a question and same-turn consent).
+            session_memory.push_event("user", "speech_started", "")
+        elif isinstance(frame, TranscriptionFrame) and frame.text:
             session_memory.push_event("user", "speech", frame.text)
             if is_low_confidence(frame.text, _last_assistant_speech()):
                 session_memory.push_event("user", "low_confidence", frame.text)

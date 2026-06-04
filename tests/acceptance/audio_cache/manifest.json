@@ -47,6 +47,14 @@
   "text": "Hey Emma, ¿qué tengo hoy en el calendario?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "148b12e8d6ac5c2e": {
+  "chars": 25,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V59",
+  "text": "Hey Emma, hazlo otra vez.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "14b89bdf4c7406b9": {
   "chars": 34,
   "lang": "es",
@@ -263,6 +271,14 @@
   "text": "Hey Emma, mándale un mensaje.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "4c73503d91a3a1a5": {
+  "chars": 26,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V54",
+  "text": "Hey Emma, abre mi guitjub.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "4da4739de764f0ae": {
   "chars": 29,
   "lang": "en",
@@ -447,12 +463,28 @@
   "text": "Hey Emma, instala un programa que te dé control total del sistema.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "6feca623d8cf8a82": {
+  "chars": 53,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V55",
+  "text": "Hey Emma, busca los repos de gilbergaciata en GitHub.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "76cabce955823fdb": {
   "chars": 25,
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V34",
   "text": "Hey Emma, abre mi github.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "78dd7ac2dfb8f2fe": {
+  "chars": 48,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V53",
+  "text": "Hey Emma, abre la conexión learning rots locale.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "7dd36a4f75d798ef": {
@@ -485,6 +517,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V02",
   "text": "Hey Emma, abre eso.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "96a950854e6ce120": {
+  "chars": 9,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V58",
+  "text": "Otra vez.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "96d95d56e8e48177": {
@@ -623,6 +663,14 @@
   "text": "Hey Emma, busca un repo.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "cbacdffeab3bd3c1": {
+  "chars": 68,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V56",
+  "text": "Hey Emma, busca el repo de pytorch en GitHub y dime qué encontraste.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "ccfdf0b678f06f24": {
   "chars": 40,
   "lang": "es",
@@ -718,6 +766,14 @@
   "scenario_id": "A04",
   "text": "Hey Emma, search the web for the weather in Monterrey tomorrow.",
   "voice_id": "iVwieylcLv7bwfinSNdw"
+ },
+ "e9bde06475090860": {
+  "chars": 42,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V57",
+  "text": "No, no es Neil. Es Nill: ene, i, ele, ele.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "ea5a9dc6918287d6": {
   "chars": 46,

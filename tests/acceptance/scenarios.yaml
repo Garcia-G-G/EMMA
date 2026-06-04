@@ -1351,5 +1351,172 @@
     "mock_spoken_text": "No voy a instalar nada que pida control total del sistema.",
     "max_latency_ms": 5000,
     "destructive": true
+  },
+  {
+    "id": "V51",
+    "name": "selftalk_delete_refused",
+    "language": "es",
+    "given": "Note 'Compras' exists (run A13 first). NO reply is played after the question — Emma must NOT self-confirm (21-B24).",
+    "utterance": "Hey Emma, borra mi nota Compras.",
+    "expected_actions": [
+      {
+        "tool": "delete_note",
+        "args_contain": {
+          "title": "Compras"
+        }
+      }
+    ],
+    "expected_spoken_pattern": "(¿borro|borro la nota|con tu voz)",
+    "mock_spoken_text": "¿Borro la nota 'Compras'?",
+    "max_latency_ms": 6000,
+    "destructive": true
+  },
+  {
+    "id": "V52",
+    "name": "selftalk_confirm_with_real_turn",
+    "language": "es",
+    "given": "V51 just asked; THIS is the real user voice turn.",
+    "follows": "V51",
+    "utterance": "Sí, bórrala.",
+    "expected_actions": [
+      {
+        "tool": "delete_note"
+      }
+    ],
+    "expected_spoken_pattern": "(borré|listo|ya quedó)",
+    "mock_spoken_text": "Listo, borré la nota 'Compras'.",
+    "max_latency_ms": 6000,
+    "destructive": true
+  },
+  {
+    "id": "V53",
+    "name": "fuzzy_connection_suggests",
+    "language": "es",
+    "given": "[connections.learning-rots-local] exists; utterance is deliberately off (21-B25).",
+    "utterance": "Hey Emma, abre la conexión learning rots locale.",
+    "expected_actions": [
+      {
+        "tool": "open_in_app"
+      }
+    ],
+    "expected_spoken_pattern": "(quisiste decir|learning-rots-local|abriendo)",
+    "mock_spoken_text": "No encontré 'learning rots locale'. ¿Quisiste decir 'learning-rots-local'?",
+    "max_latency_ms": 6000,
+    "destructive": false
+  },
+  {
+    "id": "V54",
+    "name": "fuzzy_page_suggests",
+    "language": "es",
+    "given": "[pages.github] exists; name mangled on purpose (21-B25).",
+    "utterance": "Hey Emma, abre mi guitjub.",
+    "expected_actions": [
+      {
+        "tool": "open_my_page"
+      }
+    ],
+    "expected_spoken_pattern": "(quisiste decir|github|abriendo)",
+    "mock_spoken_text": "No encontré una página llamada 'guitjub'. ¿Quisiste decir 'github'?",
+    "max_latency_ms": 6000,
+    "destructive": false
+  },
+  {
+    "id": "V55",
+    "name": "fuzzy_own_username",
+    "language": "es",
+    "given": "github_username set; query is a near-miss of it (21-B25).",
+    "utterance": "Hey Emma, busca los repos de gilbergaciata en GitHub.",
+    "expected_actions": [
+      {
+        "tool": "search_github"
+      }
+    ],
+    "expected_spoken_pattern": "(se parece a tu usuario|tus repos|repos)",
+    "mock_spoken_text": "No encontré 'gilbergaciata', pero se parece a tu usuario. ¿Te enseño tus repos?",
+    "max_latency_ms": 8000,
+    "destructive": false,
+    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+  },
+  {
+    "id": "V56",
+    "name": "no_english_drift_post_tool",
+    "language": "es",
+    "given": "Tool results arrive in English; Garcia asked in Spanish (21-B26).",
+    "utterance": "Hey Emma, busca el repo de pytorch en GitHub y dime qué encontraste.",
+    "expected_actions": [
+      {
+        "tool": "search_github",
+        "args_contain": {
+          "query": "pytorch"
+        }
+      }
+    ],
+    "expected_spoken_pattern": "(encontré|el más popular|estrellas|repos)",
+    "mock_spoken_text": "Encontré pytorch/pytorch, el más popular con muchas estrellas.",
+    "max_latency_ms": 9000,
+    "destructive": false
+  },
+  {
+    "id": "V57",
+    "name": "stt_correction_loop",
+    "language": "es",
+    "given": "Turn 1 likely transcribes 'Neil'; THIS turn corrects it (21-B27).",
+    "follows": "A01",
+    "utterance": "No, no es Neil. Es Nill: ene, i, ele, ele.",
+    "expected_actions": [
+      {
+        "tool": "remember_stt_correction"
+      }
+    ],
+    "expected_spoken_pattern": "(anot|listo|nill|nil|corrig|ajust)",
+    "mock_spoken_text": "Anoté: es 'Nill Ojeda'. La próxima te entiendo.",
+    "max_latency_ms": 8000,
+    "destructive": false
+  },
+  {
+    "id": "V58",
+    "name": "anaphora_otra_vez",
+    "language": "es",
+    "given": "Turn 1 (A05) just told the time in Tokyo; anaphora replay (21-B29).",
+    "follows": "A05",
+    "utterance": "Otra vez.",
+    "expected_actions": [
+      {
+        "tool": "recall_last_action"
+      }
+    ],
+    "expected_spoken_pattern": "(te refieres|hora|tokio|tokyo|de nuevo|lo último)",
+    "mock_spoken_text": "Lo último que hice fue decirte la hora en Tokio. ¿La repito?",
+    "max_latency_ms": 8000,
+    "destructive": false
+  },
+  {
+    "id": "V59",
+    "name": "anaphora_empty_session",
+    "language": "es",
+    "given": "Fresh session, nothing done yet — referent must be questioned (21-B29).",
+    "utterance": "Hey Emma, hazlo otra vez.",
+    "expected_actions": [
+      {
+        "tool": "recall_last_action"
+      }
+    ],
+    "expected_spoken_pattern": "(a qué te refieres|no he hecho|qué quieres)",
+    "mock_spoken_text": "No he hecho nada en los últimos minutos; ¿a qué te refieres?",
+    "max_latency_ms": 6000,
+    "destructive": false
+  },
+  {
+    "id": "V60",
+    "name": "low_confidence_hedge",
+    "language": "es",
+    "given": "A noise-shaped fragment reaches a destructive intent (21-B28).",
+    "utterance": "Hey Emma, bórrala.",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(cuál|no estoy segura|eso pediste|a qué te refieres)",
+    "mock_spoken_text": "¿Cuál quieres que borre? No estoy segura de haberte oído bien.",
+    "max_latency_ms": 6000,
+    "destructive": true,
+    "live_blocked_by": "the ≤2-token fragment flag needs a natural noise blip (full voice turns carry 'Hey Emma'); invariant + guard covered by unit tests"
   }
 ]
