@@ -166,3 +166,7 @@ stt_aliases = ["yutub", "yutu"]
 [limitacinterminalCursor]
 canonical = "limitación terminal Cursor"
 stt_aliases = ["limitación: terminal Cursor"]
+
+[NillOjeda]
+canonical = "Nill Ojeda"
+stt_aliases = ["Nil Ojeda"]

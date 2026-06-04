@@ -257,3 +257,23 @@ class TestAnaphora:
         res = await recall_last_action()
         assert res.data["last_action"] is None
         assert "a qué te refieres" in res.user_message
+
+
+class TestVadOnsetCountsAsUserTurn:
+    """21-B24 fix #2: Realtime acts on audio before the transcript lands —
+    VAD onset must satisfy the invariant or legit confirmations get refused."""
+
+    def test_speech_started_counts(self):
+        session_memory.clear()
+        session_memory.push_event("tool", "requires_confirmation:delete_note")
+        session_memory.push_event("user", "speech_started", "")
+        t_req = session_memory.last_tool_request_confirmation_ts("delete_note")
+        t_user = session_memory.last_user_turn_ts()
+        assert t_user is not None and t_user > t_req
+
+    def test_no_onset_still_refuses(self, monkeypatch):
+        session_memory.clear()
+        handler = _handler()
+        session_memory.push_event("tool", "requires_confirmation:delete_note")
+        payload = _call(handler, "delete_note", {"confirmed": True})
+        assert payload["success"] is False
