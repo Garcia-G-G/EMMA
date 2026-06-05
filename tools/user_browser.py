@@ -16,7 +16,6 @@ import webbrowser
 
 from actions import macos
 from core import app_router
-from core.apps import resolve
 from tools.base import ToolResult, tool
 
 
@@ -37,7 +36,7 @@ async def open_url(url: str, new_window: bool = False) -> ToolResult:
     """
     if "://" not in url:
         url = "https://" + url
-    app = resolve("browser") or ""
+    app = app_router.preferred("browser")
     try:
         if app:
             args = ["open", "-a", app, url]
@@ -75,7 +74,7 @@ async def close_current_tab(browser: str = "") -> ToolResult:
     """Cierra la pestaña activa del navegador. Directo y rápido (Bug 19.2-B5).
 
     Úsalo cuando Garcia diga 'cierra esta pestaña' / 'cierra la pestaña'."""
-    app = browser or resolve("browser") or "Safari"
+    app = browser or app_router.preferred("browser")
     if app == "Safari":
         script = 'tell application "Safari" to close current tab of front window'
     elif app in _CHROME_SYNTAX:
@@ -212,7 +211,7 @@ async def list_browser_tabs(browser: str = "") -> ToolResult:
 
     Úsalo cuando Garcia diga "¿cuántas pestañas tengo?" / "lista mis pestañas".
     """
-    app = browser or resolve("browser") or "Safari"
+    app = browser or app_router.preferred("browser")
     try:
         tabs = await _all_tabs(app)
     except macos.AppleScriptError as exc:
@@ -257,7 +256,7 @@ async def close_duplicate_tabs(
     Úsalo cuando Garcia diga "cierra las pestañas duplicadas". Si pide
     explícitamente incluir Google ("cierra todas, incluyendo Google"), pasa
     protect_domains=[] SOLO en esa llamada."""
-    app = browser or resolve("browser") or "Safari"
+    app = browser or app_router.preferred("browser")
     protect = list(_DEFAULT_PROTECT) if protect_domains is None else protect_domains
     try:
         tabs = await _all_tabs(app)
@@ -304,7 +303,7 @@ async def close_tabs_matching(
     p = (pattern or "").strip().lower()
     if not p:
         return ToolResult(False, None, "¿Qué pestañas cierro? Dame un patrón.", False)
-    app = browser or resolve("browser") or "Safari"
+    app = browser or app_router.preferred("browser")
     protect = list(_DEFAULT_PROTECT) if protect_domains is None else protect_domains
     try:
         tabs = await _all_tabs(app)
@@ -347,20 +346,25 @@ async def close_tabs_matching(
 async def current_tab_url(browser: str = "") -> ToolResult:
     """Devuelve la URL de la pestaña activa del navegador preferido.
 
-    Funciona con Safari y Chrome vía AppleScript; otros devuelven 'no soportado'.
+    Funciona con Safari y la familia Chromium (Chrome/Brave/Edge) vía
+    AppleScript; otros navegadores devuelven 'no soportado'.
     """
-    app = browser or resolve("browser") or ""
-    if app not in ("Safari", "Google Chrome", "Chrome"):
+    app = browser or app_router.preferred("browser")
+    # 22-B34: Brave/Edge share Chrome's AppleScript dictionary (_CHROME_SYNTAX,
+    # proven by the tab tools) — the old Safari-or-Chrome-only refusal was a
+    # stale patch that broke this for Garcia's actual browser (Brave).
+    if app != "Safari" and app not in _CHROME_SYNTAX:
         return ToolResult(
             False,
             None,
-            f"Saber la URL activa solo funciona con Safari o Chrome (tienes {app}).",
+            f"Saber la URL activa no funciona con {app} (sin diccionario AppleScript).",
             False,
         )
     if app == "Safari":
         script = 'tell application "Safari" to get URL of current tab of front window'
     else:
-        script = 'tell application "Google Chrome" to get URL of active tab of front window'
+        a = macos.esc_applescript(app)
+        script = f'tell application "{a}" to get URL of active tab of front window'
     ok, out = await macos.osascript_or_friendly(
         script, timeout_s=4.0, on_error="No pude leer la URL"
     )

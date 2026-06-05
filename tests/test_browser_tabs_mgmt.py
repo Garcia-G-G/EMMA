@@ -24,7 +24,7 @@ def _wired(monkeypatch):
     monkeypatch.setattr(ub.macos, "osascript", AsyncMock(return_value=RAW))
     closer = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr(ub.macos, "osascript_or_friendly", closer)
-    monkeypatch.setattr(ub, "resolve", lambda _cat: "Safari")
+    monkeypatch.setattr(ub.app_router, "preferred", lambda _cat: "Safari")
     return closer
 
 
