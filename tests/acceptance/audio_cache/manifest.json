@@ -31,6 +31,22 @@
   "text": "Hey Jarvis. Hey Emma, ¿qué sabes de mí?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "10d43b03d1742fe7": {
+  "chars": 25,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "b39-smoke",
+  "text": "Hey Jarvis. ¿Qué hora es?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "10d718199c5de697": {
+  "chars": 52,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "b39v2",
+  "text": "¿Qué hora es ahorita? Dime la hora exacta por favor.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "11d78ed9808f1e11": {
   "chars": 28,
   "lang": "es",
@@ -77,6 +93,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V14",
   "text": "Sí, bórrala.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "1785eafbb0a19541": {
+  "chars": 22,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V66",
+  "text": "Hey Emma, ¿sigues ahí?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "18094edbe9bf9704": {
@@ -133,6 +157,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A06",
   "text": "Hey Emma, recuérdame que soy alérgico a los mariscos.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "297a5b7ea1a087c3": {
+  "chars": 13,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "b39",
+  "text": "¿Qué hora es?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "2c09d448c4edf68d": {
@@ -669,6 +701,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A07",
   "text": "Hey Emma, ¿qué sabes de mí?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "bcf2fa7bf64394be": {
+  "chars": 57,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V67",
+  "text": "Hey Emma, pon la playlist Classical Essentials en Música.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "c2f2aaedddb832b6": {
