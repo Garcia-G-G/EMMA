@@ -214,9 +214,12 @@ class Settings(BaseSettings):
     # PipelineTask.idle_timeout_secs. Pipecat will cancel the pipeline
     # if no BotSpeakingFrame / UserSpeakingFrame has fired for this
     # long; the orchestrator then loops back to wake-word listening.
-    # 300s (5 min) keeps Emma in the conversation through natural pauses
-    # instead of dropping out after 2 minutes mid-task.
-    SESSION_MAX_S: int = 300
+    # 900s (15 min, 22-B31): Realtime bills active audio minutes, not idle
+    # WebSocket time — idle is cheap, and dying mid-thought isn't. The
+    # 19.2-B1 loopback watchdog is unaffected (it measures the gap AFTER a
+    # session ends, not session length). Explicit closes still work via the
+    # playback tools' ends_session flag / "ya, déjalo".
+    SESSION_MAX_S: int = 900
 
     # ---- Proactive engine (Prompt 17) -------------------------------
     # Master switch + global behavior. Conservative defaults: only the

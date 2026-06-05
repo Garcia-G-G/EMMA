@@ -84,6 +84,39 @@ def last_user_speech_text() -> str:
     return ""
 
 
+def last_user_speech_ts() -> float | None:
+    """Timestamp of the last TRANSCRIBED user speech (22-B31)."""
+    with _lock:
+        for ev in reversed(_events):
+            if ev.role == "user" and ev.kind == "speech":
+                return ev.ts
+    return None
+
+
+def last_assistant_speech_ts() -> float | None:
+    """When Emma last finished saying something (22-B31 continuity check)."""
+    with _lock:
+        for ev in reversed(_events):
+            if ev.role == "assistant" and ev.kind == "speech":
+                return ev.ts
+    return None
+
+
+def recent_messages_for_llm(k: int = 20) -> list[dict[str, str]]:
+    """The conversational tail in OpenAI chat shape, oldest first (22-B31).
+
+    Only real speech rides along — VAD onsets, confidence flags and tool
+    bookkeeping stay internal. This is what makes a fresh Pipecat
+    micro-session open WARM: the LLM sees the thread, not turn 1.
+    """
+    out: list[dict[str, str]] = []
+    with _lock:
+        for ev in _events:
+            if ev.kind == "speech" and ev.role in ("user", "assistant") and ev.content:
+                out.append({"role": ev.role, "content": ev.content})
+    return out[-k:]
+
+
 def last_user_turn_low_confidence() -> bool:
     """True when the NEWEST user event is a low-confidence flag (21-B28).
 
