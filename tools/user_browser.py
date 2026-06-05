@@ -15,8 +15,16 @@ import urllib.parse
 import webbrowser
 
 from actions import macos
+from core import app_router
 from core.apps import resolve
 from tools.base import ToolResult, tool
+
+
+def _state_failure(app: str, exc_text: str) -> dict[str, object] | None:
+    """Structured data when a browser call failed on OS state (22-B33)."""
+    if "-600" in exc_text or "isn't running" in exc_text:
+        return app_router.failure_data("browser", app, "app_not_running")
+    return None
 
 
 @tool()
@@ -96,9 +104,18 @@ async def close_current_tab(browser: str = "") -> ToolResult:
         script, timeout_s=4.0, on_error="No pude cerrar la pestaña"
     )
     if not ok:
-        return ToolResult(False, None, out, False)
+        return ToolResult(False, _state_failure(app, out), out, False)
+    # route_decision rides on success too (22-B30.3) — lets the LLM explain
+    # "cerré la de Chrome porque es la que tienes adelante" when relevant.
     return ToolResult(
-        True, {"browser": app, "via": "applescript"}, "Listo, cerré la pestaña.", False
+        True,
+        {
+            "browser": app,
+            "via": "applescript",
+            "route_decision": app_router.inspect("browser").as_dict(),
+        },
+        "Listo, cerré la pestaña.",
+        False,
     )
 
 
@@ -199,7 +216,12 @@ async def list_browser_tabs(browser: str = "") -> ToolResult:
     try:
         tabs = await _all_tabs(app)
     except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude leer las pestañas de {app}: {exc}", False)
+        return ToolResult(
+            False,
+            _state_failure(app, str(exc)),
+            f"No pude leer las pestañas de {app}: {exc}",
+            False,
+        )
     windows = len({t["window"] for t in tabs})
     tabs_w = "pestaña" if len(tabs) == 1 else "pestañas"
     win_w = "ventana" if windows == 1 else "ventanas"
