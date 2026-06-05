@@ -81,6 +81,49 @@ names. Real gap found in 19.7 (see §3).
    vocabulary.toml now carries [NillOjeda] learned from voice.
 5. ✅ **FIXED (19.7/21):** brittle corpus patterns loosened to intent.
 
+## 5. 🔴 Zombie session after server-side WebSocket close (live 2026-06-05)
+
+**Symptom:** Garcia: "she's not talking." Wake fired, session opened, then
+OpenAI threw a SERVER-side error ("The server had an error… retry",
+non-fatal) and closed the WS cleanly (code 1000). Pipecat kept pushing mic
+audio into the dead socket at ~50 errors/second ("Error sending client
+event: received 1000 (OK)") — **no reconnect, no session teardown**. Emma
+deaf+mute until the idle timeout (or forever if ErrorFrames count as
+activity). Daemon stayed up; only a manual restart recovered.
+
+**Root cause:** `AuthErrorWatcher` only terminates on TERMINAL auth markers;
+a clean remote close (1000) after a transient server error matches nothing
+→ nobody cancels the pipeline task → the orchestrator never loops back to
+wake-word listening.
+
+**Fix shape (next prompt):** extend the watcher (or add a dead-session
+watcher): on ErrorFrames matching "Error sending client event" /
+"received 1000" (debounced, e.g. 3 within 1s), CANCEL the pipeline task —
+NOT SystemExit — so the orchestrator loops back to wake and the next
+"hey jarvis" gets a fresh session. Log `session_zombie_recovered`.
+
+## 6. 🟡 Spotify 403 — token lacks playlist scopes (live 2026-06-05)
+
+```
+spotify_playlist_lookup_failed: 403 Insufficient client scope
+GET /v1/me/playlists
+```
+
+The OAuth token in `~/.emma/spotify_token.json` was minted without
+`playlist-read-private` / `playlist-read-collaborative`. Playing tracks
+works; listing/playing Garcia's own playlists doesn't. Fix = add the scopes
+to the auth flow's scope list and re-run the Spotify authorization (token
+refresh won't add scopes — needs a fresh consent). Check what scopes the
+flow requests in the spotify tool/action module.
+
+**Same turn, fallback also failed:** Apple Music
+`play playlist "Classical Essentials"` → AppleScript -1700: editorial
+playlists aren't in the local library; `play playlist "X"` only resolves
+LIBRARY playlists. The fallback should detect the miss and either search
+Apple Music ("search playlist") or tell Garcia it needs the playlist saved
+to his library — not die with a type error. Both halves belong to one
+"playlists actually work" fix.
+
 ## 4. 🔴 New findings from the Prompt 21 voice runs — for the next prompt
 
 1. **Realtime-acts-before-transcript race (root-caused + worked around).**
