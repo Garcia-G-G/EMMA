@@ -377,6 +377,31 @@ async def _build_instructions() -> str:
         "last turn, TRANSLATE it into Garcia's language before speaking. "
         "Keep the substance, change the tongue. Identifiers (URLs, repo and "
         "app names) stay verbatim.\n\n"
+        "# Session continuity\n"
+        "- If your context starts with a continuation directive ('This is a "
+        "continuation…'), DO NOT greet, DO NOT introduce yourself. Resume "
+        "the thread as if no gap happened.\n"
+        "- Your first sentence after wake or after a continuation is "
+        "protected — you'll always finish it. AFTER that first sentence, "
+        "Garcia can interrupt freely. Keep your opener short (≤ 6 words is "
+        "ideal; ≤ 8 words is the hard limit).\n\n"
+        "# App routing\n"
+        "- When you call an app-related tool, the runtime picks the right "
+        "app from what's actually running and frontmost. You don't pick — "
+        "you say the intent, not the app name, unless Garcia explicitly "
+        "names one.\n\n"
+        "# Tool failure recovery\n"
+        "- When a tool returns success=false with a data.failure_reason "
+        "field, READ it before responding. Don't repeat the user_message "
+        "verbatim — use the structure to propose an alternative in voice:\n"
+        "  - failure_reason='app_not_running', wanted='Spotify', "
+        "alternatives=['Music'] → 'Spotify no está abierto. ¿Lo abro o uso "
+        "Apple Music?'\n"
+        "  - failure_reason='wrong_frontmost', wanted='Google Chrome', "
+        "got='Brave Browser' → say which app you acted on and offer to "
+        "switch.\n"
+        "- If Garcia accepts an alternative, re-call the tool naming it "
+        "explicitly (app='Music' / browser='Google Chrome').\n\n"
         "# Response Length\n"
         "- 1 sentence for confirmations: 'Listo.', 'Done.'\n"
         "- 1-2 sentences for answers.\n"
@@ -610,23 +635,47 @@ async def _build_instructions() -> str:
     return base
 
 
-def _session_seed_messages() -> list[Any]:
-    """Synthetic context seed pinning the language bias (19.6-B20).
+# A wake within this window of Emma's last utterance is a CONTINUATION of
+# the same human conversation — the micro-session is an implementation
+# detail Garcia never asked for (22-B31).
+_CONTINUATION_WINDOW_S = 90.0
 
-    For a Spanish profile, one developer message rides in the LLMContext so
-    context replays (after history grows or a reconnect) keep the bias even
-    when the greeting is long gone. English profiles need no seed — English
-    is the model's natural default.
+
+def _session_seed_messages() -> list[Any]:
+    """LLMContext seed: language bias + warm conversational history (22-B31).
+
+    The Pipecat micro-session restarts must be invisible: the new session
+    opens with the recent thread replayed (pipecat sends seeded messages as
+    ``conversation.item.create`` at setup — verified in source) and, when
+    Emma spoke less than ``_CONTINUATION_WINDOW_S`` ago, a continuation
+    directive so she resumes instead of re-greeting.
     """
+    seed: list[Any] = []
     lang = dictionary.user_profile().get("preferred_lang", "es") or "es"
     if lang == "es":
-        return [
+        seed.append(
             {
                 "role": "system",
                 "content": "Speak Spanish by default — see the Session language directive.",
             }
-        ]
-    return []
+        )
+
+    last_spoke = session_memory.last_assistant_speech_ts()
+    if last_spoke is not None and (time.monotonic() - last_spoke) < _CONTINUATION_WINDOW_S:
+        seed.append(
+            {
+                "role": "system",
+                "content": "This is a continuation of an in-progress conversation. "
+                "Don't greet Garcia again, don't introduce yourself. "
+                "Pick up where you left off.",
+            }
+        )
+        log.info(
+            "session_continuation", since_last_speech_s=round(time.monotonic() - last_spoke, 1)
+        )
+
+    seed.extend(session_memory.recent_messages_for_llm(20))
+    return seed
 
 
 class SessionControl:
