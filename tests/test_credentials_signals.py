@@ -161,7 +161,7 @@ def _run_session_with(terminal_error):
     fake_llm = MagicMock()
     fake_llm._disconnect = AsyncMock()
 
-    async def fake_build():
+    async def fake_build(immediate_command=False):
         return (None, FakeTask(), None, object(), fake_watcher, fake_llm)
 
     with (

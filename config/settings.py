@@ -68,6 +68,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     EMMA_HOME: Path = Path.home() / ".emma"
 
+    # ---- Barge-in tuning (22.1-B38). The single-frame SPIKE threshold sits
+    # above Emma's own speaker echo (measured 4000-12600 RMS on this MacBook)
+    # so a clap/shout cuts her instantly; the WINDOW pair catches Garcia's
+    # NORMAL voice, which rarely spikes 18000 on one frame but sustains
+    # >6000 over 250 ms. Both live during her body phase; the opener stays
+    # protected regardless (22-B32).
+    BARGE_IN_RMS_SPIKE: float = 18000.0
+    BARGE_IN_RMS_WINDOW: float = 6000.0
+    BARGE_IN_WINDOW_MS: int = 250
+
     # ---- Voice acceptance harness gates (19.7-VAH2). ALL off in production —
     # the harness subprocess sets these via env. When EMMA_TEST_MODE is true
     # and EMMA_TEST_INPUT_DEVICE names a device (substring match, e.g.

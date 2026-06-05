@@ -372,6 +372,36 @@ def render_report(mode: str, outcomes: list[ScenarioOutcome]) -> str:
     )
 
 
+# ---------- scenario setup/teardown hooks (22.1-B40) ----------------------
+
+
+def _run_lifecycle_script(script: str, *, label: str, scenario_id: str) -> None:
+    """Run a scenario setup/teardown script via subprocess (NEVER eval/exec).
+
+    Convention: ``applescript: <code>`` or ``shell: <code>`` (default shell).
+    Failures are logged but never fail the scenario — broken teardown is a
+    test-infra problem, not an Emma problem (22.1-B40).
+    """
+    import subprocess
+
+    raw = (script or "").strip()
+    if not raw:
+        return
+    if raw.startswith("applescript:"):
+        cmd = ["osascript", "-e", raw[len("applescript:") :].strip()]
+    else:
+        body = raw[len("shell:") :].strip() if raw.startswith("shell:") else raw
+        cmd = ["/bin/bash", "-c", body]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if proc.returncode != 0:
+            print(f"[{label} {scenario_id}] exit {proc.returncode}: {proc.stderr.strip()[:160]}")
+    except subprocess.TimeoutExpired:
+        print(f"[{label} {scenario_id}] timed out (10s)")
+    except Exception as exc:
+        print(f"[{label} {scenario_id}] failed: {exc}")
+
+
 # ---------- voice mode (19.7-VAH3) ---------------------------------------
 
 
@@ -411,6 +441,9 @@ def _run_all_voice(
         else:
             _close_open()
 
+        # 22.1-B40: per-scenario state hygiene — voice runs touch REAL apps.
+        if s.get("setup_script"):
+            _run_lifecycle_script(s["setup_script"], label="setup", scenario_id=s["id"])
         try:
             summary, extras, proc = voice_driver.run_voice_scenario(
                 s, input_device=input_device, output_device=output_device, proc=proc
@@ -420,6 +453,9 @@ def _run_all_voice(
             result = TurnResult(error=f"{type(exc).__name__}: {exc}")
             outcomes.append(ScenarioOutcome(s, result, False, [str(exc)], "ERROR"))
             continue
+        finally:
+            if s.get("teardown_script"):
+                _run_lifecycle_script(s["teardown_script"], label="teardown", scenario_id=s["id"])
 
         open_proc, open_id = proc, s["id"]
         chars_synth += extras.chars_synthesized
