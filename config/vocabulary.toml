@@ -170,3 +170,7 @@ stt_aliases = ["limitación: terminal Cursor"]
 [NillOjeda]
 canonical = "Nill Ojeda"
 stt_aliases = ["Nil Ojeda"]
+
+[ObservacincierrepestaafallidoenChrome]
+canonical = "Observación cierre pestaña fallido en Chrome"
+stt_aliases = ["Observación cierre pestaña fallo en Chrome"]

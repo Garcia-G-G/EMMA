@@ -175,6 +175,14 @@
   "text": "Hey Jarvis. Hey Emma, pon música de Bad Bunny.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "35854440e5545b0d": {
+  "chars": 30,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V62",
+  "text": "Hey Emma, cierra esta pestaña.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "37877d9dd9073b40": {
   "chars": 51,
   "lang": "es",
@@ -301,6 +309,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A08",
   "text": "Hey Emma, ¿qué puedes hacer?",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "52e1c75cb2596e61": {
+  "chars": 39,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V61",
+  "text": "Hey Emma, pon una canción de Bad Bunny.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "567844479f5ba230": {
@@ -519,6 +535,14 @@
   "text": "Hey Emma, abre eso.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
+ "941a08fe734506c7": {
+  "chars": 37,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "smoke4",
+  "text": "Espera, espera, primero dime la hora.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
  "96a950854e6ce120": {
   "chars": 9,
   "lang": "es",
@@ -581,6 +605,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V24",
   "text": "Hey Emma, abre espotify.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "aee721e89bfb24f6": {
+  "chars": 24,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V63",
+  "text": "Hey Emma, espera espera.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "b15abacb3fab78d6": {
@@ -813,6 +845,14 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A06",
   "text": "Hey Jarvis. Hey Emma, recuérdame que soy alérgico a los mariscos.",
+  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
+ },
+ "fb943522573352f8": {
+  "chars": 21,
+  "lang": "es",
+  "model_id": "eleven_flash_v2_5",
+  "scenario_id": "V65",
+  "text": "Hey Emma, ¿y qué más?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  }
 }
