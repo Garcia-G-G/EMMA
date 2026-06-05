@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from core import apps
@@ -11,27 +9,15 @@ from tools import app_control, terminal_actions
 
 
 class TestResolve:
-    def test_dictionary_first(self, monkeypatch):
-        monkeypatch.setattr(
-            apps.dictionary, "app_for", lambda c: "MyEditor" if c == "editor" else ""
-        )
-        assert apps.resolve("editor") == "MyEditor"
+    """22-B30: resolve() is a deprecated thin wrapper over app_router.preferred —
+    the old static dictionary-first semantics are deleted by design (routing
+    behavior itself is covered in tests/test_app_router.py)."""
 
-    def test_detect_preferred_fallback_maps_key_to_display(self, monkeypatch):
-        monkeypatch.setattr(apps.dictionary, "app_for", lambda c: "")
-        monkeypatch.setattr(
-            apps.environment,
-            "detect_preferred",
-            lambda cat, **k: SimpleNamespace(app_name="cursor"),
-        )
-        assert apps.resolve("editor") == "Cursor"  # key 'cursor' -> display 'Cursor'
+    def test_delegates_to_router(self, monkeypatch):
+        from core import app_router
 
-    def test_none_when_unresolved(self, monkeypatch):
-        monkeypatch.setattr(apps.dictionary, "app_for", lambda c: "")
-        monkeypatch.setattr(
-            apps.environment, "detect_preferred", lambda cat, **k: SimpleNamespace(app_name=None)
-        )
-        assert apps.resolve("editor") is None
+        monkeypatch.setattr(app_router, "preferred", lambda c: "Routed Browser")
+        assert apps.resolve("browser") == "Routed Browser"
 
     def test_unknown_category(self):
         assert apps.resolve("toaster") is None

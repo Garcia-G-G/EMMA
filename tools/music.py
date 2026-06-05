@@ -17,18 +17,17 @@ import structlog
 
 from actions import macos
 from config.settings import settings
-from core.apps import resolve
+from core import app_router
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.music")
 
 
 def _music_app() -> str:
-    """Garcia's preferred music app for the AppleScript path (transport +
-    now-playing share identical syntax between Music and Spotify). Defaults to
-    Apple Music, which is always installed. (Closes the phase-06 deuda: route via
-    core.apps.resolve instead of a hardcoded app name.)"""
-    return resolve("music") or "Music"
+    """The music app to drive RIGHT NOW (22-B30): frontmost wins, then whatever
+    is actually running (preference breaks ties), then preference, then Music.
+    Thin wrapper kept for the existing call sites; the router is the truth."""
+    return app_router.preferred("music")
 
 
 _SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing"

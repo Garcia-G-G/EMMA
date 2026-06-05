@@ -16,7 +16,6 @@ from __future__ import annotations
 import structlog
 
 from actions import environment
-from core import dictionary
 
 log = structlog.get_logger("emma.apps")
 
@@ -44,27 +43,27 @@ def _display_for_key(cat: environment.Category, key: str | None) -> str | None:
 
 
 def resolve(category: str) -> str | None:
-    """Best display name for ``category``, or None if nothing is configured."""
+    """DEPRECATED thin wrapper over :func:`core.app_router.preferred` (22-B30).
+
+    Routing is DYNAMIC now: frontmost → running → preference → fallback,
+    re-evaluated on every call. The old static order (dictionary → 24h
+    detection cache) made preferences the answer; reality changed
+    second-to-second and the answer didn't — that's the Brave/Chrome and
+    Spotify/Music bug family. Preferences are a tiebreaker inside the
+    router. Kept with the old signature so the existing call sites
+    (`resolve("browser") or "Safari"`, …) work unchanged; the trailing
+    fallbacks are dead code now (the router always answers).
+
+    For "which app do I DEFAULT to?" voice queries use
+    ``actions.environment.detect_preferred`` — that's the configured
+    answer, deliberately not the live one.
+    """
     cat = _CATEGORY_ALIASES.get(category.strip().lower())
     if not cat:
         return None
+    from core import app_router
 
-    # 1. Dictionary [apps] — Garcia's explicit choice (already a display name).
-    pick: str | None = dictionary.app_for(category) or dictionary.app_for(cat)
-    if pick:
-        log.debug("app_resolved", category=cat, via="dictionary", pick=pick)
-        return pick
-
-    # 2. detect_preferred — DetectionResult.app_name is a shortlist KEY, not a
-    #    display name (there is no `.chosen` attribute), so map it.
-    res = environment.detect_preferred(cat)
-    pick = _display_for_key(cat, res.app_name)
-    if pick:
-        log.debug("app_resolved", category=cat, via="detect_preferred", pick=pick)
-        return pick
-
-    log.debug("app_unresolved", category=cat)
-    return None
+    return app_router.preferred(category)
 
 
 def resolve_or_raise(category: str, hint: str = "") -> str:
