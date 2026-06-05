@@ -139,39 +139,22 @@ class EchoGateProcessor(FrameProcessor):
 
 
 class TranscriptCollector(FrameProcessor):
-    """Captures user + assistant transcripts for memory reflection.
+    """Publishes the 'thinking' dashboard state on user speech onset.
 
-    Collects TranscriptionFrames (user speech, pushed upstream by the
-    Realtime LLM) and LLMTextFrames (assistant text, pushed downstream).
-    When the bot stops speaking, the collected turn is appended to
-    short-term memory and reflection is scheduled in the background.
+    22.1-B36 GUTTED: the transcript-capture + reflection trigger this class
+    was built for NEVER fired in production (user TranscriptionFrames travel
+    upstream of the LLM; the aggregator eats assistant LLMTextFrames — 19.7
+    root cause, `transcript_captured` count was 0 across all history).
+    Reflection now triggers from `_BotTextTap` where turns actually complete.
+    What remains here is the one thing that DID work: the visualizer state
+    event. TODO(P20): when screen-vision lands its transcript_partial
+    events, source them from the taps, not from here.
     """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._user_text = ""
-        self._assistant_text = ""
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, UserStartedSpeakingFrame):
             events_bus.publish("state", state="thinking")
-        if isinstance(frame, TranscriptionFrame) and frame.text:
-            cleaned = vocabulary.corrections(frame.text)
-            if cleaned != frame.text:
-                log.debug("transcript_corrected", before=frame.text, after=cleaned)
-            self._user_text += cleaned + " "
-        elif isinstance(frame, LLMTextFrame) and frame.text:
-            self._assistant_text += frame.text
-        elif isinstance(frame, BotStoppedSpeakingFrame):
-            user = self._user_text.strip()
-            assistant = self._assistant_text.strip()
-            if user or assistant:
-                append_turn(user, assistant)
-                schedule_reflection(last_turns(4))
-                log.debug("transcript_captured", user=user[:80], assistant=assistant[:80])
-            self._user_text = ""
-            self._assistant_text = ""
         await self.push_frame(frame, direction)
 
 
@@ -199,12 +182,18 @@ class _UserSpeechTap(FrameProcessor):
             # (no new onset occurs between a question and same-turn consent).
             session_memory.push_event("user", "speech_started", "")
         elif isinstance(frame, TranscriptionFrame) and frame.text:
-            session_memory.push_event("user", "speech", frame.text)
-            if is_low_confidence(frame.text, _last_assistant_speech()):
-                session_memory.push_event("user", "low_confidence", frame.text)
-                log.info("low_confidence_transcript", text=frame.text[:80])
+            # 22.1-B36: STT corrections apply HERE now (the dead collector
+            # used to) so session memory, the invariant, anaphora AND
+            # reflection all see the cleaned text.
+            cleaned = vocabulary.corrections(frame.text)
+            if cleaned != frame.text:
+                log.debug("transcript_corrected", before=frame.text, after=cleaned)
+            session_memory.push_event("user", "speech", cleaned)
+            if is_low_confidence(cleaned, _last_assistant_speech()):
+                session_memory.push_event("user", "low_confidence", cleaned)
+                log.info("low_confidence_transcript", text=cleaned[:80])
             if settings.EMMA_TEST_MODE:
-                log.info("stt_user_test", text=frame.text)
+                log.info("stt_user_test", text=cleaned)
         await self.push_frame(frame, direction)
 
 
@@ -232,6 +221,14 @@ class _BotTextTap(FrameProcessor):
             text = self._bot_text.strip()
             if text:
                 session_memory.push_event("assistant", "speech", text)
+                # 22.1-B36: a completed bot utterance closes a turn pair —
+                # THIS is where reflection finally fires in production
+                # (the old collector's trigger never received the frames).
+                user = session_memory.last_user_speech_text()
+                if user or text:
+                    append_turn(user, text)
+                    schedule_reflection(last_turns(4))
+                    log.debug("transcript_captured", user=user[:80], assistant=text[:80])
                 if settings.EMMA_TEST_MODE:
                     log.info("bot_text_test", text=text)
             self._bot_text = ""
@@ -290,6 +287,81 @@ class _AudioLevelTap(FrameProcessor):
             total += s * s
             count += 1
         return math.sqrt(total / count) if count else 0.0
+
+
+# Zombie-session signatures (22.1-B35): a transient OpenAI server error
+# closes the WS cleanly (code 1000) and pipecat keeps pumping audio into the
+# dead socket forever. These markers + a debounce identify it; recovery is a
+# pipeline-task cancel (NEVER SystemExit — zombies are transient).
+_ZOMBIE_MARKERS = (
+    "received 1000",
+    "Error sending client event",
+    "WebSocket connection is closed",
+)
+_ZOMBIE_DEBOUNCE_N = 3
+_ZOMBIE_DEBOUNCE_WINDOW_S = 1.0
+# Escalation (B35.3): repeated zombies = OpenAI is degraded; cool down
+# instead of hammering reconnects.
+_ZOMBIE_ESCALATE_N = 3
+_ZOMBIE_ESCALATE_WINDOW_S = 60.0
+_ZOMBIE_COOLDOWN_S = 30.0
+_zombie_recoveries: list[float] = []  # module-level: spans sessions, not the daemon
+
+
+def _record_zombie_recovery() -> None:
+    now = time.monotonic()
+    _zombie_recoveries.append(now)
+    recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
+    if len(recent) >= _ZOMBIE_ESCALATE_N:
+        log.warning("session_repeated_zombie", count=len(recent))
+        events_bus.publish("session_repeated_zombie", count=len(recent))
+
+
+def _zombie_cooldown_s() -> float:
+    """Seconds to wait before opening a session while OpenAI looks degraded."""
+    now = time.monotonic()
+    recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
+    return _ZOMBIE_COOLDOWN_S if len(recent) >= _ZOMBIE_ESCALATE_N else 0.0
+
+
+class DeadSessionWatcher(FrameProcessor):
+    """Recovers from zombie sessions (22.1-B35, ERRORS-TO-FIX §5).
+
+    OpenAI closes the WS cleanly after a transient server error; pipecat then
+    errors ~50x/s trying to send into the dead socket and the session never
+    ends — Emma is deaf+mute until a manual restart ("se apaga sola").
+    Watching for the error signatures with a debounce (3 within 1 s), this
+    cancels the pipeline task so the orchestrator loops back to wake-word
+    listening. The daemon survives; the next "hey jarvis" opens a fresh
+    session. Contrast ``AuthErrorWatcher``: that one is for TERMINAL config
+    errors and exits the daemon — zombies are transient and must not.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._task: PipelineTask | None = None
+        self._hits: list[float] = []
+        self._fired = False
+
+    def set_task(self, task: PipelineTask) -> None:
+        self._task = task
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, ErrorFrame) and not self._fired:
+            message = str(getattr(frame, "error", "") or "")
+            if any(marker in message for marker in _ZOMBIE_MARKERS):
+                now = time.monotonic()
+                self._hits = [t for t in self._hits if now - t <= _ZOMBIE_DEBOUNCE_WINDOW_S]
+                self._hits.append(now)
+                if len(self._hits) >= _ZOMBIE_DEBOUNCE_N:
+                    self._fired = True
+                    log.warning("session_zombie_recovered", trigger=message[:120])
+                    events_bus.publish("session_zombie_detected")
+                    _record_zombie_recovery()
+                    if self._task is not None:
+                        await self._task.cancel()
+        await self.push_frame(frame, direction)
 
 
 class AuthErrorWatcher(FrameProcessor):
@@ -649,7 +721,7 @@ async def _build_instructions() -> str:
 _CONTINUATION_WINDOW_S = 90.0
 
 
-def _session_seed_messages() -> list[Any]:
+def _session_seed_messages(immediate_command: bool = False) -> list[Any]:
     """LLMContext seed: language bias + warm conversational history (22-B31).
 
     The Pipecat micro-session restarts must be invisible: the new session
@@ -680,6 +752,18 @@ def _session_seed_messages() -> list[Any]:
         )
         log.info(
             "session_continuation", since_last_speech_s=round(time.monotonic() - last_spoke, 1)
+        )
+
+    if immediate_command:
+        # 22.1-B39: Garcia chained wake + command in one breath — skip the
+        # "Hola, soy Emma" preamble; the opener protection still covers
+        # whatever the first (action-bearing) sentence is.
+        seed.append(
+            {
+                "role": "system",
+                "content": "Garcia spoke immediately after the wake word. Skip any "
+                "greeting and respond directly to his command.",
+            }
         )
 
     seed.extend(session_memory.recent_messages_for_llm(20))
@@ -927,7 +1011,9 @@ async def _build_session_properties() -> SessionProperties:
     )
 
 
-async def build_pipeline() -> tuple[
+async def build_pipeline(
+    immediate_command: bool = False,
+) -> tuple[
     Pipeline,
     PipelineTask,
     LocalAudioTransport,
@@ -951,7 +1037,11 @@ async def build_pipeline() -> tuple[
     # louder human voice barge in.
     speech_phase = SpeechPhase()  # fresh per session — the opener reset (22-B32)
     echo_gate = EchoGateFilter(
-        tail_ms=600, barge_in_rms=18000.0, phase_provider=speech_phase.current
+        tail_ms=600,
+        barge_in_rms=settings.BARGE_IN_RMS_SPIKE,
+        phase_provider=speech_phase.current,
+        barge_in_rms_window=settings.BARGE_IN_RMS_WINDOW,
+        window_ms=settings.BARGE_IN_WINDOW_MS,
     )
 
     transport = LocalAudioTransport(
@@ -987,10 +1077,11 @@ async def build_pipeline() -> tuple[
         if name:
             llm.register_function(name, function_handler)
 
-    context = LLMContext(messages=_session_seed_messages())
+    context = LLMContext(messages=_session_seed_messages(immediate_command))
     assistant_aggregator = LLMAssistantAggregator(context)
     transcript_collector = TranscriptCollector()
     auth_watcher = AuthErrorWatcher()
+    dead_watcher = DeadSessionWatcher()
     end_watcher = EndSessionWatcher(session_control)
     audio_tap = _AudioLevelTap()  # publishes output RMS for the visualizer core pulse
 
@@ -1001,6 +1092,7 @@ async def build_pipeline() -> tuple[
             llm,
             _BotTextTap(speech_phase),  # assistant text + opener word count (21/22)
             auth_watcher,  # right after the LLM so it sees its ErrorFrames first
+            dead_watcher,  # zombie-session recovery (22.1-B35)
             end_watcher,  # closes the session after playback tools finish speaking
             assistant_aggregator,
             transcript_collector,
@@ -1019,16 +1111,20 @@ async def build_pipeline() -> tuple[
         cancel_on_idle_timeout=True,
     )
     auth_watcher.set_task(task)
+    dead_watcher.set_task(task)
     session_control.set_task(task)
     return pipeline, task, transport, context, auth_watcher, llm
 
 
-async def run_session() -> None:
+async def run_session(immediate_command: bool = False) -> None:
     """Run one Pipecat session until idle, cancellation, or error.
 
     The orchestrator calls this once per wake-word detection. The
     pipeline starts the mic + speaker streams; OpenAI Realtime serves
     audio in/out + function calls; the runner blocks here until idle.
+
+    ``immediate_command`` (22.1-B39): Garcia chained wake + command in one
+    breath — the seed tells the model to skip the greeting.
 
     Two credential guards: a pre-flight key-shape check before any session
     opens (raises SystemExit(2) on a missing/malformed key), and an
@@ -1044,7 +1140,16 @@ async def run_session() -> None:
         )
         raise SystemExit(2)  # non-zero exit; launchd KeepAlive treats as real failure
 
-    _pipeline, task, _transport, context, auth_watcher, llm = await build_pipeline()
+    # 22.1-B35.3: repeated zombies mean OpenAI is degraded — back off instead
+    # of hammering reconnects. Transient; never an exit.
+    cooldown = _zombie_cooldown_s()
+    if cooldown > 0:
+        log.warning("session_zombie_cooldown", sleeping_s=cooldown)
+        await asyncio.sleep(cooldown)
+
+    _pipeline, task, _transport, context, auth_watcher, llm = await build_pipeline(
+        immediate_command=immediate_command
+    )
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:

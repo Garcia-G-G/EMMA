@@ -68,6 +68,58 @@ def preflight() -> None:
     return
 
 
+# 22.1-B39: voice-energy threshold + frame count for "Garcia kept talking
+# right after the wake word." RMS 1200 is well above room tone, well below
+# speech; 3 voiced 80ms frames ≈ 240ms of actual speech (a syllable or two).
+_IMMEDIATE_RMS = 1200.0
+_IMMEDIATE_FRAMES = 3
+
+
+async def _detect_immediate_speech(window_s: float = 1.0) -> bool:
+    """True if voice energy arrives within ``window_s`` of the wake chime.
+
+    Doubles as the ack-tone decay wait (replaces the old fixed 0.8s sleep).
+    Energy-based on purpose: transcription would miss the window. Errors
+    degrade to False — never block the session over a probe.
+    """
+    import numpy as np
+    import sounddevice as sd
+
+    from core import audio_devices
+
+    voiced = 0
+    try:
+        stream = sd.RawInputStream(
+            samplerate=16_000,
+            channels=1,
+            dtype="int16",
+            blocksize=1280,  # 80 ms frames
+            device=audio_devices.test_input_device_index(),
+        )
+        stream.start()
+        try:
+            deadline = time.monotonic() + window_s
+            while time.monotonic() < deadline:
+                await asyncio.sleep(0.04)
+                frames_available = stream.read_available
+                if frames_available < 1280:
+                    continue
+                raw, _ = stream.read(1280)
+                samples = np.frombuffer(bytes(raw), dtype=np.int16).astype(np.float64)
+                rms = float(np.sqrt(np.mean(samples * samples))) if samples.size else 0.0
+                if rms >= _IMMEDIATE_RMS:
+                    voiced += 1
+                    if voiced >= _IMMEDIATE_FRAMES:
+                        return True
+        finally:
+            stream.stop()
+            stream.close()
+    except Exception as exc:  # probe failure must never block the session
+        log.warning("immediate_speech_probe_failed", error=str(exc))
+        await asyncio.sleep(0.3)  # keep a minimal ack-decay wait
+    return False
+
+
 async def _one_session() -> None:
     """Wake → Pipecat session → return. One iteration of the main loop."""
     global _last_turn_id, _last_session_end_mono
@@ -89,15 +141,19 @@ async def _one_session() -> None:
         events_bus.publish("wake_detected")
         events_bus.publish("session_started", id=turn_id, ts=_now_iso())
         events_bus.publish("state", state="listening")
-        # Let the ack tone fully decay before Pipecat opens the mic.
-        # Without this, the beep leaks into the Realtime session's VAD
-        # and fires spurious speech_started events (self-interruption loop).
-        await asyncio.sleep(0.8)
+        # Let the ack tone fully decay before Pipecat opens the mic — and USE
+        # that window (22.1-B39): if Garcia chained "hey jarvis, abre X" in
+        # one breath, raw voice ENERGY lands here. Detect it (energy, not
+        # STT — transcription is far too slow for this window) and tell the
+        # session to skip the greeting preamble.
+        immediate = await _detect_immediate_speech(window_s=1.0)
+        if immediate:
+            log.info("immediate_command_detected")
         if _simulate_crash:
             raise RuntimeError("test crash (--simulate-crash)")
         try:
             await asyncio.wait_for(
-                conversation.run_session(),
+                conversation.run_session(immediate_command=immediate),
                 timeout=float(settings.SESSION_MAX_S) + 30.0,
             )
         except TimeoutError:
@@ -105,6 +161,18 @@ async def _one_session() -> None:
             # next iteration is back listening within ~1s (B1).
             log.info("session_timeout")
             log.info("session_reset", reason="outer_timeout")
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            # Cooperative daemon shutdown (SIGINT/SIGTERM) — NEVER swallow.
+            # (Zombie recovery does NOT come through here: the watcher cancels
+            # the PIPELINE task, which pipecat unwinds as a clean return.)
+            raise
+        except SystemExit:
+            raise  # terminal auth error — ops escalation path, propagate
+        except Exception as exc:  # 22.1-B35.2: last-resort session tolerance
+            # An unexpected session error must cost ONE session, not the
+            # daemon. Log loudly, recover to wake-word listening.
+            log.error("session_cancelled_recovered", reason=f"{type(exc).__name__}: {exc}"[:200])
             await asyncio.sleep(0.5)
         duration_s = round(time.monotonic() - t_wake, 1)
         log.info("session_close", duration_s=int(duration_s))

@@ -265,7 +265,8 @@
     "expected_spoken_pattern": "(creé|lista|listo|hecho|ya quedó|compras)",
     "mock_spoken_text": "Listo, creé la nota 'Compras'.",
     "max_latency_ms": 4000,
-    "destructive": false
+    "destructive": false,
+    "setup_script": "applescript: tell application \"Notes\" to delete (every note whose name is \"Compras\")"
   },
   {
     "id": "A14",
@@ -322,7 +323,8 @@
     "expected_spoken_pattern": "(recordatorio|anotado|mañana|listo)",
     "mock_spoken_text": "Listo, recordatorio para mañana a las 9: llamar al dentista.",
     "max_latency_ms": 5000,
-    "destructive": false
+    "destructive": false,
+    "teardown_script": "applescript: tell application \"Reminders\" to delete (every reminder whose name contains \"dentista\")"
   },
   {
     "id": "A17",
@@ -430,7 +432,8 @@
     "expected_spoken_pattern": "(confirmas|agrego|línea)",
     "mock_spoken_text": "Voy a agregar 1 línea al final de tmp.txt — ¿confirmas?",
     "max_latency_ms": 6000,
-    "destructive": true
+    "destructive": true,
+    "setup_script": "shell: printf 'base\\n' > ~/Documents/EMMA/tmp.txt"
   },
   {
     "id": "A23",
@@ -559,7 +562,8 @@
     "expected_spoken_pattern": "(api|listo|anotad)",
     "mock_spoken_text": "Listo, API → interfaz de programación de aplicaciones.",
     "max_latency_ms": 4000,
-    "destructive": false
+    "destructive": false,
+    "teardown_script": "shell: true  # term entries are append-only; benign"
   },
   {
     "id": "A30",
@@ -738,7 +742,8 @@
     "expected_spoken_pattern": "(¿borro|borro la nota|compras)",
     "mock_spoken_text": "¿Borro la nota 'Compras'?",
     "max_latency_ms": 6000,
-    "destructive": true
+    "destructive": true,
+    "setup_script": "applescript: tell application \"Notes\"\nif (count of (notes whose name is \"Compras\")) is 0 then make new note with properties {body:\"<div>Compras</div><div>leche</div>\"}\nend tell"
   },
   {
     "id": "V14",
@@ -771,7 +776,8 @@
     "expected_spoken_pattern": "(sobrescribir|confirmas)",
     "mock_spoken_text": "Voy a SOBRESCRIBIR tmp.txt completo — ¿confirmas?",
     "max_latency_ms": 6000,
-    "destructive": true
+    "destructive": true,
+    "setup_script": "shell: printf 'base\\n' > ~/Documents/EMMA/tmp.txt"
   },
   {
     "id": "V16",
@@ -1369,7 +1375,8 @@
     "expected_spoken_pattern": "(¿borro|borro la nota|con tu voz)",
     "mock_spoken_text": "¿Borro la nota 'Compras'?",
     "max_latency_ms": 6000,
-    "destructive": true
+    "destructive": true,
+    "setup_script": "applescript: tell application \"Notes\"\nif (count of (notes whose name is \"Compras\")) is 0 then make new note with properties {body:\"<div>Compras</div><div>leche</div>\"}\nend tell"
   },
   {
     "id": "V52",
@@ -1593,5 +1600,36 @@
     "max_latency_ms": 9000,
     "destructive": false,
     "live_blocked_by": "harness chains keep ONE session; continuation across micro-sessions is unit-tested + live smoke 5/6"
+  },
+  {
+    "id": "V66",
+    "name": "zombie_session_recovery",
+    "language": "es",
+    "given": "OpenAI closes the WS cleanly mid-session (transient server error); Emma must cancel the pipeline and return to wake listening (22.1-B35).",
+    "utterance": "Hey Emma, ¿sigues ahí?",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(aquí|sí|dime)",
+    "mock_spoken_text": "Aquí sigo, dime.",
+    "max_latency_ms": 8000,
+    "destructive": false,
+    "live_blocked_by": "needs WS fault injection; DeadSessionWatcher covered by tests/test_dead_session.py"
+  },
+  {
+    "id": "V67",
+    "name": "editorial_playlist_fallback",
+    "language": "es",
+    "given": "'Classical Essentials' is an Apple Music EDITORIAL playlist (not in library) → -1700 → music:// search fallback (22.1-B37).",
+    "utterance": "Hey Emma, pon la playlist Classical Essentials en Música.",
+    "expected_actions": [
+      {
+        "tool": "play_playlist"
+      }
+    ],
+    "expected_spoken_pattern": "(búsqueda|apple music|no.*biblioteca|guardada|abrí|reproduciendo)",
+    "mock_spoken_text": "Esa playlist no está en tu biblioteca; te abrí la búsqueda en Apple Music.",
+    "max_latency_ms": 10000,
+    "destructive": false,
+    "setup_script": "shell: open -gja Music && sleep 2",
+    "teardown_script": "applescript: tell application \"Music\" to pause"
   }
 ]

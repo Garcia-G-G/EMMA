@@ -87,6 +87,8 @@ class EchoGateFilter(BaseAudioFilter):
         tail_ms: int = 500,
         barge_in_rms: float = 2000.0,
         phase_provider: Callable[[], str | None] | None = None,
+        barge_in_rms_window: float = 0.0,
+        window_ms: int = 250,
     ):
         self._tail_s = tail_ms / 1000.0
         self._barge_in_rms = barge_in_rms
@@ -99,6 +101,12 @@ class EchoGateFilter(BaseAudioFilter):
         self._phase_provider = phase_provider
         self._opener_buffer: list[bytes] = []
         self._opener_buffer_bytes = 0
+        # 22.1-B38: rolling-window barge-in. Normal voice rarely spikes the
+        # single-frame threshold but SUSTAINS moderate RMS — the window mean
+        # catches it. 0.0 disables (legacy single-frame behavior).
+        self._window_rms = barge_in_rms_window
+        self._window_s = window_ms / 1000.0
+        self._rms_history: list[tuple[float, float]] = []  # (monotonic_ts, rms)
 
     async def start(self, sample_rate: int) -> None:
         self._sample_rate = sample_rate
@@ -166,11 +174,27 @@ class EchoGateFilter(BaseAudioFilter):
         released = self._release_opener_buffer()
 
         if not self._is_gating():
+            self._rms_history.clear()  # gate open → no need to track
             return released + audio
         rms = self._rms(audio)
         if rms == 0.0:
             return released + b"\x00" * len(audio)
+        # Spike shortcut: a deliberate loud "¡Emma!" cuts her instantly.
         if rms >= self._barge_in_rms:
-            log.debug("echo_gate_barge_in", rms=int(rms))
+            log.debug("echo_gate_barge_in", rms=int(rms), signal="spike")
             return released + audio
+        # Rolling window (22.1-B38): sustained normal-volume voice over
+        # ~250 ms barges in even though no single frame spikes. Requires the
+        # window to be at least 60% full so one moderate frame can't trigger.
+        if self._window_rms > 0:
+            now = time.monotonic()
+            self._rms_history = [(t, r) for t, r in self._rms_history if now - t <= self._window_s]
+            self._rms_history.append((now, rms))
+            if self._rms_history and (now - self._rms_history[0][0]) >= self._window_s * 0.6:
+                mean = sum(r for _, r in self._rms_history) / len(self._rms_history)
+                if mean >= self._window_rms:
+                    # No history clear: while the voice SUSTAINS, frames keep
+                    # passing (clearing would stutter the barge-in on/off).
+                    log.debug("echo_gate_barge_in", rms=int(mean), signal="window")
+                    return released + audio
         return released + b"\x00" * len(audio)

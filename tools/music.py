@@ -11,6 +11,8 @@ clean failure and the AppleScript-driven Apple Music path takes over.
 
 from __future__ import annotations
 
+import asyncio
+import urllib.parse
 from typing import Any
 
 import structlog
@@ -30,9 +32,46 @@ def _music_app() -> str:
     return app_router.preferred("music")
 
 
-_SCOPES = "user-modify-playback-state user-read-playback-state user-read-currently-playing"
+# Module-level tuple so scope drift is visible in one place (22.1-B37).
+# playlist-read-* closes the live 403 from ERRORS-TO-FIX §6.
+_SCOPE_TUPLE = (
+    "user-modify-playback-state",
+    "user-read-playback-state",
+    "user-read-currently-playing",
+    "playlist-read-private",
+    "playlist-read-collaborative",
+)
+_SCOPES = " ".join(_SCOPE_TUPLE)
 _spotify_client: Any = None
 _spotify_unavailable = False
+
+
+def _scopes_hash() -> str:
+    import hashlib
+
+    return hashlib.sha256("|".join(_SCOPE_TUPLE).encode()).hexdigest()[:16]
+
+
+def _evict_token_on_scope_drift() -> bool:
+    """True if the cached token was minted for a DIFFERENT scope set.
+
+    Spotify token refreshes never widen scopes — only a fresh consent does
+    (developer.spotify.com/documentation/web-api/concepts/scopes). We store
+    the scope-set hash beside the token; on drift, evict so the PKCE flow
+    re-runs with the new scopes.
+    """
+    token_path = settings.EMMA_HOME / "spotify_token.json"
+    hash_path = settings.EMMA_HOME / "spotify_scopes.hash"
+    current = _scopes_hash()
+    stored = hash_path.read_text().strip() if hash_path.exists() else ""
+    if stored == current:
+        return False
+    if token_path.exists():
+        token_path.unlink()
+        log.warning("spotify_scope_drift", old=stored or "<none>", new=current)
+    hash_path.parent.mkdir(parents=True, exist_ok=True)
+    hash_path.write_text(current)
+    return bool(stored)  # drift only counts if there WAS a previous grant
 
 
 def _have_spotify_creds() -> bool:
@@ -52,6 +91,11 @@ def _spotify() -> Any:
     try:
         import spotipy
         from spotipy.oauth2 import SpotifyOAuth
+
+        if _evict_token_on_scope_drift():
+            # The next call runs the PKCE consent in the browser — Garcia
+            # hears about it instead of a mystery hang (22.1-B37).
+            log.info("spotify_reauth_needed", reason="scope set widened (playlists)")
 
         cache_path = settings.EMMA_HOME / "spotify_token.json"
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -211,11 +255,44 @@ async def play_playlist(name: str, app: str = "") -> ToolResult:
         app = "Music"
         await _ensure_running(app)
     n = macos.esc_applescript(name)
-    return _apple_music(
+    result = _apple_music(
         f'tell application "{macos.esc_applescript(app)}" to play playlist "{n}"',
         f"Reproduciendo la lista {name} en {app}.",
         app=app,
         ends_session=True,
+    )
+    if not result.success and "-1700" in (result.user_message or ""):
+        # 22.1-B37: -1700 = the playlist isn't a LIBRARY playlist (editorial
+        # ones like "Classical Essentials" live in Apple Music's catalog, not
+        # the local library — ERRORS-TO-FIX §6). Open the catalog search via
+        # the music:// URL scheme instead of dying with a type error.
+        return await _open_music_search(name)
+    return result
+
+
+async def _open_music_search(term: str) -> ToolResult:
+    """Open Apple Music's catalog search for ``term`` (22.1-B37 fallback)."""
+    url = f"music://music.apple.com/search?term={urllib.parse.quote_plus(term)}"
+    try:
+        proc = await asyncio.create_subprocess_exec("open", url, stdout=None, stderr=None)
+        await proc.wait()
+        ok = proc.returncode == 0
+    except Exception:
+        ok = False
+    if ok:
+        return ToolResult(
+            True,
+            {"failure_reason": "playlist_not_in_library", "playlist": term, "opened_search": True},
+            f"Esa playlist no está en tu biblioteca; te abrí la búsqueda de "
+            f"'{term}' en Apple Music. Dale 'agregar' si la quieres guardada.",
+            False,
+        )
+    return ToolResult(
+        False,
+        {"failure_reason": "playlist_not_in_library", "playlist": term},
+        f"No tengo la playlist '{term}' guardada. ¿La busco en Apple Music "
+        "o te la guardo a tu biblioteca?",
+        False,
     )
 
 
