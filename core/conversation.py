@@ -75,7 +75,7 @@ from pipecat.transports.local.audio import (
 from config.settings import settings
 from core import audio_devices, capability_gaps, dictionary, events_bus, session_memory, vocabulary
 from core.confidence import is_low_confidence
-from core.echo_gate import EchoGateFilter
+from core.echo_gate import EchoGateFilter, SpeechPhase
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
@@ -116,19 +116,24 @@ def _is_terminal_auth_error(message: str) -> bool:
 
 
 class EchoGateProcessor(FrameProcessor):
-    """Watches BotStarted/StoppedSpeakingFrames and toggles the echo gate."""
+    """Watches BotStarted/StoppedSpeakingFrames; toggles gate + speech phase."""
 
-    def __init__(self, gate: EchoGateFilter):
+    def __init__(self, gate: EchoGateFilter, phase: SpeechPhase | None = None):
         super().__init__()
         self._gate = gate
+        self._phase = phase
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
+            if self._phase is not None:
+                self._phase.on_bot_started()
             events_bus.publish("state", state="speaking")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._gate.set_bot_speaking(False)
+            if self._phase is not None:
+                self._phase.on_bot_stopped()
             events_bus.publish("state", state="listening")
         await self.push_frame(frame, direction)
 
@@ -212,14 +217,17 @@ class _BotTextTap(FrameProcessor):
     ``bot_text_test`` for the voice harness.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, phase: SpeechPhase | None = None) -> None:
         super().__init__()
         self._bot_text = ""
+        self._phase = phase
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
         if isinstance(frame, LLMTextFrame) and frame.text:
             self._bot_text += frame.text
+            if self._phase is not None:
+                self._phase.on_bot_text(frame.text)  # opener word count (22-B32)
         elif isinstance(frame, BotStoppedSpeakingFrame):
             text = self._bot_text.strip()
             if text:
@@ -941,7 +949,10 @@ async def build_pipeline() -> tuple[
     # (median ~5400); anything at/below that let the echo through to the Realtime
     # VAD. 18000 suppresses the echo while still letting a deliberate, close,
     # louder human voice barge in.
-    echo_gate = EchoGateFilter(tail_ms=600, barge_in_rms=18000.0)
+    speech_phase = SpeechPhase()  # fresh per session — the opener reset (22-B32)
+    echo_gate = EchoGateFilter(
+        tail_ms=600, barge_in_rms=18000.0, phase_provider=speech_phase.current
+    )
 
     transport = LocalAudioTransport(
         LocalAudioTransportParams(
@@ -957,7 +968,7 @@ async def build_pipeline() -> tuple[
         )
     )
 
-    gate_proc = EchoGateProcessor(echo_gate)
+    gate_proc = EchoGateProcessor(echo_gate, speech_phase)
 
     session_props = await _build_session_properties()
     llm = OpenAIRealtimeLLMService(
@@ -988,7 +999,7 @@ async def build_pipeline() -> tuple[
             transport.input(),
             _UserSpeechTap(),  # session memory + low-confidence flags (21-B24/B28)
             llm,
-            _BotTextTap(),  # assistant text before the aggregator eats it (21-B24)
+            _BotTextTap(speech_phase),  # assistant text + opener word count (21/22)
             auth_watcher,  # right after the LLM so it sees its ErrorFrames first
             end_watcher,  # closes the session after playback tools finish speaking
             assistant_aggregator,
