@@ -80,12 +80,41 @@ def _missing_creds_result() -> ToolResult:
     )
 
 
-def _apple_music(script: str, ok_msg: str, *, ends_session: bool = False) -> ToolResult:
+def _apple_music(
+    script: str, ok_msg: str, *, app: str = "", ends_session: bool = False
+) -> ToolResult:
     try:
         macos.run_applescript(script)
     except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"Música no respondió: {exc}", False)
+        data = None
+        if app and ("-600" in str(exc) or "isn't running" in str(exc)):
+            # OS-state mismatch (22-B33): structured so the LLM proposes a fix.
+            data = app_router.failure_data("music", app, "app_not_running")
+        return ToolResult(False, data, f"Música no respondió: {exc}", False)
     return ToolResult(True, None, ok_msg, False, ends_session=ends_session)
+
+
+def _resolve_music_or_ask(explicit: str) -> tuple[str | None, ToolResult | None]:
+    """(app, None) to proceed, or (None, ask) when NOTHING music-ish is open.
+
+    22-B33: with neither Spotify nor Music running, launching one silently
+    guesses — Emma asks instead ("¿Abro Spotify o uso Music?"). Garcia's
+    pick comes back as the explicit ``app`` arg, which always proceeds.
+    """
+    if explicit:
+        return explicit.strip(), None
+    decision = app_router.inspect("music")
+    if decision.source in ("frontmost", "running"):
+        return decision.picked, None
+    data = app_router.failure_data("music", decision.picked, "app_not_running")
+    alts = [a for a in data["alternatives"] if a]
+    alt_txt = f" o uso {alts[0]}" if alts else ""
+    return None, ToolResult(
+        False,
+        data,
+        f"No tienes ninguna app de música abierta. ¿Abro {decision.picked}{alt_txt}?",
+        False,
+    )
 
 
 async def _ensure_running(app: str) -> None:
@@ -124,12 +153,17 @@ def _spotify_playlist_uri(name: str) -> str | None:
 
 
 @tool()
-async def play_track(query: str) -> ToolResult:
+async def play_track(query: str, app: str = "") -> ToolResult:
     """Search for a track or artist and start playing the top result.
 
-    Drives the resolved desktop app (Spotify or Apple Music) via AppleScript,
-    launching it first if needed — so it works even with no active device."""
-    app = _music_app()
+    Routes to whatever music app is actually open (22-B30); with none open
+    it ASKS which to launch — Garcia's pick comes back as `app="Spotify"` /
+    `app="Music"`, which always proceeds."""
+    picked, ask = _resolve_music_or_ask(app)
+    if ask is not None:
+        return ask
+    assert picked is not None
+    app = picked
     await _ensure_running(app)
     if app == "Spotify":
         uri = _spotify_search_uri(query)
@@ -138,6 +172,7 @@ async def play_track(query: str) -> ToolResult:
             return _apple_music(
                 f'tell application "Spotify" to play track "{esc}"',
                 f"Reproduciendo {query} en Spotify.",
+                app="Spotify",
                 ends_session=True,
             )
         # No Spotify search available → fall back to Apple Music (always installed).
@@ -148,14 +183,20 @@ async def play_track(query: str) -> ToolResult:
         f'tell application "{macos.esc_applescript(app)}" to '
         f'(play (first track of (search library 1 for "{q}")))',
         f"Reproduciendo {query} en {app}.",
+        app=app,
         ends_session=True,
     )
 
 
 @tool()
-async def play_playlist(name: str) -> ToolResult:
-    """Play a playlist by name (desktop AppleScript, launching the app if needed)."""
-    app = _music_app()
+async def play_playlist(name: str, app: str = "") -> ToolResult:
+    """Play a playlist by name. Routes to the OPEN music app; with none open
+    it asks which to launch (re-call with app=<pick>)."""
+    picked, ask = _resolve_music_or_ask(app)
+    if ask is not None:
+        return ask
+    assert picked is not None
+    app = picked
     await _ensure_running(app)
     if app == "Spotify":
         uri = _spotify_playlist_uri(name)
@@ -164,6 +205,7 @@ async def play_playlist(name: str) -> ToolResult:
             return _apple_music(
                 f'tell application "Spotify" to play track "{esc}"',
                 f"Reproduciendo la lista {name} en Spotify.",
+                app="Spotify",
                 ends_session=True,
             )
         app = "Music"
@@ -172,19 +214,24 @@ async def play_playlist(name: str) -> ToolResult:
     return _apple_music(
         f'tell application "{macos.esc_applescript(app)}" to play playlist "{n}"',
         f"Reproduciendo la lista {name} en {app}.",
+        app=app,
         ends_session=True,
     )
 
 
 async def _transport(verb: str, ok_msg: str, *, ends_session: bool = False) -> ToolResult:
-    """Run a transport verb (pause/play/next track/previous track) on the resolved
-    desktop app via AppleScript, launching it first if needed. B3: no Web API —
-    that's what produced the "no active device" failures."""
-    app = _music_app()
-    await _ensure_running(app)
+    """Run a transport verb (pause/play/next track/previous track) on whatever
+    music app is OPEN (22-B30). Launching an app just to pause it is absurd —
+    with nothing running, say so with structured data instead (22-B33)."""
+    decision = app_router.inspect("music")
+    if decision.source not in ("frontmost", "running"):
+        data = app_router.failure_data("music", decision.picked, "app_not_running")
+        return ToolResult(False, data, "No hay ninguna app de música abierta.", False)
+    app = decision.picked
     return _apple_music(
         f'tell application "{macos.esc_applescript(app)}" to {verb}',
         ok_msg,
+        app=app,
         ends_session=ends_session,
     )
 
