@@ -160,13 +160,15 @@ class TestB3SpotifyLaunch:
             order.append("applescript")
             return ""
 
-        monkeypatch.setattr(music, "_music_app", lambda: "Spotify")
         monkeypatch.setattr(music.macos, "app_is_running", running)
         monkeypatch.setattr(music.macos, "launch_app", launch)
         monkeypatch.setattr(music.macos, "run_applescript", runas)
         monkeypatch.setattr(music, "_spotify_search_uri", lambda q: "spotify:track:xyz")
 
-        r = await music.play_track("bad bunny")
+        # 22-B30/B33: with nothing running, an UNNAMED app would ASK instead of
+        # launching — Garcia naming Spotify is what authorizes the launch path,
+        # and the B3 contract (launch BEFORE AppleScript) still holds there.
+        r = await music.play_track("bad bunny", app="Spotify")
         assert r.success is True
         assert "launch:Spotify" in order
         assert order.index("launch:Spotify") < order.index("applescript")

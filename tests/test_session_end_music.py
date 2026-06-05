@@ -32,12 +32,23 @@ def test_toolresult_ends_session_defaults_false():
 # --- music tools set the signal correctly ----------------------------------
 
 
+def _router_running(monkeypatch, music, app: str) -> None:
+    """22-B30: the router decides now — simulate `app` running for legacy tests."""
+    from core.app_router import RouteDecision
+
+    monkeypatch.setattr(
+        music.app_router,
+        "inspect",
+        lambda c: RouteDecision(picked=app, source="running", candidates=[app]),
+    )
+
+
 @pytest.mark.asyncio
 async def test_play_track_ends_session(monkeypatch):
     # 19.2-B3: playback is AppleScript on the (already-running) desktop app.
     import tools.music as music
 
-    monkeypatch.setattr(music, "_music_app", lambda: "Spotify")
+    _router_running(monkeypatch, music, "Spotify")
     monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
     monkeypatch.setattr(music.macos, "launch_app", AsyncMock())
     monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
@@ -51,7 +62,7 @@ async def test_play_track_ends_session(monkeypatch):
 async def test_play_track_apple_music_fallback_ends_session(monkeypatch):
     import tools.music as music
 
-    monkeypatch.setattr(music, "_music_app", lambda: "Music")
+    _router_running(monkeypatch, music, "Music")
     monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
     monkeypatch.setattr(music.macos, "launch_app", AsyncMock())
     monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
@@ -64,7 +75,7 @@ async def test_play_track_apple_music_fallback_ends_session(monkeypatch):
 async def test_pause_keeps_session_open(monkeypatch):
     import tools.music as music
 
-    monkeypatch.setattr(music, "_music_app", lambda: "Spotify")
+    _router_running(monkeypatch, music, "Spotify")
     monkeypatch.setattr(music.macos, "app_is_running", AsyncMock(return_value=True))
     monkeypatch.setattr(music.macos, "run_applescript", MagicMock(return_value=""))
     r = await music.pause()

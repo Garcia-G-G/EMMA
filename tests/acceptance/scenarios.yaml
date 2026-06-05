@@ -1518,5 +1518,80 @@
     "max_latency_ms": 6000,
     "destructive": true,
     "live_blocked_by": "the ≤2-token fragment flag needs a natural noise blip (full voice turns carry 'Hey Emma'); invariant + guard covered by unit tests"
+  },
+  {
+    "id": "V61",
+    "name": "music_routes_to_frontmost_spotify",
+    "language": "es",
+    "given": "PRECONDITION (set by smoke runner): Spotify open and FRONTMOST; Music preference irrelevant (22-B30).",
+    "utterance": "Hey Emma, pon una canción de Bad Bunny.",
+    "expected_actions": [
+      {
+        "tool": "play_track"
+      }
+    ],
+    "expected_spoken_pattern": "(.+)",
+    "mock_spoken_text": "Reproduciendo Bad Bunny en Spotify.",
+    "max_latency_ms": 9000,
+    "destructive": false,
+    "expected_transcript_pattern": "bad bunny"
+  },
+  {
+    "id": "V62",
+    "name": "browser_closes_frontmost_chrome",
+    "language": "es",
+    "given": "PRECONDITION: Chrome FRONTMOST with ≥2 tabs; Brave also running and is the preference (22-B30).",
+    "utterance": "Hey Emma, cierra esta pestaña.",
+    "expected_actions": [
+      {
+        "tool": "close_current_tab"
+      }
+    ],
+    "expected_spoken_pattern": "(.+)",
+    "mock_spoken_text": "Listo, cerré la pestaña.",
+    "max_latency_ms": 7000,
+    "destructive": true
+  },
+  {
+    "id": "V63",
+    "name": "opener_barge_in_protected",
+    "language": "es",
+    "given": "Garcia speaks OVER Emma's greeting; she must finish it, then respond (22-B32).",
+    "utterance": "Hey Emma, espera espera.",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(dime|aquí estoy|qué pasó|te escucho)",
+    "mock_spoken_text": "Aquí estoy, dime.",
+    "max_latency_ms": 7000,
+    "destructive": false,
+    "live_blocked_by": "needs speech precisely overlapped onto the opener; SpeechPhase covered by unit tests + manual smoke 4"
+  },
+  {
+    "id": "V64",
+    "name": "music_nothing_running_asks",
+    "language": "es",
+    "given": "PRECONDITION (set by smoke runner): NEITHER Spotify nor Music running (22-B33).",
+    "utterance": "Hey Emma, pon una canción de Bad Bunny.",
+    "expected_actions": [
+      {
+        "tool": "play_track"
+      }
+    ],
+    "expected_spoken_pattern": "(¿abro|abro spotify|música abierta|cuál)",
+    "mock_spoken_text": "No tienes ninguna app de música abierta. ¿Abro Spotify o uso Music?",
+    "max_latency_ms": 9000,
+    "destructive": false
+  },
+  {
+    "id": "V65",
+    "name": "session_continuity_no_regreet",
+    "language": "es",
+    "given": "Emma spoke <90s ago in a PREVIOUS session of the same daemon; the new session must resume without re-greeting (22-B31).",
+    "utterance": "Hey Emma, ¿y qué más?",
+    "expected_actions": [],
+    "expected_spoken_pattern": "(.*)",
+    "mock_spoken_text": "Pues eso era todo lo del clima.",
+    "max_latency_ms": 9000,
+    "destructive": false,
+    "live_blocked_by": "harness chains keep ONE session; continuation across micro-sessions is unit-tested + live smoke 5/6"
   }
 ]
