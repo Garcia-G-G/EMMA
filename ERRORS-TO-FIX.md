@@ -56,8 +56,8 @@ Not one bug — three stacked causes, confirmed from the session log:
 2. **Echo gate starvation:** Emma spoke **58% of the 4-min session** (21
    utterances) + 600ms tail each; `barge_in_rms=18000` ≈ unreachable by
    normal voice → Garcia's speech onsets land in gated (zeroed) audio.
-   Not changed yet — lowering the threshold risks the old self-interruption
-   bug. Candidate: rolling-window barge-in instead of single-frame RMS.
+   ✅ FIXED 22.1-B38: rolling-window barge-in (sustained ≥6000 RMS over
+   250ms) + the 18000 spike shortcut kept; opener still absolute.
 3. **`session_end_after_tool`:** after `play_track` Emma closed the session
    ("after_speech") — by design, but combined with (1) it reads as "she
    stopped listening". Revisit once wake is reliable.
@@ -71,9 +71,9 @@ names. Real gap found in 19.7 (see §3).
 1. ✅ **FIXED (21-B24):** self-confirmation — confirmation invariant in the
    function handler (event-ordered, VAD-onset user-turn marker). V13/V14
    voice-verified: question + silence → no delete; real "sí" → delete.
-2. 🟡 **PARTIALLY ADDRESSED (21-B24):** session-memory taps now capture
-   user/assistant text in production — but the REFLECTION pipeline still
-   reads the old dead collector. Wiring reflection onto the taps = next.
+2. ✅ **FIXED (22.1-B36):** reflection triggers from _BotTextTap; live
+   evidence: facts 11→13 during the 22.1 voice runs (learned 'classical
+   music' + 'notes in Spanish' from real conversations).
 3. ✅ **FIXED (21-B26):** strict-mirror prompt rule + web.py summarize
    answers in preferred_lang. V56 voice-verified (full Spanish reply).
 4. ✅ **FIXED (21-B27):** correction directive with 3 examples — V57
@@ -81,7 +81,7 @@ names. Real gap found in 19.7 (see §3).
    vocabulary.toml now carries [NillOjeda] learned from voice.
 5. ✅ **FIXED (19.7/21):** brittle corpus patterns loosened to intent.
 
-## 5. 🔴 Zombie session after server-side WebSocket close (live 2026-06-05)
+## 5. ✅ Zombie session — FIXED 22.1-B35 (DeadSessionWatcher: debounced cancel → back to wake; 3-in-60s → 30s cooldown; unit-tested, V66 documented)
 
 **Symptom:** Garcia: "she's not talking." Wake fired, session opened, then
 OpenAI threw a SERVER-side error ("The server had an error… retry",
@@ -102,7 +102,7 @@ watcher): on ErrorFrames matching "Error sending client event" /
 NOT SystemExit — so the orchestrator loops back to wake and the next
 "hey jarvis" gets a fresh session. Log `session_zombie_recovered`.
 
-## 6. 🟡 Spotify 403 — token lacks playlist scopes (live 2026-06-05)
+## 6. ✅ Playlists — FIXED 22.1-B37 (scopes + drift-eviction; -1700 → music:// catalog search; V67 live-PASS)
 
 ```
 spotify_playlist_lookup_failed: 403 Insufficient client scope
@@ -135,10 +135,10 @@ to his library — not die with a type error. Both halves belong to one
    by real notification sounds (STT heard "iMessage iMessage iMessage…").
    BlackHole install removes the whole class. Until then, runs need Do Not
    Disturb.
-3. **Repeated voice runs pollute real app state** (3 duplicate 'Compras'
+3. ✅ FIXED 22.1-B40 (setup/teardown hooks; A13×3 verified no growth). Was: **Repeated voice runs pollute real app state** (3 duplicate 'Compras'
    notes accumulated). The harness needs per-scenario setup/teardown hooks
    (e.g. `setup_script` / `teardown_script` fields) — next harness prompt.
-4. **Emma greets on wake now** ("Hola, soy ema…"), consuming a turn before
+4. ✅ FIXED 22.1-B39 (energy-detected immediate command skips the greeting; live-verified). Was: **Emma greets on wake now** ("Hola, soy ema…"), consuming a turn before
    the utterance. Harmless for humans, adds latency for the harness; the
    B20 first-sentence pin made it more consistent. Consider a no-greeting
    directive when the session opens from a barge-in-style immediate command.
