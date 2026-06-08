@@ -178,6 +178,19 @@ class TestAgentLoop:
         )
         assert res.status == "budget"
 
+    def test_missing_usage_does_not_crash(self, tmp_path):
+        # A turn whose response carries no usage object must not break the
+        # loop or the budget guard: cost stays 0, the loop still completes.
+        no_usage = SimpleNamespace(
+            id="resp_1",
+            output=[_call("finish", {"summary": "listo", "status": "ok"})],
+            usage=None,
+            output_text="",
+        )
+        res = asyncio.run(run_agent("x", str(tmp_path), client=_fake_client([no_usage])))
+        assert res.status == "ok"
+        assert res.cost_usd == 0.0
+
     def test_transcript_written(self, tmp_path):
         turns = [_resp([_call("finish", {"summary": "ok", "status": "ok"})])]
         res = asyncio.run(run_agent("x", str(tmp_path), client=_fake_client(turns), task_id="abc"))

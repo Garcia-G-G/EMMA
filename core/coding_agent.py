@@ -23,6 +23,7 @@ openai.com/index/unrolling-the-codex-agent-loop/ (the pattern).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import fnmatch
 import json
 import time
@@ -190,6 +191,10 @@ class _Sandbox:
             )
         except TimeoutError:
             proc.kill()
+            # Reap the killed process so it doesn't linger as a zombie and so
+            # proc.returncode is settled before anyone inspects it.
+            with contextlib.suppress(Exception):
+                await proc.wait()
             raise ValueError(f"command timed out after {timeout_s}s") from None
         text = (stdout or b"").decode("utf-8", errors="replace")
         if len(text) > _MAX_CMD_OUTPUT:
@@ -400,6 +405,11 @@ async def run_agent(
         usage = getattr(resp, "usage", None)
         if usage is not None:
             cost += usage.input_tokens / 1e6 * in_rate + usage.output_tokens / 1e6 * out_rate
+        else:
+            # No usage means the 2x-budget guard below can't see this turn's
+            # spend. max_iters still bounds the loop, but log it so a silent
+            # cost drift is observable rather than invisible.
+            log.warning("coding_agent_missing_usage", iter=it)
         events_bus.publish("coding_agent_cost", cost_usd=round(cost, 4), iter=it)
         if cost > 2 * budget_usd:
             return AgentRunResult(
@@ -428,7 +438,8 @@ async def run_agent(
         for call in calls:
             try:
                 args = json.loads(call.arguments or "{}")
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                log.warning("coding_agent_bad_tool_args", name=call.name, error=str(exc))
                 args = {}
             t0 = time.monotonic()
             result = await _execute_tool(sandbox, call.name, args)
