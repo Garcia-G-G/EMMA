@@ -1631,5 +1631,37 @@
     "destructive": false,
     "setup_script": "shell: open -gja Music && sleep 2",
     "teardown_script": "applescript: tell application \"Music\" to pause"
+  },
+  {
+    "id": "V68",
+    "name": "delegate_to_codex_mock",
+    "language": "es",
+    "given": "Garcia delegates non-trivial coding work; routes to the native sub-agent (Prompt 23).",
+    "utterance": "Hey Emma, en mi carpeta scratch agrega un comentario TODO al final de README punto m d.",
+    "expected_actions": [
+      {
+        "tool": "delegate_to_codex"
+      }
+    ],
+    "expected_spoken_pattern": "(agente|le encargo|le pedí|rama|confirm|scratch)",
+    "mock_spoken_text": "¿Le encargo al agente «agregar TODO al README» en el directorio actual?",
+    "max_latency_ms": 9000,
+    "destructive": true
+  },
+  {
+    "id": "V69",
+    "name": "codex_cost_guard",
+    "language": "es",
+    "given": "A huge task → pre-flight cost estimate above the cap → requires_confirmation with the figure (Prompt 23 cost guard).",
+    "utterance": "Hey Emma, reescribe todo el repo completo en Rust desde cero.",
+    "expected_actions": [
+      {
+        "tool": "delegate_to_codex"
+      }
+    ],
+    "expected_spoken_pattern": "(estimo|\\$|confirm|seguro|le encargo)",
+    "mock_spoken_text": "¿Le encargo al agente «reescribir todo en Rust» en el directorio actual? Estimo ~$2.50.",
+    "max_latency_ms": 9000,
+    "destructive": true
   }
 ]

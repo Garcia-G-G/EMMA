@@ -16,6 +16,25 @@ def _claude_available() -> bool:
     return shutil.which("claude") is not None
 
 
+async def setup_worktree(repo: Path, branch: str) -> Path:
+    """Create a fresh git worktree for ``branch`` off HEAD; return its path.
+
+    Shared by both delegate paths (Prompt 23) so the main checkout stays
+    clean and Garcia can review the diff later. No-op (returns ``repo``)
+    when ``branch`` is empty.
+    """
+    if not branch:
+        return repo
+    wt_root = repo.parent / f"emma-wt-{branch.replace('/', '-')}"
+    for cmd in (
+        ["/usr/bin/git", "fetch", "--quiet"],
+        ["/usr/bin/git", "worktree", "add", "-B", branch, str(wt_root), "HEAD"],
+    ):
+        p = await asyncio.create_subprocess_exec(*cmd, cwd=str(repo))
+        await p.wait()
+    return wt_root
+
+
 @tool(destructive=True)
 async def delegate_to_claude_code(
     task: str,
@@ -64,20 +83,7 @@ async def delegate_to_claude_code(
             False,
         )
 
-    work_dir = repo
-    if branch:
-        wt_root = repo.parent / f"emma-wt-{branch.replace('/', '-')}"
-
-        async def _setup() -> None:
-            for cmd in (
-                ["/usr/bin/git", "fetch", "--quiet"],
-                ["/usr/bin/git", "worktree", "add", "-B", branch, str(wt_root), "HEAD"],
-            ):
-                p = await asyncio.create_subprocess_exec(*cmd, cwd=str(repo))
-                await p.wait()
-
-        await _setup()
-        work_dir = wt_root
+    work_dir = await setup_worktree(repo, branch)
 
     async def runner(ctrl: Any) -> int:
         argv = ["claude", "-p", task, "--cwd", str(work_dir)]

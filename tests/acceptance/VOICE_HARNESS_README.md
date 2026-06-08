@@ -96,3 +96,14 @@ Creator tier that's ≈ **$0.11 per 1 000 characters**
 the cache. The runner estimates uncached chars before synthesizing and
 **asks for confirmation when the estimate exceeds $1** (`--yes` skips) —
 so an accidentally emptied cache can never silently bill the account.
+
+## 7. Coding-agent scenarios (Prompt 23)
+
+V68 (delegation) and V69 (cost guard) cover `delegate_to_codex` in **mock
+mode only** — they assert the routing + the confirmation/cost-guard shape
+without spending tokens or touching a repo. A real agent run is its own
+thing: drive it manually in a throwaway git repo (`/tmp/agent-smoke`) so no
+real project is at risk, e.g. `core.coding_agent.run_agent(task, workdir)`
+directly, or by voice "Emma, en /tmp/agent-smoke agrega un párrafo al
+README". A trivial task lands around **$0.01** and a handful of iterations.
+The transcript is written to `<workdir>/.emma_agent/<task_id>.jsonl`.

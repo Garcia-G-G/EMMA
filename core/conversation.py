@@ -701,6 +701,20 @@ async def _build_instructions() -> str:
         "- After editing, confirm briefly ('listo, lo cambié y lo abrí en "
         "Cursor'). Do NOT read the file contents back — the IDE already shows "
         "the change.\n"
+        "\n# Coding agent delegation\n"
+        "- Small in-place edits (≤ 3 lines, 1 file, no logic to figure out) → "
+        "use edit_file_append / edit_file_prepend / edit_file_replace / "
+        "edit_file_search_replace directly.\n"
+        "- Larger work (refactor, add a feature, fix a non-trivial bug, write "
+        "tests, audit a module) → DELEGATE via delegate_to_codex.\n"
+        "- ALWAYS confirm the workdir before delegating: '¿en ~/repos/myapp, y "
+        "en una rama nueva?' — wait for sí, then re-call with confirmed=true.\n"
+        "- AFTER delegation, briefly say 'le pedí al agente, te aviso.' Then "
+        "STOP. The background notification announces completion.\n"
+        "- When Garcia asks '¿cómo va?', call codex_status (or task_status).\n"
+        "- delegate_to_claude_code (Anthropic Claude Code CLI) is also "
+        "available IF Garcia has it installed AND explicitly asks for Claude. "
+        "The OpenAI sub-agent (delegate_to_codex) is the default.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:

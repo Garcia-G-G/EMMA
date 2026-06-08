@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     # Hard ceiling for any single external API call.
     API_TIMEOUT_S: float = 10.0
 
+    # ---- Native coding sub-agent (Prompt 23). A Responses-API tool-calling
+    # loop running INSIDE Emma — no external `codex` CLI, no Gatekeeper, no
+    # npm. Reuses OPENAI_API_KEY. Model card:
+    # https://developers.openai.com/api/docs/models/gpt-5.3-codex
+    # Alternatives via .env: gpt-5-codex ($1.25/$10, cheaper), gpt-5.5
+    # ($5/$30, more reasoning — the default once Codex variants deprecate).
+    CODING_AGENT_MODEL: str = "gpt-5.3-codex"
+    CODING_AGENT_MAX_ITERS: int = 30  # hard cap on tool-call loop iterations
+    CODING_AGENT_MAX_COST_USD: float = 2.0  # soft cap (pre-flight confirm); hard kill at 2x
+    CODING_AGENT_TIMEOUT_S: int = 1800  # 30-min wall clock
+    CODING_AGENT_REASONING: str = "medium"  # low | medium | high | xhigh
+
     # Web search: pick one. Brave is the default; Tavily works as a drop-in if set.
     BRAVE_API_KEY: str | None = None
     TAVILY_API_KEY: str | None = None
