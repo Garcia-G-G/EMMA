@@ -24,6 +24,7 @@ _CREDENTIAL_FIELDS = (
     "TAVILY_API_KEY",
     "PICOVOICE_ACCESS_KEY",
     "GITHUB_TOKEN",
+    "X_CLIENT_SECRET",
 )
 
 
@@ -175,6 +176,11 @@ class Settings(BaseSettings):
     # ARE secret → Keychain via core/secrets.py (X_ACCESS_TOKEN / X_REFRESH_TOKEN
     # / X_TOKEN_EXPIRES_AT). Run `python -m emma.x_setup` once to mint them.
     X_CLIENT_ID: str = ""
+    # Only for a CONFIDENTIAL X app (Web App / Automated App). A Native/public
+    # app uses pure PKCE with no secret — leave this blank. When set, the token
+    # exchange authenticates with HTTP Basic (client_id:secret). Secret-tier →
+    # migrated to Keychain (ends in _SECRET); listed in _CREDENTIAL_FIELDS.
+    X_CLIENT_SECRET: str | None = None
     X_REDIRECT_URI: str = "http://localhost:8723/callback"
     X_SCOPES: str = "tweet.read tweet.write users.read offline.access"
     # After 26.1 the API is the supported path; the unauthenticated web-intent

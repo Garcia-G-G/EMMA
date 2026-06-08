@@ -66,11 +66,18 @@ def build_authorize_url(
 
 
 async def _token_request(data: dict[str, str]) -> dict[str, Any]:
+    # Confidential X app (has a Client Secret) → HTTP Basic auth on the token
+    # endpoint. Public/Native app → no secret, pure PKCE. Either way the body
+    # carries client_id + code_verifier.
+    auth: Any = httpx.USE_CLIENT_DEFAULT
+    if settings.X_CLIENT_SECRET:
+        auth = (settings.X_CLIENT_ID, settings.X_CLIENT_SECRET)
     async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
         resp = await client.post(
             _TOKEN_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
+            auth=auth,
         )
     resp.raise_for_status()
     return dict(resp.json())

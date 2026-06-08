@@ -36,10 +36,14 @@ _STATE_PATH = settings.EMMA_HOME / "setup_state.json"
 
 _X_GUIDE = f"""  Para X / Twitter, una sola vez:
     1. https://developer.x.com/en/portal/dashboard → crea un Project + App (free).
-    2. User authentication settings → Native App, OAuth 2.0 ON,
+    2. User authentication settings → OAuth 2.0 ON,
        Redirect URI: {settings.X_REDIRECT_URI},
        Scopes: tweet.read tweet.write users.read offline.access.
-    3. Pega el Client ID en .env como  X_CLIENT_ID=...  y vuelve a correr este comando."""
+       Tipo de app:
+         · "Native App" (público): solo necesitas el Client ID.
+         · "Web App / Automated App" (confidencial): te da Client ID Y Client Secret.
+    3. Pega el Client ID en .env como  X_CLIENT_ID=...  (y, si tu app es confidencial,
+       también  X_CLIENT_SECRET=...). Vuelve a correr este comando."""
 
 _SPOTIFY_GUIDE = """  Para Spotify, una sola vez:
     1. https://developer.spotify.com/dashboard → crea una app.
