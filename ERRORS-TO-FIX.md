@@ -28,20 +28,34 @@ start date ≥ …` is O(all events). Garcia's calendars: main "Calendar" 39.6s,
 "US Holidays" 5.8s, others <0.5s → ~57s total, hopeless against the 20s
 timeout. The "dialog" in the error message was a red herring.
 
-**FIXED (interim):** `_FETCH_TIMEOUT_S = 90s` + cache TTL 30s → 600s (failures
-cached too), so the scan grinds Calendar ≤6×/hour. Tests in
-`tests/test_calendar_events.py::TestSlowScanHandling`.
+**✅ FIXED (Prompt 24, 2026-06-08) — EventKit migration.** Reads now go through
+`actions/calendar_store.py`, which binds EventKit via `objc.loadBundle` (zero new
+pip — pyobjc-core only) and queries Apple's indexed store with
+`predicateForEventsWithStartDate:endDate:calendars:`. Measured live on Garcia's
+calendars: `today_events` **75.9 ms cold / <1 ms warm**, `events_in_range` over
+a **full year 0.2 ms** — vs the 20 s timeout / 57 s scan. `tools/calendar_tool.py`
+(`today_events`/`next_event`/`events_in_range`) and the proactive reader
+(`core/proactive/calendar_events.py`) both migrated; the 90 s timeout + hidden
+Calendar.app launch + AppleScript scan are gone (10 min TTL cache kept).
 
-**Follow-up (proper fix, next prompt):** migrate calendar reads to **EventKit**
-(`pyobjc-framework-eventkit`, indexed → ms-fast). Requires the Calendars TCC
-pane in the permissions bootstrap (`core/permissions.py`) per the mandatory
-permissions convention. Also benefits `tools/calendar_tool.py`, whose voice
-queries hit the same 20s timeout (`_CAL_TIMEOUT_S`) against a 57s scan —
-i.e. "¿qué tengo hoy?" currently fails too.
-**Confirmed live 2026-06-04 20:57:** asked Emma "qué tengo en el calendario
-hoy" by voice → `today_events` → `tool_timed_out` at exactly 20000ms, twice
-(she auto-retried, doubling the stall to 40s). `capability_gap_recorded`
-fired. The voice calendar read path is effectively dead until EventKit.
+The Calendars TCC pane is now in the bootstrap (`core/permissions.py`:
+`_MANUAL_PANES` + `check_calendar()` probe) per the permissions convention.
+
+**Writes stay on AppleScript** (`create_event`/`delete_event`): they're single
+fast ops, never the slow scan, and EventKit writes silently fail from Emma's
+non-bundled Python process (TCC grants reads but not writes without an app-bundle
+`NSCalendarsFullAccessUsageDescription` — `saveEvent:` returns success yet
+nothing persists; verified across 4 probes). Bundling Emma for EventKit writes is
+a separate packaging task if ever wanted.
+
+Tests: `tests/test_calendar_eventkit.py` (store marshalling, auth, tool layer),
+`tests/test_calendar_events.py` (proactive, EventKit-mocked),
+`tests/test_permissions_fixes.py` (`check_calendar` + Calendars pane).
+
+*Historical (the dead path, now closed):* O(all events) AppleScript scan —
+main "Calendar" 39.6 s, "US Holidays" 5.8 s → ~57 s total vs the 20 s timeout.
+Confirmed live 2026-06-04 20:57: voice "qué tengo hoy" → `today_events` →
+`tool_timed_out` at 20000 ms ×2 (auto-retry doubled the stall).
 
 ## 2. 🟡 "She doesn't listen" — diagnosis 2026-06-04
 

@@ -1,4 +1,15 @@
-"""Apple Calendar via AppleScript: read today's agenda, next event, create events."""
+"""Apple Calendar: READS via EventKit (indexed, ms-fast), WRITES via AppleScript.
+
+Prompt 24 killed the AppleScript dead-path on reads: ``today_events`` /
+``next_event`` / ``events_in_range`` scanned ``whose start date ≥ …`` O(all
+events) — ~57 s on Garcia's calendars (``ERRORS-TO-FIX.md`` §1b) — and timed out.
+They now go through :mod:`actions.calendar_store` (EventKit predicate, ~60 ms).
+
+``create_event`` / ``delete_event`` stay on AppleScript: they're single, fast
+operations (``make new event`` / delete-by-uid, never the slow scan), and
+EventKit writes don't persist from Emma's non-bundled Python process (TCC grants
+reads but not writes without an app-bundle usage description — verified in 24).
+"""
 
 from __future__ import annotations
 
@@ -7,14 +18,41 @@ from typing import Any
 
 import structlog
 
-from actions import macos
+from actions import calendar_store, macos
 from tools.base import ToolResult, tool
 from tools.disambiguation import FIELD_SEP, ISO_DATE_HANDLER, disambiguate, parse_matches
 
 log = structlog.get_logger("emma.tools.calendar")
 
-# Calendar's AppleScript "whose start date ≥ ..." scans can be slow.
+# AppleScript timeout for the WRITE paths only (single ops; reads use EventKit).
 _CAL_TIMEOUT_S = 20.0
+
+# Spoken when calendar access isn't granted (reads need the Calendars TCC pane,
+# requested at install — see core/permissions.py).
+_AUTH_HINT = (
+    "No tengo permiso de Calendarios. Ábrelo en Configuración del Sistema → "
+    "Privacidad y Seguridad → Calendarios y activa Emma."
+)
+
+
+def _label(ev: dict[str, Any]) -> str:
+    """'HH:MM — title (location)' for one EventKit event dict."""
+    start: dt.datetime | None = ev.get("start")
+    hhmm = start.strftime("%H:%M") if start else "??:??"
+    label = f"{hhmm} — {ev.get('title', '')}"
+    if ev.get("location"):
+        label += f" ({ev['location']})"
+    return label
+
+
+def _to_tool_event(ev: dict[str, Any]) -> dict[str, Any]:
+    """EventKit dict → the shape the voice layer already expects."""
+    return {
+        "iso": ev.get("start_iso", ""),
+        "title": ev.get("title", ""),
+        "location": ev.get("location") or "",
+        "label": _label(ev),
+    }
 
 
 def _date_setter(var: str, d: dt.datetime) -> str:
@@ -30,61 +68,10 @@ def _date_setter(var: str, d: dt.datetime) -> str:
     )
 
 
-def _parse_events(raw: str) -> list[dict[str, Any]]:
-    """Parse 'Y-M-D-h-m|summary|location' lines into sorted event dicts."""
-    events: list[dict[str, Any]] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or "|" not in line:
-            continue
-        parts = line.split("|")
-        stamp = parts[0]
-        summary = parts[1] if len(parts) > 1 else ""
-        location = parts[2] if len(parts) > 2 else ""
-        try:
-            y, mo, d, h, mi = (int(x) for x in stamp.split("-"))
-            when = dt.datetime(y, mo, d, h, mi)
-        except (ValueError, TypeError):
-            continue
-        label = f"{h:02d}:{mi:02d} — {summary}"
-        if location:
-            label += f" ({location})"
-        events.append(
-            {
-                "iso": when.isoformat(),
-                "title": summary,
-                "location": location,
-                "label": label,
-                "_dt": when,
-            }
-        )
-    events.sort(key=lambda e: e["_dt"])
-    for e in events:
-        e.pop("_dt", None)
-    return events
-
-
 async def _fetch_between(start: dt.datetime, end: dt.datetime) -> list[dict[str, Any]]:
-    script = (
-        'tell application "Calendar"\n'
-        + _date_setter("startB", start)
-        + _date_setter("endB", end)
-        + 'set out to ""\n'
-        "repeat with cal in calendars\n"
-        "  repeat with ev in (every event of cal whose start date ≥ startB and start date ≤ endB)\n"
-        "    set sd to start date of ev\n"
-        '    set loc to ""\n'
-        "    try\n"
-        "      set loc to location of ev\n"
-        "    end try\n"
-        '    set out to out & (year of sd) & "-" & (month of sd as integer) & "-" & (day of sd) & "-" & (hours of sd) & "-" & (minutes of sd) & "|" & (summary of ev) & "|" & loc & linefeed\n'
-        "  end repeat\n"
-        "end repeat\n"
-        "return out\n"
-        "end tell"
-    )
-    raw = await macos.osascript(script, timeout_s=_CAL_TIMEOUT_S)
-    return _parse_events(raw)
+    """EventKit read → the voice layer's event dicts (sorted by start)."""
+    raw = await calendar_store.fetch_range(start, end)
+    return [_to_tool_event(e) for e in raw]
 
 
 @tool()
@@ -95,7 +82,9 @@ async def today_events() -> ToolResult:
     end = start + dt.timedelta(days=1) - dt.timedelta(seconds=1)
     try:
         events = await _fetch_between(start, end)
-    except macos.AppleScriptError as exc:
+    except calendar_store.CalendarAuthError:
+        return ToolResult(False, None, _AUTH_HINT, False)
+    except Exception as exc:
         return ToolResult(False, None, f"No pude leer el calendario: {exc}", False)
     if not events:
         return ToolResult(True, {"events": []}, "No tienes nada en el calendario hoy.", False)
@@ -110,7 +99,9 @@ async def next_event() -> ToolResult:
     end = now + dt.timedelta(days=14)
     try:
         events = await _fetch_between(now, end)
-    except macos.AppleScriptError as exc:
+    except calendar_store.CalendarAuthError:
+        return ToolResult(False, None, _AUTH_HINT, False)
+    except Exception as exc:
         return ToolResult(False, None, f"No pude leer el calendario: {exc}", False)
     if not events:
         return ToolResult(True, {"event": None}, "No tienes eventos próximos.", False)
@@ -128,7 +119,9 @@ async def events_in_range(start_iso: str, end_iso: str) -> ToolResult:
         return ToolResult(False, None, "Las fechas deben estar en formato ISO.", False)
     try:
         events = await _fetch_between(start, end)
-    except macos.AppleScriptError as exc:
+    except calendar_store.CalendarAuthError:
+        return ToolResult(False, None, _AUTH_HINT, False)
+    except Exception as exc:
         return ToolResult(False, None, f"No pude leer el calendario: {exc}", False)
     spoken = "; ".join(e["label"] for e in events) or "nada"
     return ToolResult(True, {"events": events}, f"En ese rango: {spoken}.", False)

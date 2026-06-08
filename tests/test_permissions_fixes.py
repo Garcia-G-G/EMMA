@@ -118,3 +118,28 @@ def test_every_automation_app_has_a_query() -> None:
 def test_dwell_constant_is_at_least_four_seconds() -> None:
     """Per-app dwell must give the user >=4s to click Allow (constraint)."""
     assert permissions._DWELL_AFTER_DIALOG_S >= 4.0
+
+
+# --- Prompt 24: EventKit Calendars permission ------------------------------
+
+
+def test_calendars_pane_in_manual_panes() -> None:
+    """The Calendars TCC pane must be wired into the bootstrap walkthrough."""
+    panes = [pane for pane, _ in permissions._MANUAL_PANES]
+    assert "Calendars" in panes
+
+
+def test_check_calendar_true_when_authorized() -> None:
+    with patch("actions.calendar_store.is_authorized", return_value=True):
+        assert permissions.check_calendar() is True
+
+
+def test_check_calendar_false_when_denied() -> None:
+    with patch("actions.calendar_store.is_authorized", return_value=False):
+        assert permissions.check_calendar() is False
+
+
+def test_check_calendar_swallows_probe_error() -> None:
+    """A broken EventKit probe must degrade to False, never raise into preflight."""
+    with patch("actions.calendar_store.is_authorized", side_effect=RuntimeError("no ek")):
+        assert permissions.check_calendar() is False

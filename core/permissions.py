@@ -17,7 +17,7 @@ import structlog
 
 log = structlog.get_logger("emma.permissions")
 
-Pane = Literal["Microphone", "Accessibility", "Automation", "AllFiles"]
+Pane = Literal["Microphone", "Accessibility", "Automation", "AllFiles", "Calendars"]
 
 
 def _say(text: str, *, voice: str = "Mónica") -> None:
@@ -106,6 +106,23 @@ def check_accessibility() -> bool:
         return False
 
 
+def check_calendar() -> bool:
+    """Probe EventKit calendar READ authorization (Prompt 24).
+
+    EventKit (``tools/calendar_tool.py`` reads + the proactive engine) needs the
+    Calendars TCC grant, which is a separate permission from Automation→Calendar
+    (that one covers the AppleScript create/delete writes). True on
+    authorized / fullAccess.
+    """
+    try:
+        from actions import calendar_store
+
+        return calendar_store.is_authorized()
+    except Exception as exc:
+        log.warning("calendar_probe_failed", error=str(exc))
+        return False
+
+
 def check_automation() -> bool:
     """Probe a no-op AppleScript on Finder. First call surfaces the prompt."""
     try:
@@ -142,6 +159,11 @@ def preflight() -> bool:
     if not check_automation():
         log.warning("automation_pending")
         # First-run prompt; not fatal.
+
+    if not check_calendar():
+        log.warning("calendar_unauthorized_or_pending")
+        _open_settings("Calendars")
+        # Not fatal — calendar reads degrade to a friendly "grant access" message.
 
     return proceed
 
@@ -193,6 +215,11 @@ _MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
         "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas.",
     ),
     ("AllFiles", "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas."),
+    (
+        "Calendars",
+        "Necesito acceso a Calendarios para leer tu agenda. Actívalo para Emma en "
+        "Privacidad y Seguridad, Calendarios.",
+    ),
 )
 
 
