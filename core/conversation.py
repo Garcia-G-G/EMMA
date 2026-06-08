@@ -740,12 +740,26 @@ async def _build_instructions() -> str:
         "- delegate_to_claude_code (Anthropic Claude Code CLI) is also "
         "available IF Garcia has it installed AND explicitly asks for Claude. "
         "The OpenAI sub-agent (delegate_to_codex) is the default.\n"
+        "\n# Long-term memory (mandatory)\n"
+        "- When you're about to claim something Garcia told you once (a "
+        "preference, a name, a habit) and it's not in the memory block below, "
+        "call recall_facts('<topic>') FIRST to confirm — don't fabricate.\n"
+        "- The memory block is already filtered to what's current; superseded "
+        "preferences are hidden, so trust it over your own assumptions.\n"
     )
     pron = vocabulary.pronunciation_block("es")
     if pron:
         base = f"{base}\n\n{pron}"
+    # Warm sessions (22-B31 continuity) carry recent turns — feed them as the
+    # semantic-priming context so paraphrase-relevant facts rank up (25-A).
+    recent_user = [
+        ev.content
+        for ev in session_memory.recent(8)
+        if ev.kind == "speech" and ev.role == "user" and ev.content
+    ]
+    ctx = " ".join(recent_user[-6:]) if recent_user else None
     try:
-        memory = await priming_block()
+        memory = await priming_block(context=ctx)
     except Exception as exc:
         log.warning("memory_priming_failed", error=str(exc))
         memory = ""
