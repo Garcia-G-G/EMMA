@@ -56,6 +56,12 @@ Enforcement:
   `POSTGRES_DSN`); secret facts use `fact_<uuid>`; user secrets use whatever
   label you choose via the `remember_secret` tool. The canonical credential
   list lives in `config/settings.py:_CREDENTIAL_FIELDS`.
+- **Social posting credentials (Prompt 26)** are Secret-tier and live in the
+  Keychain only — never in `.env` or `memory.db`. Discord per-channel webhook
+  URLs (label `discord_webhook_<channel>`, set via `remember_secret`) grant
+  posting rights, so the URL itself is the secret; an optional X OAuth2
+  user-context token uses label `X_ACCESS_TOKEN`. `core/secrets.py:_CRED_SUFFIXES`
+  gained `_WEBHOOK` so any `*_WEBHOOK` env var also migrates to Keychain.
 
 ## How to wipe everything
 
