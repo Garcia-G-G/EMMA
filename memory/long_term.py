@@ -30,6 +30,7 @@ import sqlite_vec
 import structlog
 
 from config.settings import settings
+from core import events_bus
 from memory import embeddings
 
 log = structlog.get_logger("emma.memory.long_term")
@@ -47,6 +48,17 @@ _DEDUP_MIN_SIM = 0.75  # near-duplicate => bump existing instead of inserting
 # correctly-ranked top hits. 0.20 keeps the relevant fact (always ranked
 # #1 in testing) while still rejecting true noise. See CP5 in PR notes.
 _RECALL_MIN_SIM = 0.20
+# Supersede band (Prompt 25). A new fact whose nearest active fact lands in
+# [_SUPERSEDE_MIN_SIM, _DEDUP_MIN_SIM) is "same topic, different content" — a
+# candidate contradiction. 0.45 floor measured live: "prefiere VSCode" vs
+# "prefiere Zed" = 0.632, looser "ahora usa Zed" = 0.468; unrelated facts sit
+# ~0.50 but the gpt-4o-mini classifier (not similarity) makes the final call.
+# (Contradictions that embed >= 0.75 — e.g. "vive en X" where only the city
+# changes, ~0.89 — are deduped not superseded; a documented, conservative miss.)
+_SUPERSEDE_MIN_SIM = 0.45
+# A low-confidence fact must not bury a high-confidence one: only supersede when
+# the newcomer is at least this fraction as confident as the fact it replaces.
+_SUPERSEDE_CONF_RATIO = 0.8
 _EMBED_DIMS = embeddings.EMBED_DIMS
 
 _SCHEMA = f"""
@@ -59,7 +71,9 @@ CREATE TABLE IF NOT EXISTS facts (
     created_at     REAL NOT NULL,
     last_seen_at   REAL NOT NULL,
     times_observed INTEGER NOT NULL DEFAULT 1,
-    vault_ref      TEXT
+    vault_ref      TEXT,
+    superseded_at  REAL,
+    supersedes     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_facts_kind ON facts(kind);
 CREATE INDEX IF NOT EXISTS idx_facts_conf ON facts(confidence DESC);
@@ -80,6 +94,8 @@ class Fact:
     last_seen_at: float
     times_observed: int = 1
     vault_ref: str | None = None  # Keychain label when the value is Secret-tier
+    superseded_at: float | None = None  # set when a contradicting fact replaced it
+    supersedes: int | None = None  # id of the fact this one replaced
 
 
 def _ensure_columns(conn: sqlite3.Connection) -> None:
@@ -93,6 +109,12 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE facts ADD COLUMN times_observed INTEGER NOT NULL DEFAULT 1")
     if "vault_ref" not in cols:
         conn.execute("ALTER TABLE facts ADD COLUMN vault_ref TEXT")
+    # Prompt 25: supersession (conflict-resolution). superseded_at = when this
+    # fact was replaced; supersedes = the id of the fact this one replaced.
+    if "superseded_at" not in cols:
+        conn.execute("ALTER TABLE facts ADD COLUMN superseded_at REAL")
+    if "supersedes" not in cols:
+        conn.execute("ALTER TABLE facts ADD COLUMN supersedes INTEGER")
 
 
 def _connect() -> sqlite3.Connection:
@@ -128,6 +150,8 @@ def _row_to_fact(row: sqlite3.Row) -> Fact:
         last_seen_at=row["last_seen_at"],
         times_observed=row["times_observed"] if "times_observed" in keys else 1,
         vault_ref=row["vault_ref"] if "vault_ref" in keys else None,
+        superseded_at=row["superseded_at"] if "superseded_at" in keys else None,
+        supersedes=row["supersedes"] if "supersedes" in keys else None,
     )
 
 
@@ -207,13 +231,57 @@ def _remember_with_vec_sync(
         return rid
 
 
+def _nearest_active_fact_sync(query_vec: bytes) -> tuple[Fact, float] | None:
+    """The nearest NON-secret, NON-superseded fact to ``query_vec`` + its cosine
+    similarity. None if the store is empty or the nearest is secret/superseded."""
+    with _connect() as conn:
+        knn = conn.execute(
+            "SELECT rowid, distance FROM facts_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT 5",
+            (query_vec,),
+        ).fetchall()
+        for row in knn:
+            frow = conn.execute(
+                "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL AND superseded_at IS NULL",
+                (row["rowid"],),
+            ).fetchone()
+            if frow is not None:
+                return _row_to_fact(frow), 1.0 - float(row["distance"])
+    return None
+
+
+def _supersede_insert_sync(
+    old_id: int, content: str, kind: str, confidence: float, source: str, vec: list[float]
+) -> int:
+    """Mark ``old_id`` superseded and insert ``content`` as its replacement.
+
+    Never deletes — the old fact stays on disk with ``superseded_at`` set so the
+    review CLI can show (and undo) the change. The replacement records
+    ``supersedes = old_id``.
+    """
+    now = time.time()
+    with _connect() as conn:
+        conn.execute("UPDATE facts SET superseded_at = ? WHERE id = ?", (now, old_id))
+        cur = conn.execute(
+            "INSERT INTO facts (content, kind, confidence, source, created_at, "
+            "last_seen_at, times_observed, supersedes) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+            (content, kind, confidence, source, now, now, old_id),
+        )
+        rid = int(cur.lastrowid or 0)
+        conn.execute(
+            "INSERT INTO facts_vec(rowid, embedding) VALUES (?, ?)", (rid, _serialize(vec))
+        )
+    return rid
+
+
 def _recall_sync(query: str | None, limit: int) -> list[Fact]:
     with _connect() as conn:
         if query:
             rows = conn.execute(
                 """
                 SELECT * FROM facts
-                WHERE vault_ref IS NULL AND (content LIKE ? OR kind LIKE ?)
+                WHERE vault_ref IS NULL AND superseded_at IS NULL
+                  AND (content LIKE ? OR kind LIKE ?)
                 ORDER BY confidence DESC, last_seen_at DESC
                 LIMIT ?
                 """,
@@ -223,7 +291,7 @@ def _recall_sync(query: str | None, limit: int) -> list[Fact]:
             rows = conn.execute(
                 """
                 SELECT * FROM facts
-                WHERE vault_ref IS NULL
+                WHERE vault_ref IS NULL AND superseded_at IS NULL
                 ORDER BY confidence DESC, last_seen_at DESC
                 LIMIT ?
                 """,
@@ -250,10 +318,34 @@ def _recall_vec_sync(query_vec: bytes, limit: int) -> list[Fact]:
             if sim < _RECALL_MIN_SIM:
                 continue
             frow = conn.execute(
-                "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL", (row["rowid"],)
+                "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL AND superseded_at IS NULL",
+                (row["rowid"],),
             ).fetchone()
             if frow is not None:
                 out.append(_row_to_fact(frow))
+    return out
+
+
+def _recall_vec_ranked_sync(query_vec: bytes, knn_limit: int) -> list[tuple[Fact, float]]:
+    """Like ``_recall_vec_sync`` but returns (fact, similarity) pairs so the
+    caller can rank by ``confidence * sim`` (used by the semantic priming block)."""
+    out: list[tuple[Fact, float]] = []
+    with _connect() as conn:
+        knn = conn.execute(
+            "SELECT rowid, distance FROM facts_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (query_vec, knn_limit),
+        ).fetchall()
+        for row in knn:
+            sim = 1.0 - float(row["distance"])
+            if sim < _RECALL_MIN_SIM:
+                continue
+            frow = conn.execute(
+                "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL AND superseded_at IS NULL",
+                (row["rowid"],),
+            ).fetchone()
+            if frow is not None:
+                out.append((_row_to_fact(frow), sim))
     return out
 
 
@@ -294,10 +386,11 @@ def _forget_semantic_sync(query_vec: bytes, k: int = 8) -> int:
                 break
             rid = int(r["rowid"])
             row = conn.execute(
-                "SELECT id FROM facts WHERE id = ? AND vault_ref IS NULL", (rid,)
+                "SELECT id FROM facts WHERE id = ? AND vault_ref IS NULL AND superseded_at IS NULL",
+                (rid,),
             ).fetchone()
             if row is None:
-                continue  # secret-tier or already gone — try the next nearest
+                continue  # secret-tier, superseded, or already gone — try next
             conn.execute("DELETE FROM facts WHERE id = ?", (rid,))
             conn.execute("DELETE FROM facts_vec WHERE rowid = ?", (rid,))
             return 1
@@ -308,6 +401,56 @@ def _count_sync() -> int:
     with _connect() as conn:
         row = conn.execute("SELECT COUNT(*) AS n FROM facts").fetchone()
     return int(row["n"]) if row else 0
+
+
+# ---------- conflict-resolution classifier (Prompt 25) ------------------
+
+_client: Any = None
+
+
+def _get_client() -> Any:
+    global _client
+    if _client is None:
+        from openai import AsyncOpenAI
+
+        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    return _client
+
+
+_CONTRADICTION_PROMPT = (
+    "Two facts about the same person, Garcia:\n"
+    'A (older): "{old}"\n'
+    'B (newer): "{new}"\n'
+    "Does B CONTRADICT A — same subject and predicate, different object, so B "
+    "should REPLACE A (e.g. a changed preference, location, or choice)? A mere "
+    "paraphrase, elaboration, or unrelated fact does NOT contradict.\n"
+    'Answer strict JSON: {{"contradicts": true|false}}'
+)
+
+
+async def _classify_contradiction(old: str, new: str) -> bool:
+    """True if the newer fact should supersede the older one. gpt-4o-mini, cheap.
+
+    Conservative: any error or ambiguity returns False (keep both facts)."""
+    try:
+        completion = await asyncio.wait_for(
+            _get_client().chat.completions.create(
+                model=settings.MEMORY_REFLECTION_MODEL,
+                messages=[
+                    {"role": "user", "content": _CONTRADICTION_PROMPT.format(old=old, new=new)}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+            ),
+            timeout=settings.API_TIMEOUT_S,
+        )
+        import json
+
+        payload = json.loads(completion.choices[0].message.content or "{}")
+        return bool(payload.get("contradicts", False))
+    except Exception as exc:
+        log.warning("contradiction_classify_failed", error=str(exc))
+        return False
 
 
 # ---------- async wrappers (for the orchestrator + tool layer) ----------
@@ -337,6 +480,31 @@ async def remember(
     if not content:
         return -1
     vec = await embeddings.embed(content)
+
+    # Conflict-resolution (Prompt 25): if the nearest active fact is "same topic,
+    # different content" (sim in the supersede band) AND gpt-4o-mini judges it a
+    # contradiction, replace it (mark stale, never delete). Secret-tier skips
+    # this entirely — its content is an opaque placeholder.
+    if vault_ref is None:
+        nearest = await asyncio.to_thread(_nearest_active_fact_sync, _serialize(vec))
+        if nearest is not None:
+            old, sim = nearest
+            in_band = _SUPERSEDE_MIN_SIM <= sim < _DEDUP_MIN_SIM
+            confident_enough = confidence >= old.confidence * _SUPERSEDE_CONF_RATIO
+            if in_band and confident_enough and await _classify_contradiction(old.content, content):
+                new_id = await asyncio.to_thread(
+                    _supersede_insert_sync, old.id, content, kind, confidence, source, vec
+                )
+                events_bus.publish(
+                    "fact_superseded",
+                    old_id=old.id,
+                    new_id=new_id,
+                    old=old.content[:120],
+                    new=content[:120],
+                )
+                log.info("fact_superseded", old_id=old.id, new_id=new_id)
+                return new_id
+
     return await asyncio.to_thread(
         _remember_with_vec_sync, content, kind, confidence, source, vec, vault_ref
     )
@@ -378,17 +546,92 @@ async def count() -> int:
     return await asyncio.to_thread(_count_sync)
 
 
+# ---------- supersession review (Prompt 25-C) ---------------------------
+
+
+def _stats_sync() -> tuple[int, int]:
+    with _connect() as conn:
+        active = int(
+            conn.execute("SELECT COUNT(*) FROM facts WHERE superseded_at IS NULL").fetchone()[0]
+        )
+        superseded = int(
+            conn.execute("SELECT COUNT(*) FROM facts WHERE superseded_at IS NOT NULL").fetchone()[0]
+        )
+    return active, superseded
+
+
+def _supersessions_sync(limit: int) -> list[dict[str, Any]]:
+    """The most-recent supersession pairs (replacement joined to the fact it
+    replaced), newest first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT n.id AS new_id, n.content AS new_content, "
+            "o.id AS old_id, o.content AS old_content, o.superseded_at AS at "
+            "FROM facts n JOIN facts o ON n.supersedes = o.id "
+            "WHERE n.supersedes IS NOT NULL ORDER BY o.superseded_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _undo_supersede_sync(new_id: int) -> bool:
+    """Revert ONE supersession: reactivate the old fact, delete the replacement
+    (and its embedding). Returns False if ``new_id`` isn't a replacement."""
+    with _connect() as conn:
+        row = conn.execute("SELECT supersedes FROM facts WHERE id = ?", (new_id,)).fetchone()
+        if row is None or row["supersedes"] is None:
+            return False
+        old_id = int(row["supersedes"])
+        conn.execute("UPDATE facts SET superseded_at = NULL WHERE id = ?", (old_id,))
+        conn.execute("DELETE FROM facts WHERE id = ?", (new_id,))
+        conn.execute("DELETE FROM facts_vec WHERE rowid = ?", (new_id,))
+    return True
+
+
+async def stats() -> tuple[int, int]:
+    """(active_facts, superseded_facts)."""
+    return await asyncio.to_thread(_stats_sync)
+
+
+async def recent_supersessions(limit: int = 20) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(_supersessions_sync, limit)
+
+
+async def undo_supersede(new_id: int) -> bool:
+    return await asyncio.to_thread(_undo_supersede_sync, new_id)
+
+
 # ---------- system-prompt priming ---------------------------------------
 
 
-async def priming_block(top_n: int | None = None) -> str:
+async def _priming_facts(n: int, context: str | None) -> list[Fact]:
+    """Top-N facts to prime the prompt with. When ``context`` is given (warm
+    sessions carry recent turns), rank semantically by ``confidence * sim`` so a
+    paraphrase of what Garcia is talking about surfaces; otherwise — and on any
+    embedding failure — fall back to flat confidence order (Prompt 25-A)."""
+    if context and context.strip():
+        try:
+            qvec = await embeddings.embed(context)
+            ranked = await asyncio.to_thread(
+                _recall_vec_ranked_sync, _serialize(qvec), max(n * 2, 20)
+            )
+            if ranked:
+                ranked.sort(key=lambda fs: fs[0].confidence * fs[1], reverse=True)
+                return [f for f, _ in ranked[:n]]
+        except Exception as exc:
+            log.warning("priming_semantic_failed", error=str(exc))
+    return await recall(limit=n)
+
+
+async def priming_block(top_n: int | None = None, context: str | None = None) -> str:
     """Return a short block of known facts to inject into the system prompt.
 
     Empty string when the store has nothing yet - keeps the prompt
-    clean for fresh installs.
+    clean for fresh installs. ``context`` (recent conversation) enables
+    paraphrase-aware semantic ranking; without it, flat confidence order.
     """
     n = top_n if top_n is not None else settings.MEMORY_PRIMING_TOP_N
-    facts = await recall(limit=n)
+    facts = await _priming_facts(n, context)
     if not facts:
         return ""
     lines = [f"- {f.content}" for f in facts]
