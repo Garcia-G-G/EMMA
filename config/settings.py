@@ -170,6 +170,17 @@ class Settings(BaseSettings):
     # "device flow" wording is loose - this is the actual flow spotipy drives).
     SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:8888/callback"
 
+    # X / Twitter OAuth 2.0 PKCE (Prompt 26.1). CLIENT_ID is public per the PKCE
+    # spec (public client) → plain .env, not Keychain. The access/refresh tokens
+    # ARE secret → Keychain via core/secrets.py (X_ACCESS_TOKEN / X_REFRESH_TOKEN
+    # / X_TOKEN_EXPIRES_AT). Run `python -m emma.x_setup` once to mint them.
+    X_CLIENT_ID: str = ""
+    X_REDIRECT_URI: str = "http://localhost:8723/callback"
+    X_SCOPES: str = "tweet.read tweet.write users.read offline.access"
+    # After 26.1 the API is the supported path; the unauthenticated web-intent
+    # composer is OFF by default (only opened if Garcia explicitly re-enables it).
+    X_USE_COMPOSER_FALLBACK: bool = False
+
     # Emma's browser is visible by default so the user can watch it work.
     BROWSER_HEADLESS: bool = False
 

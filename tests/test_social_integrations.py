@@ -24,11 +24,15 @@ def _no_side_effects(monkeypatch):
 
 
 class _FakeResp:
-    def __init__(self, status_code: int):
+    def __init__(self, status_code: int, body: dict | None = None):
         self.status_code = status_code
+        self._body = body or {}
+
+    def json(self):
+        return self._body
 
 
-def _fake_httpx(status_code: int, capture: dict | None = None):
+def _fake_httpx(status_code: int, capture: dict | None = None, body: dict | None = None):
     class _Client:
         async def __aenter__(self):
             return self
@@ -40,7 +44,7 @@ def _fake_httpx(status_code: int, capture: dict | None = None):
             if capture is not None:
                 capture["url"] = url
                 capture.update(kw)
-            return _FakeResp(status_code)
+            return _FakeResp(status_code, body)
 
     return lambda *a, **k: _Client()
 
@@ -81,7 +85,16 @@ class TestPostToX:
         assert r.data["truncated"] and len(r.data["text"]) == 280
 
     @pytest.mark.asyncio
-    async def test_no_token_opens_composer(self):
+    async def test_no_token_prompts_setup(self):
+        # After 26.1 the composer fallback is OFF by default → prompt x_setup.
+        r = await s.post_to_x("hola", confirmed=True)
+        assert not r.success and r.data["needs_setup"]
+        assert "emma.x_setup" in r.user_message
+        s._open.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_composer_fallback_when_enabled(self, monkeypatch):
+        monkeypatch.setattr(s.settings, "X_USE_COMPOSER_FALLBACK", True)
         r = await s.post_to_x("hola", confirmed=True)
         assert r.success and r.data["via"] == "composer"
         s._open.assert_awaited()
@@ -89,9 +102,9 @@ class TestPostToX:
     @pytest.mark.asyncio
     async def test_api_path_on_token(self, monkeypatch):
         monkeypatch.setattr(s.secrets, "retrieve", AsyncMock(return_value="usr-token"))
-        monkeypatch.setattr(s.httpx, "AsyncClient", _fake_httpx(201))
+        monkeypatch.setattr(s.httpx, "AsyncClient", _fake_httpx(201, body={"data": {"id": "42"}}))
         r = await s.post_to_x("hola", confirmed=True)
-        assert r.success and r.data["via"] == "api"
+        assert r.success and r.data["via"] == "api" and r.data["tweet_id"] == "42"
 
     @pytest.mark.asyncio
     async def test_api_rate_limited(self, monkeypatch):
