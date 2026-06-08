@@ -34,7 +34,7 @@ log = structlog.get_logger("emma.tools.social")
 
 _X_MAX = 280
 _DISCORD_MAX = 2000
-_X_REAUTH = "Corre `python -m emma.x_setup` una vez en tu Terminal para autorizarme."
+_X_REAUTH = "Corre `python -m emma.setup` para configurar X (o `--only x` si solo quieres ese)."
 
 
 async def _refresh_x_token() -> str | None:
