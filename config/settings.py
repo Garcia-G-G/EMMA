@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     CODING_AGENT_MAX_COST_USD: float = 2.0  # soft cap (pre-flight confirm); hard kill at 2x
     CODING_AGENT_TIMEOUT_S: int = 1800  # 30-min wall clock
     CODING_AGENT_REASONING: str = "medium"  # low | medium | high | xhigh
+    # Narrate sub-agent progress aloud every few tool calls (23.1-B43.4). Off by
+    # default — a running commentary on a 30-step task is exhausting.
+    CODING_AGENT_SPEAK_PROGRESS: bool = False
 
     # Web search: pick one. Brave is the default; Tavily works as a drop-in if set.
     BRAVE_API_KEY: str | None = None

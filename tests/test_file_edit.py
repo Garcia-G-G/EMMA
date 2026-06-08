@@ -22,7 +22,17 @@ def _sandbox(monkeypatch, tmp_path):
     monkeypatch.setattr(
         fe, "open_in_ide", AsyncMock(return_value=ToolResult(True, {}, "ok", False))
     )
+    # An editor IS configured by default so the first-time gate stays out of the
+    # way (B41 is exercised explicitly in test_ide_picker).
+    monkeypatch.setattr(fe.app_router, "preferred_or_ask", lambda _cat: ("Cursor", []))
+    fe._pending_reveals.clear()
     return tmp_path
+
+
+async def _drain():
+    """Await the fire-and-forget IDE reveals so assertions see the call."""
+    for t in list(fe._pending_reveals):
+        await t
 
 
 def _mk(tmp_path, name: str, content: str):
@@ -126,15 +136,54 @@ class TestPathGuard:
 
 class TestIdeRefresh:
     @pytest.mark.asyncio
-    async def test_successful_edit_opens_file_in_ide_once(self, tmp_path):
-        p = _mk(tmp_path, "g.py", "x = 1\n")
+    async def test_successful_edit_reveals_file_at_changed_line(self, tmp_path):
+        p = _mk(tmp_path, "g.py", "x = 1\n")  # 1 line → append lands at line 2
         await fe.edit_file_append(str(p), "pass", confirmed=True)
-        fe.open_in_ide.assert_awaited_once_with(str(p.resolve()))
+        await _drain()
+        fe.open_in_ide.assert_awaited_once_with(str(p.resolve()), line=2)
 
     @pytest.mark.asyncio
     async def test_unconfirmed_does_not_open_ide(self, tmp_path):
         p = _mk(tmp_path, "g.py", "x = 1\n")
         await fe.edit_file_append(str(p), "pass")
+        await _drain()
+        fe.open_in_ide.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_append_reveals_at_first_new_line(self, tmp_path):
+        p = _mk(tmp_path, "big.txt", "\n".join(f"l{i}" for i in range(1, 13)) + "\n")  # 12 lines
+        await fe.edit_file_append(str(p), "nuevo", confirmed=True)
+        await _drain()
+        fe.open_in_ide.assert_awaited_once_with(str(p.resolve()), line=13)
+
+    @pytest.mark.asyncio
+    async def test_search_replace_reveals_at_first_match(self, tmp_path):
+        p = _mk(tmp_path, "s.txt", "\n".join(f"l{i}" for i in range(1, 7)) + "\nneedle\nl8\n")
+        await fe.edit_file_search_replace(str(p), "needle", "X", confirmed=True)
+        await _drain()
+        fe.open_in_ide.assert_awaited_once_with(str(p.resolve()), line=7)
+
+    @pytest.mark.asyncio
+    async def test_search_miss_does_not_reveal(self, tmp_path):
+        p = _mk(tmp_path, "f.txt", "hola\n")
+        res = await fe.edit_file_search_replace(str(p), "xyz", "abc", confirmed=True)
+        await _drain()
+        assert res.success is False
+        fe.open_in_ide.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_first_time_editor_gate_asks_and_skips_write(self, tmp_path, monkeypatch):
+        # No editor resolvable + 2 installed → ask, and do NOT write yet (B41).
+        monkeypatch.setattr(
+            fe.app_router, "preferred_or_ask", lambda _cat: (None, ["Cursor", "VS Code"])
+        )
+        p = _mk(tmp_path, "g.py", "x = 1\n")
+        res = await fe.edit_file_append(str(p), "pass", confirmed=True)
+        await _drain()
+        assert res.requires_confirmation is True
+        assert res.data["editor_unset"] is True
+        assert res.data["candidates"] == ["Cursor", "VS Code"]
+        assert p.read_text() == "x = 1\n"  # untouched until the editor is picked
         fe.open_in_ide.assert_not_awaited()
 
 

@@ -238,6 +238,61 @@ def _rewrite_user_block(values: dict[str, str]) -> None:
     _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
+def set_app_preference(category: str, app: str) -> bool:
+    """Set Garcia's preferred app for ``category`` in the ``[apps.<category>]``
+    block (last-write-wins). This is the store the app router reads FIRST
+    (:func:`core.app_router.inspect`), so writing here — not the environment
+    cache — is what makes a voice "cambia mi editor" actually stick (23.1-B41).
+
+    Categories are the dictionary-native keys: ``editor``, ``browser``,
+    ``terminal``, ``music``. Returns False on empty input.
+    """
+    category = category.strip().lower()
+    app = app.strip()
+    if not category or not app:
+        return False
+    with _LOCK:
+        _rewrite_apps_default(category, app)
+        reload()
+    return True
+
+
+def _rewrite_apps_default(category: str, app: str) -> None:
+    """Replace ``default = "…"`` inside ``[apps.<category>]`` (or append the
+    whole block if absent). Only that one line changes; every comment and
+    sibling section is preserved byte-for-byte. Value flows through
+    :func:`_toml_escape`."""
+    header = f"[apps.{category}]"
+    esc = _toml_escape(app)
+    lines = _DICT_PATH.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    i = 0
+    replaced = False
+    while i < len(lines):
+        if lines[i].strip() == header:
+            out.append(lines[i])
+            i += 1
+            wrote_default = False
+            # Walk the block until the next section header / EOF, swapping the
+            # default line and keeping everything else (blank lines, comments).
+            while i < len(lines) and not lines[i].lstrip().startswith("["):
+                if lines[i].lstrip().startswith("default"):
+                    out.append(f'default = "{esc}"')
+                    wrote_default = True
+                else:
+                    out.append(lines[i])
+                i += 1
+            if not wrote_default:
+                out.append(f'default = "{esc}"')
+            replaced = True
+            continue
+        out.append(lines[i])
+        i += 1
+    if not replaced:
+        out.extend(["", header, f'default = "{esc}"'])
+    _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
 def user_app(name: str) -> dict[str, Any]:
     """Per-user config for an app (workspace/team/vault IDs), or {}."""
     return dict(_user_apps.get(name.strip().lower(), {}))
