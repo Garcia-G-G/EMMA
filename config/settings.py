@@ -75,8 +75,25 @@ class Settings(BaseSettings):
     # >6000 over 250 ms. Both live during her body phase; the opener stays
     # protected regardless (22-B32).
     BARGE_IN_RMS_SPIKE: float = 18000.0
-    BARGE_IN_RMS_WINDOW: float = 6000.0
+    # HOTFIX (echo-loop): 6000 sits INSIDE this Mac's measured echo band
+    # (4000-12600 RMS) and triggered false barge-in during the opener — the
+    # window mean of Emma's own speaker echo (~6000-7000) crossed it, so she
+    # self-interrupted and re-looped ("hola soy Emma, hola soy Emma..."). 15000
+    # leaves ~2400 RMS margin over the echo top. The proper fix is Layer C
+    # (reference-based echo suppression); once that lands and echo no longer
+    # reaches the RMS path, this can drop back toward 6000-8000.
+    BARGE_IN_RMS_WINDOW: float = 15000.0
     BARGE_IN_WINDOW_MS: int = 250
+
+    # ---- Echo-loop HOTFIX (Layer B): stop Emma's own opener from re-firing
+    # the wake detector at a session boundary. wake-listen and the session are
+    # sequential, so when the wake stream REOPENS after a session it can hear
+    # Emma's residual "hola soy Emma" still decaying in the room. WAKE_WARMUP_MS
+    # suppresses wake predictions for that long after the stream opens.
+    # BOT_SPEECH_TAIL_MS keeps the (dormant, defense-in-depth) bot_speaking flag
+    # set past BotStoppedSpeaking to cover speaker decay.
+    WAKE_WARMUP_MS: int = 1200
+    BOT_SPEECH_TAIL_MS: int = 800
 
     # ---- Voice acceptance harness gates (19.7-VAH2). ALL off in production —
     # the harness subprocess sets these via env. When EMMA_TEST_MODE is true
