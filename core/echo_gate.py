@@ -33,6 +33,44 @@ log = structlog.get_logger("emma.echo_gate")
 _OPENER_BUFFER_CAP_BYTES = 2 * 24_000 * 2
 
 
+def normalized_xcorr_peak(
+    in_win: np.ndarray, ref: np.ndarray, max_lag: int, lag_stride: int
+) -> float:
+    """Peak normalized cross-correlation of ``in_win`` against ``ref`` (Layer C).
+
+    Slides the input window back across ``ref`` by ``0..max_lag`` samples in
+    ``lag_stride`` steps (the speaker→mic latency is unknown, so we search a
+    lag range and take the peak). Each position is a mean-subtracted, unit-
+    normalized dot product (Pearson) — 1.0 means the mic frame IS the played
+    audio (echo); ~0 means unrelated (real speech). Returns ``max |corr|``.
+
+    Cost: ``(max_lag/lag_stride)`` dot products of length ``len(in_win)`` —
+    a few dozen x 2400 multiplies, well under the 5 ms/frame budget.
+    """
+    w = in_win.size
+    if w == 0 or ref.size < w:
+        return 0.0
+    iw = in_win - in_win.mean()
+    iw_norm = float(np.sqrt(np.dot(iw, iw)))
+    if iw_norm == 0.0:
+        return 0.0
+    best = 0.0
+    capped_max_lag = min(max_lag, ref.size - w)
+    stride = max(1, lag_stride)
+    lag = 0
+    while lag <= capped_max_lag:
+        end = ref.size - lag
+        seg = ref[end - w : end]
+        seg = seg - seg.mean()
+        seg_norm = float(np.sqrt(np.dot(seg, seg)))
+        if seg_norm > 0.0:
+            corr = abs(float(np.dot(iw, seg)) / (iw_norm * seg_norm))
+            if corr > best:
+                best = corr
+        lag += stride
+    return best
+
+
 class SpeechPhase:
     """Tracks Emma's speech phase: ``opener`` | ``body`` | None (22-B32).
 
@@ -89,6 +127,12 @@ class EchoGateFilter(BaseAudioFilter):
         phase_provider: Callable[[], str | None] | None = None,
         barge_in_rms_window: float = 0.0,
         window_ms: int = 250,
+        echo_cancel: bool = False,
+        echo_ref_buffer_ms: int = 250,
+        echo_corr_window_ms: int = 100,
+        echo_corr_threshold: float = 0.35,
+        echo_corr_max_lag_ms: int = 150,
+        echo_corr_lag_stride_ms: int = 10,
     ):
         self._tail_s = tail_ms / 1000.0
         self._barge_in_rms = barge_in_rms
@@ -107,15 +151,87 @@ class EchoGateFilter(BaseAudioFilter):
         self._window_rms = barge_in_rms_window
         self._window_s = window_ms / 1000.0
         self._rms_history: list[tuple[float, float]] = []  # (monotonic_ts, rms)
+        # Layer C: reference-based echo suppression. The ref ring holds recent
+        # OUTPUT samples (pushed from the pipeline output side); the input ring
+        # holds the most recent mic samples. Sizes are set in start() from the
+        # real sample rate. Counts/`_echo_active` drive transition-only logging.
+        self._echo_cancel = echo_cancel
+        self._echo_ref_buffer_ms = echo_ref_buffer_ms
+        self._echo_corr_window_ms = echo_corr_window_ms
+        self._echo_corr_threshold = echo_corr_threshold
+        self._echo_corr_max_lag_ms = echo_corr_max_lag_ms
+        self._echo_corr_lag_stride_ms = echo_corr_lag_stride_ms
+        self._ref_buf = np.zeros(0, dtype=np.float64)
+        self._in_buf = np.zeros(0, dtype=np.float64)
+        self._ref_cap = 0
+        self._in_cap = 0
+        self._corr_max_lag = 0
+        self._corr_lag_stride = 1
+        self._echo_active = False
+        self._echo_suppressed_count = 0
+        self._echo_passed_count = 0
 
     async def start(self, sample_rate: int) -> None:
         self._sample_rate = sample_rate
+        spms = sample_rate / 1000.0  # samples per ms
+        self._ref_cap = int(self._echo_ref_buffer_ms * spms)
+        self._in_cap = int(self._echo_corr_window_ms * spms)
+        self._corr_max_lag = int(self._echo_corr_max_lag_ms * spms)
+        self._corr_lag_stride = max(1, int(self._echo_corr_lag_stride_ms * spms))
 
     async def stop(self) -> None:
         pass
 
     async def process_frame(self, frame: FilterControlFrame) -> None:
         pass
+
+    def push_reference(self, audio: bytes) -> None:
+        """Feed an OUTPUT (played) frame into the echo reference ring.
+
+        Called from the pipeline output side (EchoGateProcessor on
+        OutputAudioRawFrame) because Pipecat's BaseAudioFilter has no
+        output hook of its own.
+        """
+        if not self._echo_cancel or not audio:
+            return
+        samples = np.frombuffer(audio, dtype=np.int16).astype(np.float64)
+        if samples.size == 0:
+            return
+        buf = np.concatenate((self._ref_buf, samples))
+        if self._ref_cap and buf.size > self._ref_cap:
+            buf = buf[-self._ref_cap :]
+        self._ref_buf = buf
+
+    def _push_input(self, samples_f: np.ndarray) -> None:
+        buf = np.concatenate((self._in_buf, samples_f))
+        if self._in_cap and buf.size > self._in_cap:
+            buf = buf[-self._in_cap :]
+        self._in_buf = buf
+
+    def _is_echo(self) -> bool:
+        """True if the buffered mic window correlates with recent output."""
+        if not self._echo_cancel:
+            return False
+        win, ref = self._in_buf, self._ref_buf
+        if self._in_cap == 0 or win.size < self._in_cap or ref.size < win.size:
+            return False
+        peak = normalized_xcorr_peak(win, ref, self._corr_max_lag, self._corr_lag_stride)
+        is_echo = peak >= self._echo_corr_threshold
+        if is_echo:
+            self._echo_suppressed_count += 1
+        else:
+            self._echo_passed_count += 1
+        # Log only on transitions (+ running counts) — never per-frame at INFO.
+        if is_echo != self._echo_active:
+            self._echo_active = is_echo
+            log.debug(
+                "echo_suppressed",
+                echo_suppressed=is_echo,
+                corr=round(peak, 3),
+                suppressed=self._echo_suppressed_count,
+                passed=self._echo_passed_count,
+            )
+        return is_echo
 
     def set_bot_speaking(self, speaking: bool) -> None:
         if speaking and not self._bot_speaking:
@@ -173,9 +289,19 @@ class EchoGateFilter(BaseAudioFilter):
 
         released = self._release_opener_buffer()
 
+        # Keep the correlation input window warm regardless of gate state, so
+        # it's already full the moment Emma starts speaking (Layer C).
+        if self._echo_cancel and audio:
+            self._push_input(np.frombuffer(audio, dtype=np.int16).astype(np.float64))
+
         if not self._is_gating():
             self._rms_history.clear()  # gate open → no need to track
             return released + audio
+        # Reference-based echo suppression (Layer C): if the mic frame
+        # correlates with what Emma just played, it's her echo — drop it
+        # BEFORE the RMS barge-in path can mistake it for real speech.
+        if self._echo_cancel and self._is_echo():
+            return released + b"\x00" * len(audio)
         rms = self._rms(audio)
         if rms == 0.0:
             return released + b"\x00" * len(audio)

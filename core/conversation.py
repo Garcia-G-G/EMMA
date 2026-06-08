@@ -133,6 +133,11 @@ class EchoGateProcessor(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
+        # Feed played audio into the echo reference ring (Layer C). This
+        # processor sits just upstream of transport.output(), so the bot's
+        # OutputAudioRawFrames pass through here on their way to the speaker.
+        if isinstance(frame, OutputAudioRawFrame) and frame.audio:
+            self._gate.push_reference(frame.audio)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
             runtime_state.mark_started()  # gate the wake listener (Layer B)
@@ -1076,6 +1081,12 @@ async def build_pipeline(
         phase_provider=speech_phase.current,
         barge_in_rms_window=settings.BARGE_IN_RMS_WINDOW,
         window_ms=settings.BARGE_IN_WINDOW_MS,
+        echo_cancel=settings.ECHO_CANCEL_ENABLED,
+        echo_ref_buffer_ms=settings.ECHO_REF_BUFFER_MS,
+        echo_corr_window_ms=settings.ECHO_CORR_WINDOW_MS,
+        echo_corr_threshold=settings.ECHO_CORR_THRESHOLD,
+        echo_corr_max_lag_ms=settings.ECHO_CORR_MAX_LAG_MS,
+        echo_corr_lag_stride_ms=settings.ECHO_CORR_LAG_STRIDE_MS,
     )
 
     transport = LocalAudioTransport(

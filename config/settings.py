@@ -95,6 +95,22 @@ class Settings(BaseSettings):
     WAKE_WARMUP_MS: int = 1200
     BOT_SPEECH_TAIL_MS: int = 800
 
+    # ---- Echo-loop HOTFIX (Layer C): reference-based echo suppression. The
+    # gate keeps a ring of recently-PLAYED output samples and cross-correlates
+    # incoming mic audio against it while Emma speaks; high coherence => echo
+    # => drop the frame before it reaches the RMS barge-in path. This is real
+    # (if simple) AEC, no new dependency. ECHO_CORR_THRESHOLD is the knob:
+    # raise it if Garcia's real voice ever gets eaten, lower it if echo leaks.
+    # Tune from the per-decision `echo_suppressed` DEBUG logs. Once validated,
+    # BARGE_IN_RMS_WINDOW (Layer A) can drop back toward 6000-8000 since echo
+    # no longer reaches the RMS path.
+    ECHO_CANCEL_ENABLED: bool = True
+    ECHO_REF_BUFFER_MS: int = 250  # how much played audio to retain as reference
+    ECHO_CORR_WINDOW_MS: int = 100  # mic window length compared each frame
+    ECHO_CORR_THRESHOLD: float = 0.35  # |corr| at/above this == echo
+    ECHO_CORR_MAX_LAG_MS: int = 150  # speaker->mic latency search range
+    ECHO_CORR_LAG_STRIDE_MS: int = 10  # lag search resolution
+
     # ---- Voice acceptance harness gates (19.7-VAH2). ALL off in production —
     # the harness subprocess sets these via env. When EMMA_TEST_MODE is true
     # and EMMA_TEST_INPUT_DEVICE names a device (substring match, e.g.
