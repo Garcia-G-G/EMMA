@@ -73,7 +73,15 @@ from pipecat.transports.local.audio import (
 )
 
 from config.settings import settings
-from core import audio_devices, capability_gaps, dictionary, events_bus, session_memory, vocabulary
+from core import (
+    audio_devices,
+    capability_gaps,
+    dictionary,
+    events_bus,
+    runtime_state,
+    session_memory,
+    vocabulary,
+)
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
 from memory.long_term import priming_block
@@ -127,11 +135,13 @@ class EchoGateProcessor(FrameProcessor):
         await super().process_frame(frame, direction)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
+            runtime_state.mark_started()  # gate the wake listener (Layer B)
             if self._phase is not None:
                 self._phase.on_bot_started()
             events_bus.publish("state", state="speaking")
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._gate.set_bot_speaking(False)
+            runtime_state.mark_stopped(settings.BOT_SPEECH_TAIL_MS)  # tail for decay (Layer B)
             if self._phase is not None:
                 self._phase.on_bot_stopped()
             events_bus.publish("state", state="listening")

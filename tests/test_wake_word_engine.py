@@ -112,6 +112,9 @@ class TestPorcupineBranch:
         monkeypatch.setattr(settings, "PICOVOICE_ACCESS_KEY", "test-access-key")
         monkeypatch.setattr(settings, "WAKE_WORD_PATH", str(ppn))
         monkeypatch.setattr(settings, "WAKE_WORD_THRESHOLD", 0.55)
+        # The fake stream delivers its single frame at t=0; disable the Layer-B
+        # wake warmup so that frame isn't suppressed as boundary echo.
+        monkeypatch.setattr(settings, "WAKE_WARMUP_MS", 0)
         module, engine = _install_fake_porcupine(monkeypatch, process_returns=0)
         monkeypatch.setattr(wake_word.sd, "RawInputStream", _FakeStream)
 

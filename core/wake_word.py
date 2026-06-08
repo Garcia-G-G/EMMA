@@ -29,7 +29,7 @@ import sounddevice as sd
 import structlog
 
 from config.settings import settings
-from core import audio_devices
+from core import audio_devices, runtime_state
 from core.audio import play_wake_chime
 
 log = structlog.get_logger("emma.wake_word")
@@ -185,10 +185,29 @@ async def _listen_openwakeword() -> None:
     name = settings.WAKE_WORD_NAME
     note_near_miss = _make_near_miss_logger(threshold)
 
+    # Layer B: a session that died mid-speech could leave bot_speaking stuck;
+    # clear it so the gate can never deafen us. Boundary echo (Emma's residual
+    # "hola soy Emma" when this stream reopens) is handled by the warmup below.
+    runtime_state.force_clear()
+    # No acoustic echo on the harness's virtual cable, where synthesized wakes
+    # can land at stream-open — so skip the warmup under EMMA_TEST_MODE.
+    warmup_s = 0.0 if settings.EMMA_TEST_MODE else settings.WAKE_WARMUP_MS / 1000.0
+    open_mono = time.monotonic()
+    gate = {"suppressed": True}  # start in warmup; flips on the first live frame
+
     def _cb(indata: object, frames: int, _t: object, status: object) -> None:
         if status:
             log.warning("input_status", status=str(status))
         try:
+            if runtime_state.suppress_wake(open_mono, warmup_s):
+                gate["suppressed"] = True
+                return  # skip predict on residual echo / bot speech (Layer B)
+            if gate["suppressed"]:
+                # Un-gate (B3): clear retained state so the model doesn't fire
+                # on activation built up around the suppressed window.
+                gate["suppressed"] = False
+                _reset_model(model)
+                log.debug("wake_warmup_done", warmup_ms=settings.WAKE_WARMUP_MS)
             samples = np.frombuffer(bytes(indata), dtype=np.int16)  # type: ignore[call-overload]
             predictions = model.predict(samples)
             score = float(predictions.get(name, 0.0))
@@ -289,10 +308,20 @@ async def _listen_porcupine() -> None:
     detected = asyncio.Event()
     loop = asyncio.get_running_loop()
 
+    # Layer B: clear any stuck flag, then suppress detections during the
+    # stream-open warmup so Emma's residual opener echo can't re-trigger wake.
+    runtime_state.force_clear()
+    # No acoustic echo on the harness's virtual cable, where synthesized wakes
+    # can land at stream-open — so skip the warmup under EMMA_TEST_MODE.
+    warmup_s = 0.0 if settings.EMMA_TEST_MODE else settings.WAKE_WARMUP_MS / 1000.0
+    open_mono = time.monotonic()
+
     def _cb(indata: object, frames: int, _t: object, status: object) -> None:
         if status:
             log.warning("input_status", status=str(status))
         try:
+            if runtime_state.suppress_wake(open_mono, warmup_s):
+                return  # skip on warmup / bot speech (Layer B)
             samples = np.frombuffer(bytes(indata), dtype=np.int16)  # type: ignore[call-overload]
             if porcupine.process(samples) >= 0:
                 loop.call_soon_threadsafe(detected.set)
