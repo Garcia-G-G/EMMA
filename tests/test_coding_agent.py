@@ -20,6 +20,21 @@ def _restore_loop():
     asyncio.set_event_loop(asyncio.new_event_loop())
 
 
+@pytest.fixture(autouse=True)
+def _no_real_ide(monkeypatch):
+    """The live-reveal hooks (23.1-B43) call open_in_ide — stub it so the suite
+    never launches a real editor."""
+    from tools.base import ToolResult
+
+    async def _noop(path, line=0, ide="", project_mode=False):
+        return ToolResult(True, {}, "ok", False)
+
+    monkeypatch.setattr(coding_agent, "open_in_ide", _noop)
+    coding_agent._REVEAL_TASKS.clear()
+    yield
+    coding_agent._REVEAL_TASKS.clear()
+
+
 def _sb(tmp_path):
     return _Sandbox(tmp_path)
 
@@ -211,3 +226,76 @@ class TestAgentLoop:
     def test_missing_workdir(self):
         res = asyncio.run(run_agent("x", "/nonexistent/dir/xyz"))
         assert res.status == "error"
+
+
+class TestLiveReveal:
+    """23.1-B43: project-root open + throttled per-write reveal."""
+
+    def _run_capturing(self, tmp_path, turns, monkeypatch):
+        from core import events_bus
+        from tools.base import ToolResult
+
+        opened: list[tuple[str, int, bool]] = []
+
+        async def _track(path, line=0, ide="", project_mode=False):
+            opened.append((str(path), line, project_mode))
+            return ToolResult(True, {}, "ok", False)
+
+        monkeypatch.setattr(coding_agent, "open_in_ide", _track)
+        q = events_bus.subscribe()
+
+        async def _go():
+            res = await run_agent("x", str(tmp_path), client=_fake_client(turns), task_id="t")
+            await asyncio.gather(*coding_agent._REVEAL_TASKS, return_exceptions=True)
+            return res
+
+        res = asyncio.run(_go())
+        events_bus.unsubscribe(q)
+        events: list[dict] = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        return res, opened, events
+
+    def test_project_root_opens_and_single_write_reveals_at_line_1(self, tmp_path, monkeypatch):
+        turns = [
+            _resp([_call("write_file", {"path": "a.txt", "content": "x"})]),
+            _resp([_call("finish", {"summary": "ok", "status": "ok"})]),
+        ]
+        res, opened, events = self._run_capturing(tmp_path, turns, monkeypatch)
+        assert res.status == "ok"
+        # project root opened once as a project
+        assert sum(1 for _p, _l, pm in opened if pm) == 1
+        # the write was revealed at line 1
+        assert any(p.endswith("a.txt") and ln == 1 and not pm for p, ln, pm in opened)
+        revealed = [e for e in events if e["type"] == "coding_agent_file_revealed"]
+        assert len(revealed) == 1 and revealed[0]["line"] == 1
+        assert any(e["type"] == "coding_agent_project_opened" for e in events)
+
+    def test_burst_of_writes_throttles_opens_but_signals_each(self, tmp_path, monkeypatch):
+        # all six write_file calls in ONE model turn
+        writes = [
+            _call("write_file", {"path": f"f{i}.txt", "content": "x"}, call_id=f"c{i}")
+            for i in range(6)
+        ]
+        turns = [
+            _resp(writes),
+            _resp([_call("finish", {"summary": "ok", "status": "ok"})]),
+        ]
+        res, opened, events = self._run_capturing(tmp_path, turns, monkeypatch)
+        assert res.status == "ok"
+        revealed = [e for e in events if e["type"] == "coding_agent_file_revealed"]
+        assert len(revealed) == 6  # every write signals
+        # but the actual file-opens are throttled to far fewer than six tabs
+        file_opens = [o for o in opened if not o[2]]
+        assert 1 <= len(file_opens) < 6
+
+    def test_edit_file_reveals_at_first_match_line(self, tmp_path, monkeypatch):
+        (tmp_path / "e.txt").write_text("l1\nl2\nneedle\nl4\n", encoding="utf-8")
+        turns = [
+            _resp([_call("edit_file", {"path": "e.txt", "search": "needle", "replace": "X"})]),
+            _resp([_call("finish", {"summary": "ok", "status": "ok"})]),
+        ]
+        res, _opened, events = self._run_capturing(tmp_path, turns, monkeypatch)
+        assert res.status == "ok"
+        revealed = [e for e in events if e["type"] == "coding_agent_file_revealed"]
+        assert len(revealed) == 1 and revealed[0]["line"] == 3

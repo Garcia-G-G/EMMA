@@ -61,13 +61,19 @@ def _open_args(cli: str | None, app: str, path: str, line: int) -> list[str]:
 
 
 @tool()
-async def open_in_ide(path: str, line: int = 0, ide: str = "") -> ToolResult:
+async def open_in_ide(
+    path: str, line: int = 0, ide: str = "", project_mode: bool = False
+) -> ToolResult:
     """Abre un archivo o carpeta en el IDE preferido de Garcia.
 
     Úsalo cuando diga:
     - "Emma, abre <path> en mi IDE"
     - "Emma, abre <path> en la línea N"
     - "Emma, ábreme esto en Cursor"
+
+    `project_mode=True` abre `path` como CARPETA de proyecto (el árbol en la
+    barra lateral) en vez de como archivo — Cursor/VS Code/Zed aceptan un
+    directorio en su CLI (23.1-B43).
     """
     app = ide or resolve("editor")
     if not app:
@@ -77,7 +83,8 @@ async def open_in_ide(path: str, line: int = 0, ide: str = "") -> ToolResult:
         return ToolResult(False, None, f"No encontré {p}.", False)
 
     cli = _cli_for(app)
-    args = _open_args(cli, app, str(p), line)
+    # A project (directory) open never carries a line jump.
+    args = _open_args(cli, app, str(p), 0 if project_mode else line)
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,
@@ -88,11 +95,21 @@ async def open_in_ide(path: str, line: int = 0, ide: str = "") -> ToolResult:
     except Exception as exc:
         return ToolResult(False, None, f"No pude abrir en {app}: {exc}", False)
 
-    at_line = f" en la línea {line}" if line > 0 else ""
+    if project_mode:
+        spoken = f"Listo, abriendo el proyecto en {app}."
+    else:
+        at_line = f" en la línea {line}" if line > 0 else ""
+        spoken = f"Listo, abriendo en {app}{at_line}."
     return ToolResult(
         True,
-        {"app": app, "path": str(p), "line": line, "via": "cli" if cli else "open"},
-        f"Listo, abriendo en {app}{at_line}.",
+        {
+            "app": app,
+            "path": str(p),
+            "line": 0 if project_mode else line,
+            "project_mode": project_mode,
+            "via": "cli" if cli else "open",
+        },
+        spoken,
         False,
     )
 

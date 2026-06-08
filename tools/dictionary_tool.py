@@ -81,6 +81,69 @@ async def remember_user_profile(field: str, value: str) -> ToolResult:
     )
 
 
+# Voice/category aliases → the dictionary-native [apps.<key>] block.
+_APP_CATEGORY_ALIASES = {
+    "editor": "editor",
+    "ide": "editor",
+    "code": "editor",
+    "browser": "browser",
+    "terminal": "terminal",
+    "shell": "terminal",
+    "music": "music",
+}
+
+
+def _canonical_app_display(category: str, app: str) -> str | None:
+    """Loose app name → the shortlist's canonical display name ('vscode' /
+    'VS Code' → 'Visual Studio Code'), or None if unsupported. Reuses the
+    preference normalizer's alias table so both paths agree."""
+    from actions.environment import SHORTLISTS
+    from tools.preferences import _normalize_app
+
+    env_cat = "ide" if category == "editor" else category
+    key = _normalize_app(env_cat, app)  # type: ignore[arg-type]
+    if key is None:
+        return None
+    for entry in SHORTLISTS.get(env_cat, []):  # type: ignore[call-overload]
+        if entry.get("key") == key:
+            apps = entry.get("apps") or []
+            return apps[0] if apps else None
+    return None
+
+
+@tool()
+async def remember_app_preference(category: str, app: str) -> ToolResult:
+    """Guarda la app preferida de Garcia para una categoría y la usa de ahí en adelante.
+
+    Úsalo (1) la PRIMERA vez que necesites abrir algo y un tool te diga que no
+    hay editor configurado (`data.editor_unset`), después de que Garcia elija, o
+    (2) cuando diga "cambia mi editor a X" / "usa Y para código".
+
+    `category` ∈ editor, browser, terminal, music. Escribe en el diccionario —
+    la fuente que el router lee primero — y recarga en caliente, así que la
+    próxima edición ya abre en la app elegida.
+    """
+    cat = _APP_CATEGORY_ALIASES.get(category.strip().lower())
+    if not cat:
+        return ToolResult(
+            False,
+            None,
+            f"No reconozco la categoría '{category}'. Usa: editor, browser, terminal, music.",
+            False,
+        )
+    display = _canonical_app_display(cat, app)
+    if display is None:
+        return ToolResult(False, None, f"No soporto {app} para {cat} todavía.", False)
+    if not dictionary.set_app_preference(cat, display):
+        return ToolResult(False, None, f"No pude guardar tu preferencia de {cat}.", False)
+    return ToolResult(
+        True,
+        {"category": cat, "app": display},
+        f"Listo, usaré {display} para {cat} de ahora en adelante.",
+        False,
+    )
+
+
 @tool()
 async def remember_connection(name: str, app: str, kind: str = "connection") -> ToolResult:
     """Recuerda un recurso DENTRO de una app: conexión de TablePlus, canal, etc.

@@ -37,11 +37,18 @@ from openai import AsyncOpenAI
 from config.settings import settings
 from core import events_bus
 from tools.file_edit import _atomic_write  # reuse the tested atomic primitive (19.6-B16)
+from tools.ide_actions import open_in_ide
 
 log = structlog.get_logger("emma.coding_agent")
 
 _MAX_READ_BYTES = 256 * 1024
 _MAX_CMD_OUTPUT = 16 * 1024
+# Min gap between actual IDE reveals — a burst of writes opens ONE tab, not 20
+# (23.1-B43.2). Every write still emits a coding_agent_file_revealed event.
+_REVEAL_THROTTLE_S = 2.0
+# Strong refs to in-flight reveal opens so the GC can't drop a fire-and-forget
+# task (and so a test can drain them on the same loop before it closes).
+_REVEAL_TASKS: set[asyncio.Task[Any]] = set()
 _CMD_TIMEOUT_DEFAULT = 60
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".emma_agent", "dist", "build"}
 
@@ -312,6 +319,30 @@ async def _execute_tool(sandbox: _Sandbox, name: str, args: dict[str, Any]) -> s
         return f"ERROR: {exc}"
 
 
+def _reveal_target(sandbox: _Sandbox, name: str, args: dict[str, Any]) -> tuple[str, int] | None:
+    """(absolute path, line) to reveal after a successful write/edit, or None.
+    write_file → line 1 (whole file); edit_file → the first replacement line."""
+    path_arg = args.get("path")
+    if not path_arg:
+        return None
+    try:
+        p = sandbox._resolve(str(path_arg))
+    except Exception:
+        return None
+    if not p.is_file():
+        return None
+    if name == "write_file":
+        return str(p), 1
+    try:  # edit_file: first replacement keeps its line in the new content
+        new = p.read_text(encoding="utf-8")
+        replace = str(args.get("replace", "") or "")
+        idx = new.index(replace) if replace else -1
+        line = new[:idx].count("\n") + 1 if idx >= 0 else 1
+    except Exception:
+        line = 1
+    return str(p), line
+
+
 def _client() -> AsyncOpenAI:
     return AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -356,6 +387,40 @@ async def run_agent(
             f.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
 
     _record({"t": "task", "task": task, "model": model, "workdir": str(wd)})
+
+    # --- live reveal (23.1-B43): open the project root, then reveal each write
+    # as it lands, throttled to one tab per burst, never blocking the loop. -----
+    reveal_times: list[float] = []
+    last_write: tuple[str, int] | None = None
+
+    def _spawn_reveal(path: str, line: int, *, project_mode: bool = False) -> None:
+        async def _open() -> None:
+            with contextlib.suppress(Exception):
+                await open_in_ide(path, line=line, project_mode=project_mode)
+
+        task = asyncio.create_task(_open())
+        _REVEAL_TASKS.add(task)
+        task.add_done_callback(_REVEAL_TASKS.discard)
+
+    def _maybe_reveal(name: str, args: dict[str, Any], result: str) -> None:
+        nonlocal last_write
+        if name not in ("write_file", "edit_file") or result.startswith("ERROR"):
+            return
+        target = _reveal_target(sandbox, name, args)
+        if target is None:
+            return
+        path, line = target
+        last_write = (path, line)
+        events_bus.publish("coding_agent_file_revealed", path=path, line=line)
+        now = time.monotonic()
+        if any(now - t < _REVEAL_THROTTLE_S for t in reveal_times):
+            return  # same burst — signalled, but don't pop another tab
+        reveal_times.append(now)
+        del reveal_times[:-5]  # keep only the last 5 timestamps
+        _spawn_reveal(path, line)
+
+    _spawn_reveal(str(wd), 0, project_mode=True)
+    events_bus.publish("coding_agent_project_opened", path=str(wd))
 
     cost = 0.0
     tool_calls = 0
@@ -428,6 +493,8 @@ async def run_agent(
             summary = resp.output_text.strip() if getattr(resp, "output_text", "") else ""
             _record({"t": "message", "text": summary})
             if summary:
+                if last_write is not None:
+                    _spawn_reveal(*last_write)
                 return AgentRunResult("ok", summary, it + 1, cost, tool_calls, str(transcript_path))
             pending_input = [{"role": "user", "content": "¿Terminaste? Llama a finish."}]
             continue
@@ -452,6 +519,13 @@ async def run_agent(
                 elapsed_ms=elapsed,
             )
             _record({"t": "tool", "name": call.name, "args": args, "result": result[:2000]})
+            _maybe_reveal(call.name, args, result)
+            if settings.CODING_AGENT_SPEAK_PROGRESS and tool_calls % 5 == 0:
+                events_bus.publish(
+                    "coding_agent_progress",
+                    text=f"voy en {Path(str(args.get('path', ''))).name or 'el proyecto'}",
+                    tool_calls=tool_calls,
+                )
             pending_input.append(
                 {"type": "function_call_output", "call_id": call.call_id, "output": result[:30000]}
             )
@@ -459,10 +533,14 @@ async def run_agent(
         if sandbox.finished is not None:
             summary, status = sandbox.finished
             _record({"t": "finish", "summary": summary, "status": status, "cost": round(cost, 4)})
+            if last_write is not None:  # ensure the LAST file is visible at the end
+                _spawn_reveal(*last_write)
             return AgentRunResult(
                 status, summary or "Listo.", it + 1, cost, tool_calls, str(transcript_path)
             )
 
+    if last_write is not None:  # show the last file even if we hit the step cap
+        _spawn_reveal(*last_write)
     return AgentRunResult(
         "max_iters",
         f"Llegué al límite de {max_iters} pasos sin terminar. Revisa lo que alcancé.",

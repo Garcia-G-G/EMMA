@@ -203,6 +203,49 @@ def preferred(category: str) -> str:
     return decision.picked
 
 
+def _installed_editor_displays() -> list[str]:
+    """Display names of the installed shortlist editors, in shortlist order.
+    (``detect_preferred`` reports installed entries by KEY; we map back to the
+    canonical display name the rest of the stack uses.)"""
+    avail = set(environment.detect_preferred("ide").available_alternatives)
+    out: list[str] = []
+    for entry in _shortlist("ide"):
+        if entry.get("key") in avail:
+            apps = entry.get("apps") or []
+            if apps:
+                out.append(apps[0])
+    return out
+
+
+def preferred_or_ask(category: str) -> tuple[str | None, list[str]]:
+    """Like :func:`preferred`, but signals when the EDITOR pick is genuinely
+    ambiguous and Garcia should be asked once (23.1-B41).
+
+    Returns ``(picked, [])`` when the chain (frontmost → running → explicit
+    preference) is confident, OR when only one editor is installed (not
+    ambiguous — just use it). Returns ``(None, candidates)`` only when, for the
+    editor category, nothing is frontmost, nothing is running, no explicit
+    preference is set, AND more than one editor is installed.
+    """
+    cat = _ALIASES.get(category.strip().lower())
+    if not cat:
+        return "", []
+    decision = inspect(category)
+    if decision.source in ("frontmost", "running"):
+        return decision.picked, []
+    # An explicit preference (dictionary [apps.*] / env override) is a confident
+    # answer — never ask over it.
+    if dictionary.app_for(category) or dictionary.app_for(cat):
+        return decision.picked, []
+    # Only the editor pick is interactive; other categories keep silent fallback.
+    if cat != "ide":
+        return decision.picked, []
+    installed = _installed_editor_displays()
+    if len(installed) <= 1:
+        return (installed[0] if installed else decision.picked), []
+    return None, installed
+
+
 def failure_data(category: str, wanted: str, reason: str) -> dict[str, Any]:
     """Structured OS-state failure payload for ToolResult.data (22-B33)."""
     decision = inspect(category)
