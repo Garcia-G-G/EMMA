@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
+from typing import Any
 
 import httpx
 import structlog
 
 from config.settings import settings
-from core import app_capabilities, dictionary, secrets
+from core import app_capabilities, dictionary, secrets, x_oauth
 from tools.app_url_tool import _fill_template, _open
 from tools.base import ToolResult, tool
 
@@ -32,6 +34,62 @@ log = structlog.get_logger("emma.tools.social")
 
 _X_MAX = 280
 _DISCORD_MAX = 2000
+_X_REAUTH = "Corre `python -m emma.x_setup` una vez en tu Terminal para autorizarme."
+
+
+async def _refresh_x_token() -> str | None:
+    """Mint a fresh access token from the stored refresh token, persisting it.
+    None if there's no refresh token / client id or the refresh call fails."""
+    refresh = await secrets.retrieve("X_REFRESH_TOKEN")
+    if not refresh or not settings.X_CLIENT_ID:
+        return None
+    try:
+        tokens = await x_oauth.refresh_access_token(settings.X_CLIENT_ID, refresh)
+    except Exception as exc:
+        log.warning("x_refresh_failed", error=str(exc))
+        return None
+    access: str | None = tokens.get("access_token")
+    if not access:
+        return None
+    await secrets.store("X_ACCESS_TOKEN", access, kind="oauth_token")
+    if tokens.get("refresh_token"):  # X may or may not rotate — keep what it gives
+        await secrets.store("X_REFRESH_TOKEN", tokens["refresh_token"], kind="oauth_token")
+    expires_at = int(time.time()) + int(tokens.get("expires_in", 7200))
+    await secrets.store("X_TOKEN_EXPIRES_AT", str(expires_at), kind="oauth_meta")
+    log.info("x_token_refreshed")
+    return access
+
+
+async def _valid_x_token() -> str | None:
+    """A usable X access token, refreshing proactively when it's within 60s of
+    expiry. None if X isn't set up yet (run emma.x_setup)."""
+    token = await secrets.retrieve("X_ACCESS_TOKEN")
+    if not token:
+        return None
+    expires_at = await secrets.retrieve("X_TOKEN_EXPIRES_AT")
+    expired = False
+    if expires_at:
+        try:
+            expired = time.time() > float(expires_at) - 60
+        except ValueError:
+            expired = False
+    if expired:
+        return await _refresh_x_token() or token
+    return token
+
+
+async def _x_post(token: str, text: str) -> tuple[int, dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
+        resp = await client.post(
+            "https://api.x.com/2/tweets",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"text": text},
+        )
+    try:
+        body = dict(resp.json())
+    except Exception:
+        body = {}
+    return resp.status_code, body
 
 
 def _composer_url(app: str, kind: str, **values: str) -> str | None:
@@ -93,26 +151,46 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
             requires_confirmation=True,
         )
 
-    token = await secrets.retrieve("X_ACCESS_TOKEN")
-    if token:
-        try:
-            async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
-                resp = await client.post(
-                    "https://api.x.com/2/tweets",
-                    headers={"Authorization": f"Bearer {token}"},
-                    json={"text": text},
-                )
-            if resp.status_code == 201:
-                return ToolResult(True, {"via": "api"}, "Listo, publiqué en X.", False)
-            if resp.status_code == 429:
-                return ToolResult(
-                    False, None, "X me limitó el ritmo de publicaciones. Intenta en un rato.", False
-                )
-            log.warning("x_api_failed", status=resp.status_code)
-            # fall through to the composer on auth/other errors
-        except Exception as exc:
-            log.warning("x_api_error", error=str(exc))
+    token = await _valid_x_token()
+    if token is None:
+        # Not authorized yet. The API is the supported path (26.1); only open the
+        # unauthenticated composer if Garcia explicitly re-enabled that fallback.
+        if settings.X_USE_COMPOSER_FALLBACK:
+            return await _open_x_composer(text)
+        return ToolResult(
+            False,
+            {"needs_setup": True},
+            f"No tengo permiso para publicar en X. {_X_REAUTH}",
+            False,
+        )
 
+    try:
+        status, body = await _x_post(token, text)
+        if status in (401, 403):  # token rejected → one refresh + retry
+            fresh = await _refresh_x_token()
+            if fresh:
+                status, body = await _x_post(fresh, text)
+            if status != 201:
+                return ToolResult(False, None, f"Mi sesión con X expiró. {_X_REAUTH}", False)
+    except Exception as exc:
+        log.warning("x_api_error", error=str(exc))
+        return ToolResult(False, None, f"No pude publicar en X: {exc}", False)
+
+    if status == 201:
+        tweet_id = (body.get("data") or {}).get("id", "")
+        return ToolResult(
+            True, {"via": "api", "tweet_id": tweet_id}, "Listo, publiqué en X.", False
+        )
+    if status == 429:
+        return ToolResult(
+            False, None, "X me limitó el ritmo de publicaciones. Intenta en un rato.", False
+        )
+    log.warning("x_api_failed", status=status)
+    return ToolResult(False, None, f"X rechazó la publicación ({status}).", False)
+
+
+async def _open_x_composer(text: str) -> ToolResult:
+    """Legacy web-intent composer (OFF by default after 26.1)."""
     url = _composer_url("x", "post", text=text)
     if not url:
         return ToolResult(False, None, "No pude armar el composer de X.", False)
