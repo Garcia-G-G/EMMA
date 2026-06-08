@@ -27,8 +27,11 @@ log = structlog.get_logger("emma.secrets")
 SERVICE = os.environ.get("EMMA_KEYCHAIN_SERVICE") or "com.garcia.emma"
 _TIMEOUT_S = 5.0
 
-# Credential env-var heuristics for .env migration.
-_CRED_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN")
+# Credential env-var heuristics for .env migration. ``_WEBHOOK`` covers Discord
+# channel webhook URLs (Prompt 26) — the URL itself grants posting rights, so it
+# is secret-tier and must land in Keychain, never .env or memory.db. (X_BEARER_
+# TOKEN / LINKEDIN_ACCESS_TOKEN are already caught by ``_TOKEN``.)
+_CRED_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_DSN", "_WEBHOOK")
 
 
 async def _run(args: list[str]) -> tuple[int, str, str]:

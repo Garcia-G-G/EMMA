@@ -26,12 +26,34 @@ resource_url.dm = "slack://user?team={workspace}&id={user}"
 [discord]
 url_scheme = "discord"
 category = "chat"
-notes = "discord://-/channels/<server>/<channel>."
+notes = "Open a channel via the desktop app; POST messages via a per-channel webhook (Keychain). discord://-/channels/<server>/<channel>."
+resource_url.channel = "discord://-/channels/{server_id}/{channel_id}"
+resource_url.dm = "discord://-/channels/@me/{user_id}"
 
 [whatsapp]
 url_scheme = "whatsapp"
 category = "chat"
-notes = "whatsapp://send?phone=<intl-number>."
+notes = "wa.me opens the desktop app (or web) with the message prefilled; Garcia taps Send. Phone = digits only, no +/spaces."
+resource_url.message = "whatsapp://send?phone={phone}&text={text}"
+web_fallback.message = "https://wa.me/{phone}?text={text}"
+
+# Prompt 26: X has NO native macOS app since Aug 2024, so twitter:// is dead on
+# the Mac — the web intent composer is the reliable path (no auth to open).
+[x]
+url_scheme = ""
+category = "social"
+notes = "Web intent composer (browser, prefilled); Garcia taps Post. API posting needs an OAuth2 user-context token (paid/approved acct)."
+web_fallback.post = "https://twitter.com/intent/tweet?text={text}"
+
+# LinkedIn cannot reliably prefill arbitrary post TEXT via URL (verified 2026):
+# share-offsite only attaches a link via Open Graph. We open the feed composer
+# (best-effort text) AND copy the text to the clipboard so Garcia can paste.
+[linkedin]
+url_scheme = "linkedin"
+category = "social"
+notes = "Web composer; text prefill is best-effort (LinkedIn ignores URL text params), so Emma also copies the text to the clipboard."
+resource_url.profile = "linkedin://in/{handle}"
+web_fallback.post = "https://www.linkedin.com/feed/?shareActive=true&text={text}"
 
 [figma]
 url_scheme = "figma"

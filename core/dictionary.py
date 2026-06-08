@@ -39,6 +39,7 @@ class Contact:
     email: str
     relation: str
     aliases: list[str]
+    phone: str = ""  # +<country><number>, digits only — for WhatsApp (Prompt 26)
 
 
 @dataclass
@@ -111,6 +112,7 @@ def _parse() -> None:
                 email=v.get("email", ""),
                 relation=v.get("relation", ""),
                 aliases=list(v.get("aliases", [])),
+                phone=str(v.get("phone", "")),
             )
         for k, v in (data.get("terms") or {}).items():
             _terms[k] = Term(key=k, expansion=v.get("expansion", ""), context=v.get("context", ""))
