@@ -33,18 +33,6 @@ def _mock_osascript(return_value: str = ""):
 # ---------- read-path parsing ----------
 
 
-def test_today_events_parses() -> None:
-    from tools.calendar_tool import today_events
-
-    raw = "2026-5-28-9-5|Standup|Office\n2026-5-28-14-0|Lunch|"
-    with _mock_osascript(raw):
-        res = _run(today_events())
-    assert res.success
-    events = res.data["events"]
-    assert events[0]["label"] == "09:05 — Standup (Office)"
-    assert events[1]["label"] == "14:00 — Lunch"
-
-
 def test_list_unread_parses() -> None:
     from tools.mail_tool import list_unread
 
@@ -205,11 +193,12 @@ def test_move_item_requires_confirmation_first() -> None:
         m.assert_not_called()
 
 
-def test_applescript_error_surfaces_friendly_message() -> None:
+def test_create_event_applescript_error_surfaces_friendly_message() -> None:
+    # create_event still uses AppleScript (writes); reads moved to EventKit (24).
     from actions.macos import AppleScriptError
-    from tools.calendar_tool import today_events
+    from tools.calendar_tool import create_event
 
     with patch("actions.macos.osascript", new=AsyncMock(side_effect=AppleScriptError("boom"))):
-        res = _run(today_events())
+        res = _run(create_event("Café", "2026-06-09T16:00:00", confirmed=True))
     assert res.success is False
-    assert "calendario" in res.user_message.lower()
+    assert "evento" in res.user_message.lower()
