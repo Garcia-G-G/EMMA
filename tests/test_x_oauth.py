@@ -95,6 +95,26 @@ class TestTokenCalls:
         assert cap["data"]["grant_type"] == "refresh_token"
         assert cap["data"]["refresh_token"] == "RT"
 
+    def test_confidential_client_uses_basic_auth(self, monkeypatch):
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_ID", "CID")
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_SECRET", "SECRET")
+        cap = {}
+        monkeypatch.setattr(
+            x_oauth.httpx, "AsyncClient", _fake_async_client({"access_token": "AT"}, cap)
+        )
+        asyncio.run(x_oauth.exchange_code("CID", "CODE", "VER", "http://localhost:8723/callback"))
+        assert cap["auth"] == ("CID", "SECRET")
+
+    def test_public_client_sends_no_basic_auth(self, monkeypatch):
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_SECRET", None)
+        cap = {}
+        monkeypatch.setattr(
+            x_oauth.httpx, "AsyncClient", _fake_async_client({"access_token": "AT"}, cap)
+        )
+        asyncio.run(x_oauth.refresh_access_token("CID", "RT"))
+        # no secret → no Basic auth (httpx's "use client default" sentinel)
+        assert cap["auth"] == x_oauth.httpx.USE_CLIENT_DEFAULT
+
 
 class TestCallbackServer:
     def _serve(self, state, port):
