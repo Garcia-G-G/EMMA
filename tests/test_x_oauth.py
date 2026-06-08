@@ -12,6 +12,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import pytest
+
 from core import x_oauth
 
 
@@ -125,3 +127,53 @@ class TestCallbackServer:
             ).read()
         t.join(6)
         assert "err" in out  # raised — a bad state never yields a code
+
+
+class TestTokenStatus:
+    @pytest.mark.parametrize(
+        "values,expected",
+        [
+            ({}, "missing"),
+            ({"X_ACCESS_TOKEN": "AT", "X_TOKEN_EXPIRES_AT": str(time.time() + 3600)}, "valid"),
+            ({"X_ACCESS_TOKEN": "AT", "X_TOKEN_EXPIRES_AT": str(time.time() - 10)}, "expired"),
+            ({"X_ACCESS_TOKEN": "AT"}, "valid"),  # no expiry recorded → assume valid
+        ],
+    )
+    def test_status(self, monkeypatch, values, expected):
+        async def _retrieve(label):
+            return values.get(label)
+
+        monkeypatch.setattr(x_oauth.secrets, "retrieve", _retrieve)
+        assert asyncio.run(x_oauth.token_status()) == expected
+
+
+class TestRunPkceSetup:
+    def test_no_client_id_returns_false(self, monkeypatch):
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_ID", "")
+        assert asyncio.run(x_oauth.run_pkce_setup()) is False
+
+    def test_non_interactive_returns_false(self, monkeypatch):
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_ID", "CID")
+        assert asyncio.run(x_oauth.run_pkce_setup(non_interactive=True)) is False
+
+    def test_happy_path_stores_tokens(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(x_oauth.settings, "X_CLIENT_ID", "CID")
+        monkeypatch.setattr(x_oauth.subprocess, "run", MagicMock())
+        monkeypatch.setattr(x_oauth, "run_callback_server", lambda state, port: {"code": "abc"})
+        monkeypatch.setattr(
+            x_oauth,
+            "exchange_code",
+            AsyncMock(
+                return_value={"access_token": "AT", "refresh_token": "RT", "expires_in": 7200}
+            ),
+        )
+        stored: dict[str, str] = {}
+
+        async def _store(label, value, kind="secret"):
+            stored[label] = value
+
+        monkeypatch.setattr(x_oauth.secrets, "store", _store)
+        assert asyncio.run(x_oauth.run_pkce_setup()) is True
+        assert stored["X_ACCESS_TOKEN"] == "AT" and stored["X_REFRESH_TOKEN"] == "RT"

@@ -78,6 +78,31 @@ def _have_spotify_creds() -> bool:
     return bool(settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET)
 
 
+def _spotify_cache_path() -> Any:
+    path = settings.EMMA_HOME / "spotify_token.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _spotify_auth() -> Any:
+    """Build the SpotifyOAuth manager (shared by the lazy + eager-setup paths).
+    Raises if spotipy is unavailable; callers handle that."""
+    from spotipy.oauth2 import SpotifyOAuth
+
+    if _evict_token_on_scope_drift():
+        # The next call runs the PKCE consent in the browser — Garcia
+        # hears about it instead of a mystery hang (22.1-B37).
+        log.info("spotify_reauth_needed", reason="scope set widened (playlists)")
+    return SpotifyOAuth(
+        client_id=settings.SPOTIFY_CLIENT_ID,
+        client_secret=settings.SPOTIFY_CLIENT_SECRET,
+        redirect_uri=settings.SPOTIFY_REDIRECT_URI,
+        scope=_SCOPES,
+        cache_path=str(_spotify_cache_path()),
+        open_browser=True,
+    )
+
+
 def _spotify() -> Any:
     """Lazy-init the Spotify client. Returns None if unavailable."""
     global _spotify_client, _spotify_unavailable
@@ -90,29 +115,49 @@ def _spotify() -> Any:
         return None
     try:
         import spotipy
-        from spotipy.oauth2 import SpotifyOAuth
 
-        if _evict_token_on_scope_drift():
-            # The next call runs the PKCE consent in the browser — Garcia
-            # hears about it instead of a mystery hang (22.1-B37).
-            log.info("spotify_reauth_needed", reason="scope set widened (playlists)")
-
-        cache_path = settings.EMMA_HOME / "spotify_token.json"
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        auth = SpotifyOAuth(
-            client_id=settings.SPOTIFY_CLIENT_ID,
-            client_secret=settings.SPOTIFY_CLIENT_SECRET,
-            redirect_uri=settings.SPOTIFY_REDIRECT_URI,
-            scope=_SCOPES,
-            cache_path=str(cache_path),
-            open_browser=True,
-        )
-        _spotify_client = spotipy.Spotify(auth_manager=auth)
+        _spotify_client = spotipy.Spotify(auth_manager=_spotify_auth())
         return _spotify_client
     except Exception as exc:
         log.error("spotify_init_failed", error=str(exc))
         _spotify_unavailable = True
         return None
+
+
+def spotify_token_status() -> str:
+    """'valid' | 'expired' | 'missing' for the cached Spotify token (26.2).
+    Reads ~/.emma/spotify_token.json without prompting."""
+    import json
+    import time
+
+    path = settings.EMMA_HOME / "spotify_token.json"
+    if not path.exists():
+        return "missing"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return "missing"
+    return "valid" if float(data.get("expires_at", 0)) > time.time() else "expired"
+
+
+async def run_spotify_setup(non_interactive: bool = False) -> bool:
+    """Eagerly run the Spotify PKCE consent at install time (26.2). True once a
+    token is cached. The lazy path in _spotify() is unchanged."""
+    if not _have_spotify_creds() or non_interactive:
+        return False
+
+    def _authorize() -> bool:
+        try:
+            auth = _spotify_auth()
+            # check_cache=True reuses a valid token; otherwise opens the browser
+            # and blocks on spotipy's local redirect server until authorized.
+            token = auth.get_access_token(as_dict=False, check_cache=True)
+            return bool(token)
+        except Exception as exc:
+            log.error("spotify_setup_failed", error=str(exc))
+            return False
+
+    return await asyncio.to_thread(_authorize)
 
 
 def _missing_creds_result() -> ToolResult:

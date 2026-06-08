@@ -14,10 +14,12 @@ Refs: RFC 7636 (PKCE) · docs.x.com/resources/fundamentals/authentication/oauth-
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import http.server
 import secrets as _secrets
+import subprocess
 import time
 import urllib.parse
 from typing import Any
@@ -26,6 +28,7 @@ import httpx
 import structlog
 
 from config.settings import settings
+from core import secrets
 
 log = structlog.get_logger("emma.x_oauth")
 
@@ -156,3 +159,62 @@ def run_callback_server(
     if "code" not in result:
         raise ValueError(f"authorization failed: {result.get('error', 'unknown')}")
     return result
+
+
+# ---- setup-time entry points (consumed by emma.setup, 26.2) ---------------
+
+
+async def _store_tokens(tokens: dict[str, Any]) -> None:
+    access = tokens.get("access_token")
+    if not access:
+        raise ValueError("X did not return an access_token")
+    await secrets.store("X_ACCESS_TOKEN", access, kind="oauth_token")
+    if tokens.get("refresh_token"):
+        await secrets.store("X_REFRESH_TOKEN", tokens["refresh_token"], kind="oauth_token")
+    expires_at = int(time.time()) + int(tokens.get("expires_in", 7200))
+    await secrets.store("X_TOKEN_EXPIRES_AT", str(expires_at), kind="oauth_meta")
+
+
+async def run_pkce_setup(non_interactive: bool = False) -> bool:
+    """Run the browser PKCE consent and persist the tokens. True on success.
+
+    Pure auth flow — no user-decision logic (the orchestrator owns "do you use
+    X?"). Returns False when X_CLIENT_ID is unset or we're non-interactive (the
+    flow needs a browser), so the caller can message accordingly.
+    """
+    if not settings.X_CLIENT_ID or non_interactive:
+        return False
+    verifier, challenge = make_pkce_pair()
+    state = make_state()
+    url = build_authorize_url(
+        settings.X_CLIENT_ID, settings.X_REDIRECT_URI, settings.X_SCOPES, challenge, state
+    )
+    port = urllib.parse.urlparse(settings.X_REDIRECT_URI).port or 8723
+    print("Abriendo X.com para que autorices a Emma…")
+    print(f"(Si no se abre solo, pega esto en tu navegador:\n  {url}\n)")
+    subprocess.run(["open", url], check=False)
+    try:
+        cb = await asyncio.to_thread(run_callback_server, state, port)
+        tokens = await exchange_code(
+            settings.X_CLIENT_ID, cb["code"], verifier, settings.X_REDIRECT_URI
+        )
+        await _store_tokens(tokens)
+    except Exception as exc:
+        log.warning("x_pkce_setup_failed", error=str(exc))
+        return False
+    return True
+
+
+async def token_status() -> str:
+    """'valid' | 'expired' | 'missing' — reads Keychain, never prompts."""
+    access = await secrets.retrieve("X_ACCESS_TOKEN")
+    if not access:
+        return "missing"
+    expires_at = await secrets.retrieve("X_TOKEN_EXPIRES_AT")
+    if expires_at:
+        try:
+            if time.time() > float(expires_at):
+                return "expired"  # a refresh on next post will try to renew
+        except ValueError:
+            pass
+    return "valid"

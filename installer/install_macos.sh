@@ -114,6 +114,20 @@ else
     echo "    cd ${EMMA_ROOT} && uv run python -m emma.dictionary seed"
 fi
 
+# 7.8 OAuth integrations (X, Spotify, …) — TCC was already requested in 7.5, so
+# --skip-tcc avoids re-prompting those dialogs. Non-fatal: voice + TCC are the
+# mandatory floor; a pending social/music auth never blocks the daemon (26.2).
+step "Configuring integrations (X, Spotify, ...)"
+if [ -t 0 ] && [ -t 1 ]; then
+    echo "    Se abrirán páginas en tu navegador para autorizar a Emma."
+    ( cd "${EMMA_ROOT}" && uv run python -m emma.setup --skip-tcc ) || \
+        warn "Some integrations stayed pending. Re-run later: uv run python -m emma.setup"
+    ok "Integrations step finished"
+else
+    warn "Non-interactive shell; skipping OAuth setup. Run manually:"
+    echo "    cd ${EMMA_ROOT} && uv run python -m emma.setup"
+fi
+
 # 8. Install plist with paths substituted
 step "Installing LaunchAgent"
 mkdir -p "${HOME_DIR}/Library/LaunchAgents" "${LOG_DIR}"

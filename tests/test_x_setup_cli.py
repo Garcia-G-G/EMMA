@@ -1,55 +1,20 @@
-"""Prompt 26.1-B: the `python -m emma.x_setup` CLI (mocked browser + callback)."""
+"""Prompt 26.2: `emma.x_setup` is now a thin alias for `emma.setup --only x`.
+
+(The X flow itself moved into core.x_oauth.run_pkce_setup — see test_x_oauth.py.)
+"""
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock, MagicMock
 
 from emma import x_setup
 
 
-def test_missing_client_id_prints_guide(monkeypatch, capsys):
-    monkeypatch.setattr(x_setup.settings, "X_CLIENT_ID", "")
-    rc = x_setup.main()
-    out = capsys.readouterr().out
-    assert rc == 1
-    assert "developer.x.com" in out and "X_CLIENT_ID=" in out
+def test_x_setup_delegates_to_unified_setup(monkeypatch):
+    captured: dict = {}
 
+    def _fake(argv=None):
+        captured["argv"] = argv
+        return 0
 
-def test_full_flow_stores_three_keychain_entries(monkeypatch):
-    monkeypatch.setattr(x_setup.settings, "X_CLIENT_ID", "CID")
-    monkeypatch.setattr(x_setup.subprocess, "run", MagicMock())  # don't open a browser
-    monkeypatch.setattr(
-        x_setup.x_oauth,
-        "run_callback_server",
-        lambda state, port=8723: {"code": "abc", "state": state},
-    )
-    monkeypatch.setattr(
-        x_setup.x_oauth,
-        "exchange_code",
-        AsyncMock(return_value={"access_token": "AT", "refresh_token": "RT", "expires_in": 7200}),
-    )
-    stored: dict[str, str] = {}
-
-    async def _store(label, value, kind="secret"):
-        stored[label] = value
-
-    monkeypatch.setattr(x_setup.secrets, "store", _store)
-
-    rc = x_setup.main()
-    assert rc == 0
-    assert stored["X_ACCESS_TOKEN"] == "AT"
-    assert stored["X_REFRESH_TOKEN"] == "RT"
-    assert int(stored["X_TOKEN_EXPIRES_AT"]) > 0
-
-
-def test_callback_timeout_is_handled(monkeypatch, capsys):
-    monkeypatch.setattr(x_setup.settings, "X_CLIENT_ID", "CID")
-    monkeypatch.setattr(x_setup.subprocess, "run", MagicMock())
-
-    def _timeout(state, port=8723):
-        raise TimeoutError("no redirect")
-
-    monkeypatch.setattr(x_setup.x_oauth, "run_callback_server", _timeout)
-    rc = x_setup.main()
-    assert rc == 1
-    assert "no recibí la autorización" in capsys.readouterr().out.lower()
+    monkeypatch.setattr(x_setup, "_setup_main", _fake)
+    assert x_setup.main() == 0
+    assert captured["argv"] == ["--only", "x"]

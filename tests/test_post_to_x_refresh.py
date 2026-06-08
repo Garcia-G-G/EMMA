@@ -132,7 +132,7 @@ class TestRetryOn401:
         )
         x_ready.setattr(s.httpx, "AsyncClient", _seq_httpx([401, 401]))
         r = await s.post_to_x("hola", confirmed=True)
-        assert not r.success and "emma.x_setup" in r.user_message
+        assert not r.success and "emma.setup" in r.user_message
 
 
 class TestNotSetUp:

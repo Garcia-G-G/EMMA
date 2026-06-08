@@ -86,10 +86,10 @@ class TestPostToX:
 
     @pytest.mark.asyncio
     async def test_no_token_prompts_setup(self):
-        # After 26.1 the composer fallback is OFF by default → prompt x_setup.
+        # After 26.1 the composer fallback is OFF by default → prompt setup.
         r = await s.post_to_x("hola", confirmed=True)
         assert not r.success and r.data["needs_setup"]
-        assert "emma.x_setup" in r.user_message
+        assert "emma.setup" in r.user_message
         s._open.assert_not_awaited()
 
     @pytest.mark.asyncio
