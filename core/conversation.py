@@ -327,6 +327,9 @@ def _record_zombie_recovery() -> None:
     now = time.monotonic()
     _zombie_recoveries.append(now)
     recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
+    # Prune in place: a long-lived daemon flapping against a degraded OpenAI
+    # would otherwise grow this list one float per zombie forever.
+    _zombie_recoveries[:] = recent
     if len(recent) >= _ZOMBIE_ESCALATE_N:
         log.warning("session_repeated_zombie", count=len(recent))
         events_bus.publish("session_repeated_zombie", count=len(recent))
@@ -875,6 +878,12 @@ class SessionControl:
         if not self._end_requested:
             return
         self._end_requested = False
+        # Cancel the fallback timer so it doesn't outlive this session: the
+        # normal path ends via EndSessionWatcher (after_speech), leaving the
+        # 10s sleep orphaned and holding the dead pipeline graph referenced.
+        if self._fallback is not None and not self._fallback.done():
+            self._fallback.cancel()
+            self._fallback = None
         if self.task is not None:
             log.info("session_end_after_tool", reason=reason)
             await self.task.cancel()

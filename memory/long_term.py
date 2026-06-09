@@ -122,6 +122,14 @@ def _connect() -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    # Reflection runs as a fire-and-forget background task and can write
+    # concurrently with explicit `remember()` tool calls (each on its own
+    # `to_thread` worker + connection). Without these PRAGMAs the second
+    # writer gets an immediate "database is locked" and silently drops the
+    # fact. WAL lets readers/writers coexist; busy_timeout makes a competing
+    # writer wait instead of erroring.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     # sqlite-vec is a loadable extension; every connection that touches
     # facts_vec must load it first.
     conn.enable_load_extension(True)
@@ -212,7 +220,21 @@ def _remember_with_vec_sync(
                 "WHERE embedding MATCH ? ORDER BY distance LIMIT 1",
                 (qv,),
             ).fetchone()
+            # Only merge into an ACTIVE, non-secret fact. The vec0 MATCH ranks
+            # across every row, so the nearest neighbour can be a superseded
+            # fact (bumping it would resurrect dead state and drop the new
+            # fact) or a secret placeholder (folding a personal fact into a
+            # secret row). Re-hydrate the candidate and skip dedup for those.
             if nearest is not None and (1.0 - float(nearest["distance"])) >= _DEDUP_MIN_SIM:
+                rid = int(nearest["rowid"])
+                eligible = conn.execute(
+                    "SELECT 1 FROM facts WHERE id = ? "
+                    "AND vault_ref IS NULL AND superseded_at IS NULL",
+                    (rid,),
+                ).fetchone()
+            else:
+                eligible = None
+            if nearest is not None and eligible is not None:
                 rid = int(nearest["rowid"])
                 conn.execute(
                     "UPDATE facts SET times_observed = times_observed + 1, "
