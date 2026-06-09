@@ -7,8 +7,14 @@ requires-python = ">=3.11"
 authors = [{ name = "Garcia" }]
 dependencies = [
     "openwakeword>=0.6.0",
-    "openai>=1.50.0",
-    "elevenlabs>=1.0.0",
+    # onnxruntime is openWakeWord's actual (and only) inference backend on
+    # macOS — wake_word.py forces inference_framework="onnx". Pin it directly
+    # instead of relying on it arriving transitively. NOTE: tensorflow and
+    # ai-edge-litert were removed — they were ~400MB of dead weight, imported
+    # nowhere and not pulled by openWakeWord on the onnx path.
+    "onnxruntime>=1.10,<2",
+    # Realtime API GA only; the 1.x line still shipped the removed Realtime beta.
+    "openai>=2.0.0",
     "playwright>=1.40.0",
     "sounddevice>=0.4.6",
     "numpy>=1.26.0",
@@ -21,8 +27,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "spotipy>=2.23.0",
     "trafilatura>=1.12.0",
-    "ai-edge-litert>=2.1.5",
-    "tensorflow>=2.21.0",
     "websockets>=12.0",
     "pipecat-ai[openai,silero]>=1.2.1",
     "pyaudio>=0.2.14",
