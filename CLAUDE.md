@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Emma is
 
-Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~36 tools, and maintains long-term memory in a local SQLite store.
+Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~120 tools, and maintains long-term memory in a local SQLite store.
 
 ## Commands
 
@@ -70,7 +70,7 @@ The orchestrator (`core/orchestrator.py`) runs an infinite loop: wait for wake w
 
 **`memory/long_term.py`** — SQLite fact store at `~/.emma/memory.db`. Deduplicates on exact content match, bumps confidence on repeat observations. `priming_block()` returns the top-N facts formatted for injection into the system prompt.
 
-**`memory/reflection.py`** — Calls gpt-4o-mini on a short conversation window to extract durable facts about Garcia. Currently the reflection scheduling is **not wired** to the Pipecat session — explicit `remember_fact` tool calls work, but automatic fact extraction after each turn requires Pipecat transcript event hooks (not yet implemented).
+**`memory/reflection.py`** — Calls gpt-4o-mini on a short conversation window to extract durable facts about Garcia. Reflection is wired to the live session as of 22.1: the function-call/transcript path in `core/conversation.py` fires `schedule_reflection(last_turns(4))` (conversation.py:245) after a turn, so durable facts are extracted automatically in addition to explicit `remember_fact` tool calls. The DB connection runs in WAL mode with a busy timeout so this background write can't lose facts to a lock collision with an explicit `remember`.
 
 **`actions/environment.py`** — Detects installed apps (IDE, terminal, music, browser) from a hardcoded shortlist. Caches results in `~/.emma/environment_cache.json` (24h TTL). User overrides via voice ("prefiero Zed") persist as preferences in the same cache.
 
