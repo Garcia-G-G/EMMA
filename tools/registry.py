@@ -94,7 +94,10 @@ async def dispatch(name: str, args: dict[str, Any]) -> ToolResult:
         if inspect.isawaitable(result):
             result = await result
     except TypeError as exc:
-        log.error("tool_bad_args", tool=name, args=args, error=str(exc))
+        # Never log `args` itself: for secret-tier tools (remember_secret,
+        # recall_secret, post_to_x, …) it contains plaintext values. Log only
+        # the key names so a malformed call can't leak a password to disk.
+        log.error("tool_bad_args", tool=name, arg_keys=sorted(args), error=str(exc))
         return ToolResult(False, None, f"Argumentos inválidos para {name}.", False)
     except Exception as exc:
         log.exception("tool_runtime_error", tool=name)

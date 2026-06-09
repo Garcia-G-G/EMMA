@@ -87,6 +87,11 @@ async def clone_and_open(
         return err or ToolResult(False, None, "No pude resolver el repo.", False)
 
     name = (dest_subdir or url.rstrip("/").split("/")[-1]).removesuffix(".git").strip("/")
+    # Guard against a degenerate name (empty, ".", "..", or one with a path
+    # separator): dest would collapse to CLONE_DIR itself and the clone
+    # command's `rm -rf "{dest}"` would wipe the entire clone directory.
+    if not name or name in (".", "..") or "/" in name:
+        return ToolResult(False, None, "No pude derivar un nombre de carpeta válido para ese repo.", False)
     dest = Path(settings.CLONE_DIR) / name
 
     chosen = _resolve_ide(ide)

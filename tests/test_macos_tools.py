@@ -30,6 +30,31 @@ def _mock_osascript(return_value: str = ""):
     return patch("actions.macos.osascript", new=AsyncMock(return_value=return_value))
 
 
+# ---------- AppleScript escaping ----------
+
+
+def test_esc_applescript_escapes_quotes_and_backslashes() -> None:
+    from actions.macos import esc_applescript
+
+    assert esc_applescript('say "hi"') == 'say \\"hi\\"'
+    assert esc_applescript("a\\b") == "a\\\\b"
+
+
+def test_esc_applescript_splices_newlines_out_of_literal() -> None:
+    """A raw newline must not terminate the AppleScript "…" literal.
+
+    Multi-line note/email bodies are normal voice requests; an unescaped
+    newline both breaks the script and is an injection vector.
+    """
+    from actions.macos import esc_applescript
+
+    assert "\n" not in esc_applescript("line one\nline two")
+    assert esc_applescript("line one\nline two") == 'line one" & linefeed & "line two'
+    # CRLF collapses to a single linefeed splice, not two breaks.
+    assert esc_applescript("a\r\nb") == 'a" & linefeed & "b'
+    assert "\r" not in esc_applescript("a\rb")
+
+
 # ---------- read-path parsing ----------
 
 

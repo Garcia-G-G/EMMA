@@ -48,10 +48,35 @@ def test_luhn_rejects_invalid_card() -> None:
     assert "[REDACTED:CREDIT_CARD]" not in redact("4111 1111 1111 1112")
 
 
+def test_redaction_bare_digit_ids_not_treated_as_phone() -> None:
+    # Bare digit runs (e.g. a 10-digit epoch token-expiry timestamp) are IDs,
+    # not phones — they must stay readable in logs. A real phone has a "+" or
+    # internal separators. (Card-length bare runs that coincidentally pass Luhn
+    # may still redact as CREDIT_CARD; that's the safe direction, so we don't
+    # fight it here.)
+    assert redact("X token expires 1750000000") == "X token expires 1750000000"
+    assert "[REDACTED:PHONE_INTL]" not in redact("tweet 1760123456789012345 posted")
+    # A genuinely phone-shaped number is still redacted.
+    assert "[REDACTED:PHONE_INTL]" in redact("call +52 81 1234 5678")
+    assert "[REDACTED:PHONE_INTL]" in redact("call 81-1234-5678")
+
+
 def test_redaction_processor_redacts_strings_only() -> None:
     ev = redaction_processor(None, "info", {"event": "paid 4111 1111 1111 1111", "count": 7})
     assert "[REDACTED:CREDIT_CARD]" in ev["event"]
     assert ev["count"] == 7  # non-string values untouched
+
+
+def test_redaction_processor_recurses_into_nested_args() -> None:
+    # A secret passed inside a dict/list value (e.g. log.error(..., args={...}))
+    # must still be redacted, not just top-level string fields.
+    ev = redaction_processor(
+        None,
+        "error",
+        {"event": "bad", "args": {"key": "sk-proj-" + "a" * 40}, "items": ["123-45-6789"]},
+    )
+    assert "[REDACTED:API_KEY_LIKE]" in ev["args"]["key"]
+    assert "[REDACTED:US_SSN]" in ev["items"][0]
 
 
 def test_log_redaction_end_to_end(capsys) -> None:

@@ -100,8 +100,18 @@ async def osascript_or_friendly(
 
 
 def esc_applescript(s: str) -> str:
-    """Escape a Python string for safe embedding in an AppleScript string literal."""
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    """Escape a Python string for safe embedding in an AppleScript string literal.
+
+    AppleScript string literals cannot contain a raw newline or carriage
+    return — a bare ``\\n`` terminates the ``"…"`` literal and the remainder is
+    parsed as source (a correctness break for any multi-line note/email body,
+    and an injection vector for LLM- or user-supplied text). Splice line breaks
+    back in via AppleScript's ``linefeed``/``return`` constants.
+    """
+    s = s.replace("\\", "\\\\").replace('"', '\\"')
+    s = s.replace("\r\n", '" & linefeed & "')
+    s = s.replace("\n", '" & linefeed & "').replace("\r", '" & return & "')
+    return s
 
 
 def _process_name(app: str) -> str:
