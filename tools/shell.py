@@ -16,26 +16,56 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.shell")
 
+# Catastrophic commands that are ALWAYS refused, even if confirmed — there is
+# no legitimate voice-assistant reason to run these.
 _BLOCKED_PATTERNS = [
-    r"rm\s+(-[a-z]*r[a-z]*\s+(-[a-z]*f[a-z]*\s+)?|-[a-z]*f[a-z]*\s+(-[a-z]*r[a-z]*\s+)?)[\"']?(/|~)",
-    r"mkfs",
-    r"dd\s+if=",
-    r":\(\)\s*\{",
+    r"\bmkfs",
+    r"\bdd\s+if=",
+    r":\(\)\s*\{",  # fork bomb
     r">\s*/dev/sd",
-    r"chmod\s+(-[a-z]*R[a-z]*\s+)?777\s+/",
-    r"curl\b.*\|\s*(ba)?sh",
-    r"wget\b.*\|\s*(ba)?sh",
+    r">\s*/dev/disk",
+    r"\bchmod\s+(-[a-z]*R[a-z]*\s+)?777\s+/",
+    r"\b(curl|wget)\b.*\|\s*(ba)?sh",  # pipe-to-shell remote exec
 ]
 _BLOCKED_RE = [re.compile(p, re.IGNORECASE) for p in _BLOCKED_PATTERNS]
 
+# Commands that mutate the filesystem / processes / system state and so must be
+# confirmed by voice before running. The blocklist above is NOT a security
+# boundary (it is trivially bypassable: `rm -rf $HOME`, `find ~ -delete`); the
+# confirmation gate is. Matched as whole words so `format` inside a path or
+# `removed` in output don't trip it.
+_DESTRUCTIVE_PATTERNS = [
+    r"\brm\b", r"\brmdir\b", r"\bunlink\b", r"\bshred\b", r"\bsrm\b",
+    r"\bmv\b", r"\bdd\b", r"\btrash\b",
+    r"\bchmod\b", r"\bchown\b", r"\bchgrp\b", r"\bchflags\b",
+    r"\bkill\b", r"\bkillall\b", r"\bpkill\b",
+    r"\bshutdown\b", r"\breboot\b", r"\bhalt\b",
+    r"\bdiskutil\b", r"\bfdisk\b", r"\bnvram\b",
+    r"\bsudo\b", r"\bsu\b",
+    r"\bdefaults\s+delete\b",
+    r"\bgit\s+reset\s+--hard\b", r"\bgit\s+clean\b", r"--force\b", r"\bgit\s+push\b",
+    r"\b(brew|pip|pip3|npm|uv)\s+(uninstall|remove|rm)\b",
+    r"\bfind\b.*-delete\b", r"\bfind\b.*-exec\b",
+    r"(?<![0-9&>])>(?![>&])",  # truncating redirect `> file` (not >>, 2>, &>, >&)
+]
+_DESTRUCTIVE_RE = [re.compile(p, re.IGNORECASE) for p in _DESTRUCTIVE_PATTERNS]
+
+
+def _is_destructive(command: str) -> bool:
+    return any(p.search(command) for p in _DESTRUCTIVE_RE)
+
 
 @tool()
-def run_command(command: str) -> ToolResult:
+def run_command(command: str, confirmed: bool = False) -> ToolResult:
     """Run a simple shell command on Garcia's Mac and return the output.
 
     IMPORTANT: Use ONE simple command. Do NOT write multi-line scripts,
     do NOT chain with && or ;, do NOT embed osascript/AppleScript
     inline. If you need multiple steps, call this tool multiple times.
+
+    Destructive commands (rm, mv, chmod, kill, sudo, disk/power ops, force
+    pushes, truncating redirects, …) require a spoken confirmation before they
+    run; read-only commands run immediately.
 
     Good examples:
     - run_command("code ~/Documents/EMMA")
@@ -56,6 +86,15 @@ def run_command(command: str) -> ToolResult:
                 "That command looks dangerous - I won't run it.",
                 False,
             )
+
+    # Two-phase confirmation gate for state-mutating commands.
+    if _is_destructive(command) and not confirmed:
+        return ToolResult(
+            success=False,
+            data={"command": command},
+            user_message=f"Voy a ejecutar: {command}. ¿Lo confirmo?",
+            requires_confirmation=True,
+        )
 
     try:
         proc = subprocess.run(
