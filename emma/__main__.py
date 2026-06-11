@@ -150,10 +150,19 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         for t in _bg_tasks:
             t.cancel()
 
+    def _reload_tools_sighup() -> None:
+        # 37-B: `kill -HUP <pid>` live-reloads tools without restarting the session.
+        from core import diagnostics
+
+        result = diagnostics.reload_all_tools()
+        log.info("tools_reloaded_via_sighup", reloaded=len(result["reloaded"]), errors=len(result["errors"]))
+
     loop = asyncio.get_running_loop()
     for s in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(s, _shutdown, s)
+    with contextlib.suppress(NotImplementedError, AttributeError):
+        loop.add_signal_handler(signal.SIGHUP, _reload_tools_sighup)
 
     try:
         await orchestrator_task
