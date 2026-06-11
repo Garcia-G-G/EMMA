@@ -83,6 +83,39 @@ def redact(text: str) -> str:
     return out
 
 
+def contains_secret(text: str) -> bool:
+    """True if `text` carries a HIGH-CONFIDENCE secret.
+
+    Stricter than ``redact() != text``: built for callers that must REFUSE on a
+    secret rather than over-redact harmless text (e.g. the X-post guard). The
+    difference vs ``redact``:
+      * a phone number is shareable PII, NOT a secret → ignored here;
+      * an API-key-shaped run must mix letters AND digits to count — a long plain
+        word or hashtag (``#SuperLargoHashtag…``) is not a secret;
+      * cards still require a valid Luhn; IBAN still requires the length guard.
+    """
+    if not text:
+        return False
+    for kind, pattern, _repl in _RULES:
+        if kind == "PHONE_INTL":
+            continue
+        for m in pattern.finditer(text):
+            frag = m.group(0)
+            if kind == "API_KEY_LIKE":
+                if any(c.isalpha() for c in frag) and any(c.isdigit() for c in frag):
+                    return True
+                continue
+            if kind == "CREDIT_CARD":
+                digits = re.sub(r"\D", "", frag)
+                if 13 <= len(digits) <= 19 and _luhn_ok(digits):
+                    return True
+                continue
+            if kind == "IBAN" and len(frag) < 15:
+                continue
+            return True  # CURP / RFC / US_SSN / valid IBAN — structural, high-confidence
+    return False
+
+
 def _redact_value(v: Any) -> Any:
     """Recursively redact strings inside nested dict/list/tuple structures."""
     if isinstance(v, str):
