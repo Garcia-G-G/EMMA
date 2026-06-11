@@ -1,0 +1,423 @@
+"""Screen vision via the macOS Accessibility (AX) API — read what's on screen.
+
+This is the same UI-element store VoiceOver uses: every app publishes a tree of
+``AXUIElement`` nodes (windows → groups → buttons / text fields / static text)
+with attributes (role, title, value, position). We read it natively — no OCR,
+no screenshots. The Accessibility TCC grant is requested at install
+(``core/permissions.py``), so reads need no new prompt.
+
+Design notes:
+- Every AX C call funnels through :func:`_attr`, the single seam, so the
+  tree-walk logic is unit-testable with a mocked AX layer (no live display).
+- Trees are read FRESH per call (AX state changes every keystroke) and capped
+  (depth ≤ 4, nodes ≤ 400) — some apps (Slack/Electron) have monstrous trees.
+- Secure fields (passwords) NEVER have their value read — role/subrole carrying
+  "Secure" is reported as ``<hidden>``.
+- All blocking AX work runs in a worker thread (``read_current_screen``).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import re
+from dataclasses import dataclass
+from typing import Any
+
+import structlog
+
+log = structlog.get_logger("emma.screen_vision")
+
+# AX symbols. Guarded so the module imports (and unit tests run) even where the
+# framework or a display is unavailable; the public API degrades to empty/None.
+# Attribute / action names. Stable AX identifier strings (these literals ARE the
+# values of Apple's kAX* constants); we define them here so the module imports
+# and unit tests run even where the framework or a display is absent.
+kAXChildrenAttribute = "AXChildren"  # noqa: N816 - Apple AX constant name
+kAXDescriptionAttribute = "AXDescription"  # noqa: N816
+kAXEnabledAttribute = "AXEnabled"  # noqa: N816
+kAXFocusedWindowAttribute = "AXFocusedWindow"  # noqa: N816
+kAXPositionAttribute = "AXPosition"  # noqa: N816
+kAXPressAction = "AXPress"  # noqa: N816
+kAXRoleAttribute = "AXRole"  # noqa: N816
+kAXSizeAttribute = "AXSize"  # noqa: N816
+kAXSubroleAttribute = "AXSubrole"  # noqa: N816
+kAXTitleAttribute = "AXTitle"  # noqa: N816
+kAXValueAttribute = "AXValue"  # noqa: N816
+
+try:
+    from ApplicationServices import (
+        AXUIElementCopyAttributeValue,
+        AXUIElementCreateApplication,
+        AXUIElementPerformAction,
+        AXUIElementSetAttributeValue,
+    )
+
+    _AX_OK = True
+except Exception as exc:  # pragma: no cover - only on a box without the framework
+    log.warning("ax_unavailable", error=str(exc))
+    _AX_OK = False
+
+# Role strings (stable AX identifiers).
+ROLE_WINDOW = "AXWindow"
+ROLE_BUTTON = "AXButton"
+ROLE_TEXTFIELD = "AXTextField"
+ROLE_TEXTAREA = "AXTextArea"
+ROLE_SECURE = "AXSecureTextField"
+ROLE_STATIC = "AXStaticText"
+
+_MAX_DEPTH = 4
+_MAX_NODES = 400
+_TEXT_CAP = 4000  # never hand the LLM an unbounded wall of text
+
+
+@dataclass(frozen=True)
+class WindowSnapshot:
+    app: str
+    title: str
+    role: str
+    bounds: tuple[float, float, float, float] | None  # x, y, w, h
+    focused_role: str | None
+    focused_title: str | None
+
+
+@dataclass(frozen=True)
+class ElementRef:
+    """Opaque handle to an AX element + a human path for logging/re-lookup."""
+
+    elem: Any
+    role: str
+    title: str
+    path: str
+
+
+# ---- the single AX seam -----------------------------------------------------
+
+
+def _attr(elem: Any, attr: str) -> Any | None:
+    """Read one AX attribute. Returns None on any error / non-success.
+
+    THE mock seam: unit tests monkeypatch this to read from fake elements, so
+    nothing below ever touches the real C API in tests.
+    """
+    if elem is None or not _AX_OK:
+        return None
+    try:
+        err, value = AXUIElementCopyAttributeValue(elem, attr, None)
+        return value if err == 0 else None
+    except Exception:
+        return None
+
+
+def _role(elem: Any) -> str:
+    return str(_attr(elem, kAXRoleAttribute) or "")
+
+
+def _subrole(elem: Any) -> str:
+    return str(_attr(elem, kAXSubroleAttribute) or "")
+
+
+def _title(elem: Any) -> str:
+    return str(_attr(elem, kAXTitleAttribute) or "")
+
+
+def _description(elem: Any) -> str:
+    return str(_attr(elem, kAXDescriptionAttribute) or "")
+
+
+def _children(elem: Any) -> list[Any]:
+    kids = _attr(elem, kAXChildrenAttribute)
+    return list(kids) if kids else []
+
+
+def _is_secure(elem: Any) -> bool:
+    return "Secure" in _role(elem) or "Secure" in _subrole(elem)
+
+
+def _value_str(elem: Any) -> str:
+    """String value of an element, or "<hidden>" for a secure (password) field."""
+    if _is_secure(elem):
+        return "<hidden>"
+    val = _attr(elem, kAXValueAttribute)
+    if val is None:
+        return ""
+    if isinstance(val, bool):
+        return ""
+    return str(val)
+
+
+def _bounds(elem: Any) -> tuple[float, float, float, float] | None:
+    pos = _attr(elem, kAXPositionAttribute)
+    size = _attr(elem, kAXSizeAttribute)
+    try:
+        if pos is not None and size is not None:
+            return (float(pos.x), float(pos.y), float(size.width), float(size.height))
+    except Exception:
+        return None
+    return None
+
+
+# ---- frontmost app ----------------------------------------------------------
+
+
+def _frontmost_app() -> Any | None:
+    """The frontmost ``NSRunningApplication`` (has localizedName + pid)."""
+    try:
+        from AppKit import NSWorkspace
+
+        return NSWorkspace.sharedWorkspace().frontmostApplication()
+    except Exception as exc:  # pragma: no cover
+        log.warning("frontmost_app_failed", error=str(exc))
+        return None
+
+
+def _app_element(app: Any) -> Any | None:
+    if app is None or not _AX_OK:
+        return None
+    try:
+        return AXUIElementCreateApplication(app.processIdentifier())
+    except Exception:
+        return None
+
+
+def _focused_window(app_elem: Any) -> Any | None:
+    return _attr(app_elem, kAXFocusedWindowAttribute)
+
+
+# ---- public read API --------------------------------------------------------
+
+
+def frontmost_window() -> WindowSnapshot | None:
+    """Snapshot of the frontmost app's focused window, or None."""
+    app = _frontmost_app()
+    if app is None:
+        return None
+    app_elem = _app_element(app)
+    win = _focused_window(app_elem)
+    if win is None:
+        return None
+    focused = _attr(app_elem, "AXFocusedUIElement")
+    return WindowSnapshot(
+        app=str(app.localizedName() or ""),
+        title=_title(win),
+        role=_role(win) or ROLE_WINDOW,
+        bounds=_bounds(win),
+        focused_role=_role(focused) if focused is not None else None,
+        focused_title=(_title(focused) or _description(focused)) if focused is not None else None,
+    )
+
+
+def read_window_tree(
+    elem: Any, max_depth: int = _MAX_DEPTH, max_nodes: int = _MAX_NODES
+) -> dict[str, Any]:
+    """DFS the AX tree from ``elem`` into a capped role/title/value dict."""
+    budget = [max_nodes]
+
+    def walk(node: Any, depth: int) -> dict[str, Any]:
+        out: dict[str, Any] = {"role": _role(node), "title": _title(node)}
+        text = _value_str(node)
+        if text:
+            out["value"] = text[:_TEXT_CAP]
+        desc = _description(node)
+        if desc:
+            out["description"] = desc[:200]
+        if depth < max_depth:
+            kids: list[dict[str, Any]] = []
+            for child in _children(node):
+                if budget[0] <= 0:
+                    out["truncated"] = True
+                    break
+                budget[0] -= 1
+                kids.append(walk(child, depth + 1))
+            if kids:
+                out["children"] = kids
+        return out
+
+    return walk(elem, 0)
+
+
+def find_element(
+    elem: Any,
+    role: str | None = None,
+    title_re: str | None = None,
+    description_re: str | None = None,
+    max_depth: int = _MAX_DEPTH,
+    max_nodes: int = _MAX_NODES,
+) -> ElementRef | None:
+    """First element under ``elem`` matching role/title/description, DFS, capped."""
+    title_pat = re.compile(title_re, re.IGNORECASE) if title_re else None
+    desc_pat = re.compile(description_re, re.IGNORECASE) if description_re else None
+    budget = [max_nodes]
+
+    def matches(node: Any) -> bool:
+        if role is not None and _role(node) != role:
+            return False
+        if title_pat is not None and not title_pat.search(_title(node)):
+            return False
+        return desc_pat is None or bool(desc_pat.search(_description(node)))
+
+    def walk(node: Any, depth: int, path: str) -> ElementRef | None:
+        if budget[0] <= 0:
+            return None
+        budget[0] -= 1
+        if matches(node):
+            return ElementRef(elem=node, role=_role(node), title=_title(node), path=path)
+        if depth < max_depth:
+            for i, child in enumerate(_children(node)):
+                hit = walk(child, depth + 1, f"{path}/{_role(child) or '?'}[{i}]")
+                if hit is not None:
+                    return hit
+        return None
+
+    return walk(elem, 0, _role(elem) or "root")
+
+
+def read_text_of(elem: Any, _cap: int = _TEXT_CAP) -> str:
+    """Concatenate value + description + descendants' text, capped."""
+    parts: list[str] = []
+    budget = [_MAX_NODES]
+
+    def walk(node: Any) -> None:
+        if budget[0] <= 0:
+            return
+        budget[0] -= 1
+        v = _value_str(node)
+        if v and v != "<hidden>":
+            parts.append(v)
+        d = _description(node)
+        if d:
+            parts.append(d)
+        for child in _children(node):
+            if sum(len(p) for p in parts) >= _cap:
+                return
+            walk(child)
+
+    walk(elem)
+    return " ".join(parts)[:_cap].strip()
+
+
+# ---- high-level structured read ---------------------------------------------
+
+
+def _collect(win: Any) -> dict[str, list[str]]:
+    """Walk the window collecting buttons / fields / static text by role."""
+    buttons: list[str] = []
+    fields: list[str] = []
+    texts: list[str] = []
+    budget = [_MAX_NODES]
+
+    def walk(node: Any, depth: int) -> None:
+        if budget[0] <= 0:
+            return
+        budget[0] -= 1
+        role = _role(node)
+        if role == ROLE_BUTTON:
+            label = _title(node) or _description(node)
+            if label:
+                buttons.append(label)
+        elif role in (ROLE_TEXTFIELD, ROLE_TEXTAREA, ROLE_SECURE) or _is_secure(node):
+            label = _title(node) or _description(node) or "campo"
+            fields.append(f"{label}: {_value_str(node)}")
+        elif role == ROLE_STATIC:
+            t = _value_str(node) or _title(node)
+            if t:
+                texts.append(t)
+        if depth < _MAX_DEPTH:
+            for child in _children(node):
+                if budget[0] <= 0:
+                    break
+                walk(child, depth + 1)
+
+    walk(win, 0)
+    return {"buttons": buttons, "fields": fields, "texts": texts}
+
+
+def _format_screen(app_name: str, win: Any) -> str:
+    title = _title(win)
+    parts = _collect(win)
+    lines = [f"App: {app_name}", f'Window: "{title}"']
+    if parts["buttons"]:
+        lines.append("Buttons: [" + ", ".join(parts["buttons"][:30]) + "]")
+    if parts["fields"]:
+        lines.append("Fields: [" + ", ".join(parts["fields"][:20]) + "]")
+    if parts["texts"]:
+        joined = " · ".join(parts["texts"])[:_TEXT_CAP]
+        lines.append(f'Text: "{joined}"')
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class ScreenRead:
+    app: str
+    title: str
+    buttons: list[str]
+    fields: list[str]
+    texts: list[str]
+    structured: str  # the flattened App/Window/Buttons/Fields/Text block
+
+
+def _current_screen_sync() -> ScreenRead | None:
+    fw = _frontmost_window_element()
+    if fw is None:
+        return None
+    app, win = fw
+    parts = _collect(win)
+    return ScreenRead(
+        app=app,
+        title=_title(win),
+        buttons=parts["buttons"],
+        fields=parts["fields"],
+        texts=parts["texts"],
+        structured=_format_screen(app, win),
+    )
+
+
+async def current_screen() -> ScreenRead | None:
+    """Structured read of the frontmost focused window (AX runs off the loop)."""
+    return await asyncio.to_thread(_current_screen_sync)
+
+
+async def read_current_screen() -> str:
+    """Structured TEXT of the frontmost focused window — what the LLM reasons over."""
+    r = await current_screen()
+    return r.structured if r is not None else ""
+
+
+# ---- actions (used by the destructive tools) --------------------------------
+
+
+def press_element(ref: ElementRef) -> bool:
+    """Send AXPress to an element. True on success."""
+    if not _AX_OK:
+        return False
+    try:
+        return bool(AXUIElementPerformAction(ref.elem, kAXPressAction) == 0)
+    except Exception as exc:
+        log.warning("ax_press_failed", error=str(exc))
+        return False
+
+
+def set_element_value(ref: ElementRef, text: str) -> bool:
+    """Set kAXValue on a field. True on success. (Never logs the value.)"""
+    if not _AX_OK:
+        return False
+    try:
+        return bool(AXUIElementSetAttributeValue(ref.elem, kAXValueAttribute, text) == 0)
+    except Exception as exc:
+        log.warning("ax_set_value_failed", error=str(exc))
+        return False
+
+
+def _frontmost_window_element() -> tuple[str, Any] | None:
+    """(app_name, focused_window_element) for the tools to search, or None."""
+    app = _frontmost_app()
+    if app is None:
+        return None
+    win = _focused_window(_app_element(app))
+    if win is None:
+        return None
+    return (str(app.localizedName() or ""), win)
+
+
+def button_labels(win: Any) -> list[str]:
+    """Every button label in the window (for fuzzy matching in the tools)."""
+    return _collect(win)["buttons"]

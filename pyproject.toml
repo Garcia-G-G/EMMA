@@ -35,6 +35,7 @@ dependencies = [
     "pyobjc-framework-webkit>=12.1",
     "pvporcupine>=4.0.2",
     "croniter>=6.2.2",
+    "pyobjc-framework-applicationservices>=12.2",
 ]
 
 [dependency-groups]
