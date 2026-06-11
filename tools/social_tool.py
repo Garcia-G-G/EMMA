@@ -18,6 +18,7 @@ never .env or memory.db (SECURITY.md).
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 from typing import Any
@@ -26,7 +27,7 @@ import httpx
 import structlog
 
 from config.settings import settings
-from core import app_capabilities, dictionary, secrets, x_oauth
+from core import app_capabilities, dictionary, redaction, secrets, x_oauth
 from tools.app_url_tool import _fill_template, _open
 from tools.base import ToolResult, tool
 
@@ -36,13 +37,65 @@ _X_MAX = 280
 _DISCORD_MAX = 2000
 _X_REAUTH = "Corre `python -m emma.setup` para configurar X (o `--only x` si solo quieres ese)."
 
+# B50.1: single-flight refresh. Two posts racing on an expired token (a background
+# task + a foreground voice turn) would otherwise each POST /2/oauth2/token; the
+# second spends the one-time refresh token again → invalid_grant, breaking the
+# chain until Garcia re-runs setup. The lock serializes; the waiter then re-reads
+# the now-fresh token instead of refreshing again.
+_X_REFRESH_LOCK = asyncio.Lock()
 
-async def _refresh_x_token() -> str | None:
+# B50.3: curly quotes the Realtime LLM occasionally emits around URLs break the
+# link. Normalize ONLY inside URL tokens so styled prose quotes survive.
+# (escapes, not literals, so the linter doesn't flag ambiguous Unicode)
+_CURLY = str.maketrans({"\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"})
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _normalize_urls(text: str) -> str:
+    return _URL_RE.sub(lambda m: m.group(0).translate(_CURLY), text)
+
+
+def _is_malformed_token_error(body: dict[str, Any]) -> bool:
+    """X returns OAuth ``invalid_request`` for a malformed bearer — a refresh
+    can't fix that. ``invalid_token`` / plain expiry IS refreshable. Default to
+    refreshable when the body is unrecognized (don't strand a recoverable 401)."""
+    blob = json.dumps(body or {}).lower()
+    return "invalid_request" in blob or "invalid-request" in blob
+
+
+def _rate_limit_result(headers: dict[str, Any]) -> ToolResult:
+    """B50.2: a 429 surfaces the ``x-rate-limit-reset`` (epoch) as a wait time."""
+    reset = headers.get("x-rate-limit-reset") if headers else None
+    suffix = " Intenta en un rato."
+    if reset:
+        try:
+            mins = max(1, round((float(reset) - time.time()) / 60))
+            suffix = f" Intenta en ~{mins} min."
+        except (ValueError, TypeError):
+            pass
+    return ToolResult(False, None, f"X me limitó el ritmo de publicaciones.{suffix}", False)
+
+
+async def _refresh_x_token(stale: str | None = None) -> str | None:
     """Mint a fresh access token from the stored refresh token, persisting it.
-    None if there's no refresh token / client id or the refresh call fails."""
-    refresh = await secrets.retrieve("X_REFRESH_TOKEN")
-    if not refresh or not settings.X_CLIENT_ID:
-        return None
+    None if there's no refresh token / client id or the refresh call fails.
+
+    Single-flight (B50.1): callers pass the token that just failed as ``stale``.
+    After taking the lock we re-read the stored token; if it already changed,
+    a concurrent caller refreshed while we waited — reuse it rather than spend
+    the refresh token a second time."""
+    async with _X_REFRESH_LOCK:
+        if stale is not None:
+            current = await secrets.retrieve("X_ACCESS_TOKEN")
+            if current and current != stale:
+                return current
+        refresh = await secrets.retrieve("X_REFRESH_TOKEN")
+        if not refresh or not settings.X_CLIENT_ID:
+            return None
+        return await _do_refresh(refresh)
+
+
+async def _do_refresh(refresh: str) -> str | None:
     try:
         tokens = await x_oauth.refresh_access_token(settings.X_CLIENT_ID, refresh)
     except Exception as exc:
@@ -74,11 +127,11 @@ async def _valid_x_token() -> str | None:
         except ValueError:
             expired = False
     if expired:
-        return await _refresh_x_token() or token
+        return await _refresh_x_token(token) or token
     return token
 
 
-async def _x_post(token: str, text: str) -> tuple[int, dict[str, Any]]:
+async def _x_post(token: str, text: str) -> tuple[int, dict[str, Any], dict[str, Any]]:
     async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
         resp = await client.post(
             "https://api.x.com/2/tweets",
@@ -89,7 +142,10 @@ async def _x_post(token: str, text: str) -> tuple[int, dict[str, Any]]:
         body = dict(resp.json())
     except Exception:
         body = {}
-    return resp.status_code, body
+    # Lowercase header keys so the 429 reset lookup is case-insensitive regardless
+    # of what httpx (or a test mock) hands back. Defensive: mocks may omit headers.
+    headers = {str(k).lower(): v for k, v in (getattr(resp, "headers", {}) or {}).items()}
+    return resp.status_code, body, headers
 
 
 def _composer_url(app: str, kind: str, **values: str) -> str | None:
@@ -138,6 +194,21 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
     if not text:
         return ToolResult(False, None, "¿Qué quieres que publique en X?", False)
 
+    # B50.3: normalize curly quotes inside URLs, then refuse to publish anything
+    # that carries a secret (API key, card, token — including inside a URL query
+    # like ?api_key=…). `contains_secret` is precise: it ignores phone numbers and
+    # long plain words/hashtags, so normal tweets aren't blocked. We refuse rather
+    # than auto-redact-and-post — Garcia must see it and rewrite.
+    text = _normalize_urls(text)
+    if redaction.contains_secret(text):
+        return ToolResult(
+            False,
+            {"blocked": "sensitive"},
+            "No voy a publicar esto: parece traer un dato sensible (una clave o número). "
+            "Reescríbelo sin esa información.",
+            False,
+        )
+
     truncated = len(text) > _X_MAX
     if truncated:
         text = text[: _X_MAX - 1].rstrip() + "…"
@@ -165,13 +236,14 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
         )
 
     try:
-        status, body = await _x_post(token, text)
-        if status in (401, 403):  # token rejected → one refresh + retry
-            fresh = await _refresh_x_token()
+        status, body, headers = await _x_post(token, text)
+        # B50.2: only an expired/invalid_token 401 is refreshable. invalid_request
+        # (malformed bearer) and 403 (missing scope) are NOT — refreshing there
+        # just burns the token. Exactly one refresh + retry, never a loop.
+        if status == 401 and not _is_malformed_token_error(body):
+            fresh = await _refresh_x_token(token)
             if fresh:
-                status, body = await _x_post(fresh, text)
-            if status != 201:
-                return ToolResult(False, None, f"Mi sesión con X expiró. {_X_REAUTH}", False)
+                status, body, headers = await _x_post(fresh, text)
     except Exception as exc:
         log.warning("x_api_error", error=str(exc))
         return ToolResult(False, None, f"No pude publicar en X: {exc}", False)
@@ -182,8 +254,15 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
             True, {"via": "api", "tweet_id": tweet_id}, "Listo, publiqué en X.", False
         )
     if status == 429:
+        return _rate_limit_result(headers)
+    if status == 403:
+        # Missing scope (tweet.write not granted at OAuth time) — re-auth needed.
         return ToolResult(
-            False, None, "X me limitó el ritmo de publicaciones. Intenta en un rato.", False
+            False, None, f"X no me da permiso para publicar (falta el alcance). {_X_REAUTH}", False
+        )
+    if status == 401:
+        return ToolResult(
+            False, None, f"Mi sesión con X no es válida o expiró. {_X_REAUTH}", False
         )
     log.warning("x_api_failed", status=status)
     return ToolResult(False, None, f"X rechazó la publicación ({status}).", False)

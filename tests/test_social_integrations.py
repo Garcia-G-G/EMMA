@@ -81,7 +81,9 @@ class TestPostToX:
 
     @pytest.mark.asyncio
     async def test_truncates_over_280(self):
-        r = await s.post_to_x("a" * 400)
+        # Real prose (spaced) so the 280-truncation is what's under test — not the
+        # B50.3 secret guard, which flags a 400-char unbroken alphanumeric run.
+        r = await s.post_to_x("hola " * 80)
         assert r.data["truncated"] and len(r.data["text"]) == 280
 
     @pytest.mark.asyncio
