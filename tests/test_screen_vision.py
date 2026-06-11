@@ -14,18 +14,40 @@ import tools.screen_vision_tool as svt
 from core import screen_vision as sv
 
 
-class FakeAX:
-    """A fake AX element: an attribute dict + children, read via _attr."""
+class _Pt:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
 
-    def __init__(self, role="", title="", value=None, subrole="", desc="", children=None):
+
+class _Sz:
+    def __init__(self, w, h):
+        self.width, self.height = w, h
+
+
+class FakeAX:
+    """A fake AX element: an attribute dict + children, read via _attr.
+
+    Children get their AXParent back-pointer wired automatically so the pane
+    walk-up works in tests.
+    """
+
+    def __init__(self, role="", title="", value=None, subrole="", desc="",
+                 identifier="", role_desc="", pos=None, size=None, children=None):
         self.attrs = {
             sv.kAXRoleAttribute: role,
             sv.kAXTitleAttribute: title,
             sv.kAXValueAttribute: value,
             sv.kAXSubroleAttribute: subrole,
             sv.kAXDescriptionAttribute: desc,
+            sv.kAXIdentifierAttribute: identifier,
+            sv.kAXRoleDescriptionAttribute: role_desc,
             sv.kAXChildrenAttribute: children or [],
+            sv.kAXParentAttribute: None,
+            sv.kAXPositionAttribute: _Pt(*pos) if pos else None,
+            sv.kAXSizeAttribute: _Sz(*size) if size else None,
         }
+        for c in children or []:
+            c.attrs[sv.kAXParentAttribute] = self
 
 
 @pytest.fixture(autouse=True)
@@ -244,3 +266,155 @@ async def test_summarize_screen_uses_llm(monkeypatch) -> None:
     monkeypatch.setattr(svt, "_summarize", AsyncMock(return_value="Tienes Mail abierto."))
     res = await svt.summarize_screen("¿qué hay?")
     assert res.success and "Mail" in res.user_message
+
+
+# ---- pane / focus introspection (27.1) --------------------------------------
+
+
+def test_position_is_pure_geometry() -> None:
+    win = (0, 0, 1000, 800)
+    assert sv._position((0, 0, 200, 800), win) == "izquierda"
+    assert sv._position((800, 0, 200, 800), win) == "derecha"
+    assert sv._position((400, 300, 200, 200), win) == "centro"
+    assert sv._position((0, 600, 300, 200), win) == "abajo a la izquierda"
+
+
+def test_ancestors_walk_up_cap_fires() -> None:
+    node = FakeAX(role="AXLeaf")
+    for i in range(30):  # 30-deep chain; cap is 20
+        node = FakeAX(role="AXGroup", title=f"g{i}", children=[node])
+    leaf = node
+    while sv._children(leaf):
+        leaf = sv._children(leaf)[0]
+    assert len(sv._ancestors(leaf)) <= sv._WALK_UP_CAP
+
+
+def test_ancestors_cycle_guard() -> None:
+    a = FakeAX(role="AXGroup")
+    b = FakeAX(role="AXGroup")
+    a.attrs[sv.kAXParentAttribute] = b
+    b.attrs[sv.kAXParentAttribute] = a  # cycle
+    assert len(sv._ancestors(a)) <= sv._WALK_UP_CAP  # no infinite loop
+
+
+def test_pick_pane_prefers_app_set_label_over_nearer_generic() -> None:
+    win = FakeAX(role="AXWindow")
+    labeled = FakeAX(role="AXGroup", title="Terminal")  # app named this region
+    generic = FakeAX(role="AXGroup", role_desc="grupo")  # nearer, but unnamed
+    focused = FakeAX(role="AXTextArea")
+    pane = sv._pick_pane(focused, [generic, labeled, win], (0, 0, 1000, 800))
+    assert pane is labeled
+
+
+def test_pick_pane_geometry_fallback_when_unlabeled() -> None:
+    big = FakeAX(role="AXGroup", pos=(0, 0), size=(1000, 800))  # == window
+    small = FakeAX(role="AXScrollArea", pos=(700, 0), size=(300, 800))  # distinct sub-region
+    focused = FakeAX(role="AXTextArea")
+    pane = sv._pick_pane(focused, [small, big], (0, 0, 1000, 800))
+    assert pane is small
+
+
+def _seed_focus(monkeypatch, app_elem, name="TestApp"):
+    class _App:
+        def localizedName(self):  # noqa: N802 - mirrors AppKit
+            return name
+
+        def processIdentifier(self):  # noqa: N802 - mirrors AppKit
+            return 1
+
+    monkeypatch.setattr(sv, "_frontmost_app", lambda: _App())
+    monkeypatch.setattr(sv, "_app_element", lambda app: app_elem)
+
+
+def test_focused_pane_resolves_label_position_and_hides_secret(monkeypatch) -> None:
+    win = FakeAX(role="AXWindow", pos=(0, 0), size=(1000, 800))
+    pane = FakeAX(role="AXGroup", title="Terminal", pos=(0, 500), size=(1000, 300), children=[
+        FakeAX(role="AXStaticText", value="$ ls"),
+        FakeAX(role="AXSecureTextField", value="hunter2"),
+    ])
+    focused = FakeAX(role="AXTextArea", value="comando")
+    focused.attrs[sv.kAXParentAttribute] = pane
+    pane.attrs[sv.kAXParentAttribute] = win
+    app_elem = FakeAX(role="AXApplication")
+    app_elem.attrs[sv.kAXFocusedUIElementAttribute] = focused
+    _seed_focus(monkeypatch, app_elem)
+
+    p = sv.focused_pane()
+    assert p is not None
+    assert p.label == "Terminal"
+    assert p.position == "abajo"
+    assert "$ ls" in p.snippet
+    assert "hunter2" not in p.snippet  # secure value never leaks into the snippet
+
+
+def test_focused_pane_none_when_app_exposes_no_focus(monkeypatch) -> None:
+    app_elem = FakeAX(role="AXApplication")  # no AXFocusedUIElement (Electron-like)
+    _seed_focus(monkeypatch, app_elem)
+    assert sv.focused_pane() is None
+
+
+def test_window_panes_lists_labeled_regions(monkeypatch) -> None:
+    win = FakeAX(role="AXWindow", pos=(0, 0), size=(1000, 800), children=[
+        FakeAX(role="AXGroup", title="Sidebar", pos=(0, 0), size=(200, 800)),
+        FakeAX(role="AXGroup", identifier="editor", pos=(200, 0), size=(800, 500)),
+        FakeAX(role="AXScrollArea", role_desc="terminal area", pos=(200, 500), size=(800, 300)),
+    ])
+    monkeypatch.setattr(sv, "_frontmost_window_element", lambda: ("X", win))
+    labels = {p["label"] for p in sv.window_panes()}
+    assert {"Sidebar", "editor", "terminal area"} <= labels
+
+
+# ---- scoped tools -----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_find_button_scope_focus_narrows_to_pane(monkeypatch) -> None:
+    win, pane = object(), object()
+    monkeypatch.setattr(sv, "_frontmost_window_element", lambda: ("App", win))
+    monkeypatch.setattr(sv, "focused_pane_element", lambda: pane)
+    seen = {}
+
+    def labels(root):
+        seen["root"] = root
+        return ["Enviar"] if root is pane else ["Enviar", "Cancelar", "Guardar"]
+
+    monkeypatch.setattr(sv, "button_labels", labels)
+    res = await svt.find_button("Enviar", scope="focus")
+    assert res.success and seen["root"] is pane
+
+
+@pytest.mark.asyncio
+async def test_find_button_default_scope_is_whole_window(monkeypatch) -> None:
+    win, pane = object(), object()
+    monkeypatch.setattr(sv, "_frontmost_window_element", lambda: ("App", win))
+    monkeypatch.setattr(sv, "focused_pane_element", lambda: pane)
+    seen = {}
+
+    def labels(root):
+        seen["root"] = root
+        return ["Guardar"]
+
+    monkeypatch.setattr(sv, "button_labels", labels)
+    res = await svt.find_button("Guardar")  # 27 behavior, no scope arg
+    assert res.success and seen["root"] is win
+
+
+@pytest.mark.asyncio
+async def test_where_am_i_names_the_region(monkeypatch) -> None:
+    p = sv.PaneInfo(app="App", role="AXGroup", role_description="grupo", identifier="",
+                    title="Agent chat", label="Agent chat", position="derecha", bounds=None,
+                    focused_role="AXTextArea", focused_role_description="área de texto",
+                    snippet="hola", ancestors=["AXGroup: Agent chat"])
+    monkeypatch.setattr(sv, "focused_pane", lambda: p)
+    res = await svt.where_am_i()
+    assert res.success
+    assert "Agent chat" in res.user_message and "derecha" in res.user_message
+
+
+@pytest.mark.asyncio
+async def test_where_am_i_degrades_when_no_focus(monkeypatch) -> None:
+    monkeypatch.setattr(sv, "focused_pane", lambda: None)
+    monkeypatch.setattr(sv, "current_screen", AsyncMock(return_value=_screen()))
+    res = await svt.where_am_i()
+    assert res.success  # degrades to the window read rather than failing
+    assert res.data["pane"] is None
