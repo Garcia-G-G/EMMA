@@ -96,6 +96,52 @@ class TestDeadSessionWatcher:
         assert conv._zombie_cooldown_s() == 0.0
 
 
+# ---- B48: _zombie_recoveries thread-safety + bounded growth ------------------
+
+
+class TestZombieRecoveryThreadSafety:
+    def test_recovery_list_is_bounded_under_flapping(self, monkeypatch):
+        """B48.2: a daemon flapping against a degraded OpenAI must not grow the
+        list unbounded. Clock frozen → every record stays inside the escalation
+        window, so the natural time-prune can't help; only the cap bounds it."""
+        import core.conversation as conv
+
+        monkeypatch.setattr(conv, "_zombie_recoveries", [])
+        monkeypatch.setattr(conv.time, "monotonic", lambda: 500.0)
+        for _ in range(250):
+            conv._record_zombie_recovery()
+        assert len(conv._zombie_recoveries) <= 100
+
+    def test_concurrent_record_and_read_is_consistent(self, monkeypatch):
+        """B48.1: _record_zombie_recovery is invoked from pipecat frame-processor
+        contexts; the lock must keep the append + in-place trim atomic against
+        concurrent _zombie_cooldown_s reads. No exception, invariants hold."""
+        import threading
+
+        import core.conversation as conv
+
+        monkeypatch.setattr(conv, "_zombie_recoveries", [])
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                for _ in range(200):
+                    conv._record_zombie_recovery()
+                    conv._zombie_cooldown_s()
+            except Exception as exc:  # pragma: no cover - failure path
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert all(isinstance(x, float) for x in conv._zombie_recoveries)
+        assert len(conv._zombie_recoveries) <= 100
+
+
 class TestOrchestratorTolerance:
     @pytest.mark.asyncio
     async def test_unexpected_session_error_recovers(self, monkeypatch):

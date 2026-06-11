@@ -17,17 +17,37 @@ from tools.base import ToolResult, tool
 log = structlog.get_logger("emma.tools.shell")
 
 # Catastrophic commands that are ALWAYS refused, even if confirmed — there is
-# no legitimate voice-assistant reason to run these.
-_BLOCKED_PATTERNS = [
-    r"\bmkfs",
-    r"\bdd\s+if=",
-    r":\(\)\s*\{",  # fork bomb
-    r">\s*/dev/sd",
-    r">\s*/dev/disk",
-    r"\bchmod\s+(-[a-z]*R[a-z]*\s+)?777\s+/",
-    r"\b(curl|wget)\b.*\|\s*(ba)?sh",  # pipe-to-shell remote exec
+# no legitimate voice-assistant reason to run these. Each rule carries a short
+# Spanish REASON: the refusal surfaces the reason, never the matched command
+# text. A blocked command can carry a secret on its line (`curl -u u:pass …`),
+# and the message is spoken, sent to the LLM, and shown on the dashboard —
+# echoing the fragment would leak it (audit fix).
+_BLOCKED_RULES = [
+    (r"\bmkfs", "formatear un disco"),
+    (r"\bdd\s+if=", "escritura cruda a disco (dd)"),
+    # dd writing to a /dev device with args in any order (of= before if=, or a
+    # `< /dev/…` input redirect) — a confirmed disk wipe must stay unreachable.
+    (r"\bdd\b.*\bof=\s*/dev/(r?disk|sd)", "escritura cruda a disco (dd)"),
+    (r":\(\)\s*\{", "fork bomb"),
+    (r">\s*/dev/sd", "escritura a un dispositivo de disco"),
+    (r">\s*/dev/disk", "escritura a un dispositivo de disco"),
+    (r"\bchmod\s+(-[a-z]*R[a-z]*\s+)?777\s+/", "permisos 777 en la raíz"),
+    (r"\b(curl|wget)\b.*\|\s*(ba)?sh", "descargar y ejecutar desde internet"),
+    # process substitution: `bash <(curl …)` is pipe-to-shell without a pipe.
+    (r"<\(\s*(curl|wget)\b", "ejecutar algo descargado de internet"),
+    # generic pipe-to-shell: ANY `… | sh|bash|zsh`. `\bsh\b` keeps `| sshpass`
+    # / `| shasum` from matching.
+    (r"\|\s*(ba|z)?sh\b", "tubería hacia una shell"),
+    # eval/source of a remote URL — a classic one-liner remote-exec. (Bare
+    # `. http://…` is intentionally NOT blocked: `cd . ; …` would false-positive.)
+    (r"\beval\b.*https?://", "ejecutar una URL remota (eval)"),
+    (r"\bsource\b.*https?://", "ejecutar una URL remota (source)"),
+    # bash history expansion: `!!` / `!$` / `!N` could resurrect a deleted command.
+    (r"!!", "expansión de historial"),
+    (r"!\$", "expansión de historial"),
+    (r"!\d", "expansión de historial"),
 ]
-_BLOCKED_RE = [re.compile(p, re.IGNORECASE) for p in _BLOCKED_PATTERNS]
+_BLOCKED_RE = [(re.compile(p, re.IGNORECASE), reason) for p, reason in _BLOCKED_RULES]
 
 # Commands that mutate the filesystem / processes / system state and so must be
 # confirmed by voice before running. The blocklist above is NOT a security
@@ -46,7 +66,9 @@ _DESTRUCTIVE_PATTERNS = [
     r"\bgit\s+reset\s+--hard\b", r"\bgit\s+clean\b", r"--force\b", r"\bgit\s+push\b",
     r"\b(brew|pip|pip3|npm|uv)\s+(uninstall|remove|rm)\b",
     r"\bfind\b.*-delete\b", r"\bfind\b.*-exec\b",
-    r"(?<![0-9&>])>(?![>&])",  # truncating redirect `> file` (not >>, 2>, &>, >&)
+    # truncating redirect `> file` (not >>, 2>, &>, >&) — and not the `=>`/`->`/`>=`
+    # arrows that show up when Garcia asks Emma to echo or grep code.
+    r"(?<![0-9&>=-])>(?![>&=])",
 ]
 _DESTRUCTIVE_RE = [re.compile(p, re.IGNORECASE) for p in _DESTRUCTIVE_PATTERNS]
 
@@ -78,12 +100,15 @@ def run_command(command: str, confirmed: bool = False) -> ToolResult:
     - run_command("networksetup -getairportnetwork en0")
     - run_command("top -l 1 | head -10")
     """
-    for pattern in _BLOCKED_RE:
+    # Pre-execution refusal: the blocklist is checked BEFORE the command is ever
+    # handed to the shell. We tell Garcia the REASON (e.g. "tubería hacia una
+    # shell"), never the matched command text — the command can carry a secret.
+    for pattern, reason in _BLOCKED_RE:
         if pattern.search(command):
             return ToolResult(
                 False,
                 None,
-                "That command looks dangerous - I won't run it.",
+                f"No ejecuto eso por seguridad: {reason}.",
                 False,
             )
 

@@ -32,6 +32,7 @@ import asyncio
 import contextlib
 import json
 import math
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -320,25 +321,39 @@ _ZOMBIE_DEBOUNCE_WINDOW_S = 1.0
 _ZOMBIE_ESCALATE_N = 3
 _ZOMBIE_ESCALATE_WINDOW_S = 60.0
 _ZOMBIE_COOLDOWN_S = 30.0
+_ZOMBIE_MAX_RECORDS = 100  # B48.2: hard cap so a flapping daemon can't grow this forever
 _zombie_recoveries: list[float] = []  # module-level: spans sessions, not the daemon
+# B48.1: _record_zombie_recovery fires from pipecat frame-processor contexts while
+# _zombie_cooldown_s reads from the orchestrator. Guard the append + in-place trim
+# (a read-modify-write) and the read-and-decide so they can't interleave.
+_zombie_lock = threading.Lock()
 
 
 def _record_zombie_recovery() -> None:
     now = time.monotonic()
-    _zombie_recoveries.append(now)
-    recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
-    # Prune in place: a long-lived daemon flapping against a degraded OpenAI
-    # would otherwise grow this list one float per zombie forever.
-    _zombie_recoveries[:] = recent
-    if len(recent) >= _ZOMBIE_ESCALATE_N:
-        log.warning("session_repeated_zombie", count=len(recent))
-        events_bus.publish("session_repeated_zombie", count=len(recent))
+    with _zombie_lock:
+        _zombie_recoveries.append(now)
+        # Prune in place: a long-lived daemon flapping against a degraded OpenAI
+        # would otherwise grow this list one float per zombie forever. Trim by
+        # time first, then by the hard cap (the cap matters when many zombies
+        # land inside a single escalation window).
+        recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
+        if len(recent) > _ZOMBIE_MAX_RECORDS:
+            recent = recent[-_ZOMBIE_MAX_RECORDS:]
+        _zombie_recoveries[:] = recent
+        escalated = len(recent) >= _ZOMBIE_ESCALATE_N
+        count = len(recent)
+    # Log/publish OUTSIDE the lock — never hold it across I/O.
+    if escalated:
+        log.warning("session_repeated_zombie", count=count)
+        events_bus.publish("session_repeated_zombie", count=count)
 
 
 def _zombie_cooldown_s() -> float:
     """Seconds to wait before opening a session while OpenAI looks degraded."""
     now = time.monotonic()
-    recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
+    with _zombie_lock:
+        recent = [t for t in _zombie_recoveries if now - t <= _ZOMBIE_ESCALATE_WINDOW_S]
     return _ZOMBIE_COOLDOWN_S if len(recent) >= _ZOMBIE_ESCALATE_N else 0.0
 
 
