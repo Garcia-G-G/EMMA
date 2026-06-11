@@ -31,6 +31,7 @@ from typing import Any
 import structlog
 
 from core import app_router
+from memory import episodic
 from tools.base import ToolResult, tool
 from tools.ide_actions import open_in_ide
 
@@ -196,6 +197,9 @@ async def _apply(
     _reveal(str(p), line)  # non-blocking: voice confirms while the IDE warms up
     data["ide_revealed"] = True
     data["reveal_line"] = line
+    # 28: restore_text undo blueprint — `old` is the captured pre-edit content.
+    # episodic.record() downgrades to "manual" (Time Machine) if the blob is too big.
+    data["_reverse_blueprint"] = episodic.blueprint_restore_text(str(p), old)
     log.info("file_edited", path=str(p), added=added, removed=removed, bytes=byte_delta, line=line)
     return ToolResult(
         True, data, done_message.format(name=p.name, added=added, removed=removed), False
