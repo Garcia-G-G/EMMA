@@ -85,6 +85,7 @@ from core import (
 )
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
+from memory import episodic
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
@@ -588,6 +589,15 @@ async def _build_instructions() -> str:
         "- NEVER click a financial / banking / payment confirmation button without an "
         "extra explicit 'sí, hazlo' from Garcia — re-ask once more even if already "
         "confirmed.\n\n"
+        "# Action history + undo\n"
+        "- '¿Qué hiciste ayer?' / '¿qué hiciste el martes?' / '¿qué hiciste hoy?' → "
+        "what_did_you_do (pass the day phrase verbatim).\n"
+        "- 'Deshaz lo último' / 'deshazlo' / 'echa para atrás' → undo_last_action "
+        "(confirm before reversing).\n"
+        "- 'Deshaz la de las 3' → first what_did_you_do to find the action id, then "
+        "undo_action_by_id.\n"
+        "- If the action can't be reversed (a sent message, a posted tweet, a played "
+        "song), say so honestly and offer the manual step if there is one.\n\n"
         "# Forbidden\n"
         "- No filler: 'Great question!', 'Absolutely!', 'Of course!'\n"
         "- No closers: '¿Algo más?', 'Anything else?'\n"
@@ -936,6 +946,29 @@ class EndSessionWatcher(FrameProcessor):
             await self._control.end_now("after_speech")
 
 
+async def _maybe_record_episodic(name: str, args: dict[str, Any], result: Any) -> None:
+    """28: durable audit log. Records state-changing tools (destructive flag, or
+    any tool that emitted a ``_reverse_blueprint``) so '¿qué hiciste el martes?'
+    and undo_last_action have something to read. Reads/no-op tools are skipped.
+    The blueprint is popped from the result data so it never reaches the LLM."""
+    try:
+        entry = get_tool(name)
+        destructive = bool(getattr(entry, "destructive", False))
+        data = result.data if isinstance(result.data, dict) else {}
+        blueprint = data.pop("_reverse_blueprint", None)
+        if not destructive and blueprint is None:
+            return
+        await episodic.record(
+            tool_name=name,
+            args=args,
+            result=data,
+            user_speech=session_memory.last_user_speech_text(),
+            reverse=blueprint,
+        )
+    except Exception as exc:  # never let audit logging break a successful action
+        log.warning("episodic_record_failed", name=name, error=str(exc))
+
+
 def _make_function_handler(
     control: SessionControl,
 ) -> Callable[[FunctionCallParams], Awaitable[None]]:
@@ -1073,6 +1106,7 @@ def _make_function_handler(
             session_memory.record_completed_action(
                 name, args, user_text=session_memory.last_user_speech_text()
             )
+            await _maybe_record_episodic(name, args, result)
         payload: dict[str, Any] = {
             "success": result.success,
             "user_message": result.user_message,

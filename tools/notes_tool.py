@@ -23,6 +23,7 @@ import structlog
 
 from actions import macos
 from core import dictionary
+from memory import episodic
 from tools.base import ToolResult, tool
 from tools.disambiguation import (
     FIELD_SEP,
@@ -268,7 +269,11 @@ async def create_note(
         await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude crear la nota: {exc}", False)
-    return ToolResult(True, {"title": title}, f"Listo, creé la nota '{title}'.", False)
+    # 28: undo a creation by deleting it.
+    reverse = episodic.blueprint_inverse("delete_note", {"title": title})
+    return ToolResult(
+        True, {"title": title, "_reverse_blueprint": reverse}, f"Listo, creé la nota '{title}'.", False
+    )
 
 
 def _lang() -> str:
@@ -535,15 +540,29 @@ async def delete_note(
         )
 
     nid = macos.esc_applescript(chosen.id)
+    # 28: capture the body BEFORE deleting so undo can recreate the note.
+    try:
+        saved_body = await _read_body(chosen.id)
+    except Exception:
+        saved_body = ""
     script = f'tell application "Notes" to delete (note id "{nid}")'
     ok, out = await macos.osascript_or_friendly(
         script, timeout_s=_NOTES_TIMEOUT_S, on_error="No pude borrar la nota"
     )
     if not ok:
         return ToolResult(False, None, out, False)
+    if saved_body.strip():
+        reverse = episodic.blueprint_inverse(
+            "create_note", {"title": chosen.title, "body": saved_body}
+        )
+    else:
+        reverse = episodic.blueprint_manual(
+            f"No guardé el contenido de '{chosen.title}'. Restáurala desde "
+            "'Eliminados recientemente' en Apple Notes."
+        )
     return ToolResult(
         True,
-        {"deleted": 1, "title": chosen.title},
+        {"deleted": 1, "title": chosen.title, "_reverse_blueprint": reverse},
         f"Listo, borré la nota '{chosen.title}'.",
         False,
     )
