@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from typing import Any
 
 import structlog
 from openai import AsyncOpenAI
@@ -73,19 +74,21 @@ async def read_window_text() -> ToolResult:
 
 
 @tool()
-async def find_button(name: str) -> ToolResult:
+async def find_button(name: str, scope: str = "window") -> ToolResult:
     """Dice si existe un botón con ese nombre en la ventana de adelante.
 
     Úsalo cuando Garcia pregunte "¿hay un botón de X?" / "encuentra el botón Y".
+    Con scope="focus" busca SOLO en el panel donde está la atención ("el botón
+    Enviar de este panel"); por defecto ("window") busca en toda la ventana.
     """
     name = (name or "").strip()
     if not name:
         return ToolResult(False, None, "¿Qué botón busco?", False)
-    fw = await asyncio.to_thread(sv._frontmost_window_element)
-    if fw is None:
+    root = await _scoped_root(scope)
+    if root is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    _app, win = fw
-    labels = await asyncio.to_thread(sv.button_labels, win)
+    _app, search = root
+    labels = await asyncio.to_thread(sv.button_labels, search)
     match = _best_button(name, labels)
     if match:
         return ToolResult(True, {"button": match, "buttons": labels}, f"Sí, encontré el botón «{match}».", False)
@@ -144,20 +147,21 @@ async def _summarize(structured: str, question: str) -> str:
 
 
 @tool(destructive=True)
-async def click_button(name: str, confirmed: bool = False) -> ToolResult:
+async def click_button(name: str, confirmed: bool = False, scope: str = "window") -> ToolResult:
     """Hace click en un botón de la ventana de adelante. SIEMPRE confirma antes.
 
     Úsalo para "cierra ese diálogo", "haz click en Aceptar / Cancelar". Un click
-    de UI puede autorizar pagos — por eso la confirmación es obligatoria.
+    de UI puede autorizar pagos — por eso la confirmación es obligatoria. Con
+    scope="focus" se limita al panel enfocado; por defecto ("window") toda la ventana.
     """
     name = (name or "").strip()
     if not name:
         return ToolResult(False, None, "¿En qué botón hago click?", False)
-    fw = await asyncio.to_thread(sv._frontmost_window_element)
-    if fw is None:
+    root = await _scoped_root(scope)
+    if root is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    app, win = fw
-    labels = await asyncio.to_thread(sv.button_labels, win)
+    app, search = root
+    labels = await asyncio.to_thread(sv.button_labels, search)
     match = _best_button(name, labels)
     if not match:
         return ToolResult(False, {"buttons": labels}, f"No encontré un botón «{name}» para hacer click.", False)
@@ -167,7 +171,7 @@ async def click_button(name: str, confirmed: bool = False) -> ToolResult:
             f"Voy a hacer click en «{match}» de {app}. ¿Lo confirmo?",
             requires_confirmation=True,
         )
-    ref = await asyncio.to_thread(sv.find_element, win, sv.ROLE_BUTTON, re.escape(match))
+    ref = await asyncio.to_thread(sv.find_element, search, sv.ROLE_BUTTON, re.escape(match))
     ok = await asyncio.to_thread(sv.press_element, ref) if ref else False
     if ok:
         return ToolResult(True, {"clicked": match}, f"Listo, hice click en «{match}».", False)
@@ -202,3 +206,121 @@ async def type_in_field(field_name: str, text: str, confirmed: bool = False) -> 
     if ok:
         return ToolResult(True, {"field": field_name}, f"Listo, escribí en «{field_name}».", False)
     return ToolResult(False, {"field": field_name}, f"No pude escribir en «{field_name}».", False)
+
+
+# ---- pane / focus introspection (27.1) --------------------------------------
+
+
+async def _scoped_root(scope: str) -> tuple[str, object] | None:
+    """(app_name, search_root). scope="focus" narrows to the focused pane; any
+    other value keeps 27's whole-window behavior. Falls back to the window when
+    the app exposes no focused pane (sparse AX tree)."""
+    fw = await asyncio.to_thread(sv._frontmost_window_element)
+    if fw is None:
+        return None
+    app, win = fw
+    if scope == "focus":
+        pane = await asyncio.to_thread(sv.focused_pane_element)
+        if pane is not None:
+            return app, pane
+    return app, win
+
+
+def _pane_data(p: sv.PaneInfo) -> dict[str, Any]:
+    return {
+        "app": p.app, "label": p.label, "role": p.role,
+        "role_description": p.role_description, "identifier": p.identifier,
+        "title": p.title, "position": p.position, "focused_role": p.focused_role,
+        "focused_role_description": p.focused_role_description,
+        "ancestors": p.ancestors, "snippet": p.snippet[:600],
+    }
+
+
+def _pane_block(p: sv.PaneInfo) -> str:
+    """A compact text block of JUST the pane — never the whole window."""
+    lines = [f"App: {p.app}"]
+    if p.label:
+        lines.append(f"Panel: {p.label}")
+    if p.position:
+        lines.append(f"Posición: {p.position}")
+    if p.role_description:
+        lines.append(f"Tipo (AX): {p.role_description}")
+    if p.snippet:
+        lines.append(f"Contenido:\n{p.snippet}")
+    return "\n".join(lines)
+
+
+def _loc_phrase(position: str) -> str:
+    if not position or position == "centro":
+        return ""
+    if position in ("izquierda", "derecha"):
+        return f"a la {position}"
+    return position  # "arriba", "abajo", "abajo a la izquierda", …
+
+
+def _pane_phrase(p: sv.PaneInfo) -> str:
+    loc = _loc_phrase(p.position)
+    if p.label:
+        return f"Estás en «{p.label}»{f' ({loc})' if loc else ''}."
+    if loc:
+        return f"Estás en un panel {loc} de la ventana de {p.app}."
+    if p.focused_role_description:
+        return f"Estás en {p.focused_role_description} de {p.app}."
+    return f"No logro distinguir el panel exacto en {p.app}; te puedo leer la ventana completa."
+
+
+@tool()
+async def where_am_i() -> ToolResult:
+    """Dice en qué panel o región de la ventana está puesta la atención de Garcia.
+
+    Para "¿dónde estoy?", "¿en qué panel estoy?", "¿qué región es esta?".
+    """
+    pane = await asyncio.to_thread(sv.focused_pane)
+    if pane is None:
+        r = await sv.current_screen()  # app exposes no focus → degrade to the window
+        if r is None:
+            return ToolResult(False, None, _NO_WINDOW, False)
+        return ToolResult(
+            True, {"screen": r.structured, "pane": None},
+            f"No logro distinguir el panel exacto en {r.app}, pero te leo la ventana «{r.title}».", False,
+        )
+    return ToolResult(True, {"pane": _pane_data(pane)}, _pane_phrase(pane), False)
+
+
+@tool()
+async def window_layout() -> ToolResult:
+    """Lista los paneles/regiones de la ventana de adelante y dónde están.
+
+    Para "¿qué tengo en esta ventana?", "¿qué paneles hay?".
+    """
+    panes = await asyncio.to_thread(sv.window_panes)
+    if not panes:
+        return ToolResult(False, None, "No pude leer la distribución de esta ventana.", False)
+    names = [p["label"] for p in panes if p.get("label")][:8]
+    msg = ("En esta ventana veo: " + ", ".join(names) + ".") if names else "Veo regiones, pero sin nombres claros."
+    return ToolResult(True, {"panes": panes}, msg, False)
+
+
+@tool()
+async def read_pane_text() -> ToolResult:
+    """Lee solo el texto del panel donde está la atención (no toda la ventana).
+
+    Para "léeme este panel", "¿qué dice este panel?", "léeme la terminal".
+    """
+    pane = await asyncio.to_thread(sv.focused_pane)
+    if pane is None or not pane.snippet:
+        return ToolResult(False, None, "No logro identificar el panel para leerlo.", False)
+    return ToolResult(True, {"pane": _pane_data(pane)}, pane.snippet[:600], False)
+
+
+@tool()
+async def summarize_pane(question: str = "") -> ToolResult:
+    """Resume SOLO el panel enfocado (no toda la ventana). Respuesta más corta y precisa.
+
+    Para "resúmeme la terminal", "¿qué dice este panel?", "¿qué pasó en este chat?".
+    """
+    pane = await asyncio.to_thread(sv.focused_pane)
+    if pane is None or not pane.snippet:
+        return ToolResult(False, None, "No logro identificar el panel para resumirlo.", False)
+    answer = await _summarize(_pane_block(pane), (question or "").strip())
+    return ToolResult(True, {"pane": _pane_data(pane)}, answer, False)
