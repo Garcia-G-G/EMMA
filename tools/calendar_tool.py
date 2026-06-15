@@ -19,6 +19,7 @@ from typing import Any
 import structlog
 
 from actions import calendar_store, macos
+from memory import episodic
 from tools.base import ToolResult, tool
 from tools.disambiguation import FIELD_SEP, ISO_DATE_HANDLER, disambiguate, parse_matches
 
@@ -167,7 +168,41 @@ async def create_event(
         await macos.osascript(script, timeout_s=_CAL_TIMEOUT_S)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude crear el evento: {exc}", False)
-    return ToolResult(True, {"title": title}, f"Listo, creé '{title}'.", False)
+    # 28.1-A1: undo a creation by deleting it (delete_event resolves by title).
+    reverse = episodic.blueprint_inverse("delete_event", {"title": title})
+    return ToolResult(True, {"title": title, "_reverse_blueprint": reverse}, f"Listo, creé '{title}'.", False)
+
+
+async def _read_event_snapshot(uid: str) -> dict[str, Any] | None:
+    """Read an event's start/end/location by uid (for the delete_event snapshot)."""
+    u = macos.esc_applescript(uid)
+    script = (
+        ISO_DATE_HANDLER + 'tell application "Calendar"\n'
+        "  repeat with cal in calendars\n"
+        f'    repeat with ev in (every event of cal whose uid is "{u}")\n'
+        "      set loc to \"\"\n"
+        "      try\n        set loc to (location of ev)\n      end try\n"
+        f'      return (my isoDate(start date of ev)) & "{FIELD_SEP}" & '
+        f'(my isoDate(end date of ev)) & "{FIELD_SEP}" & loc\n'
+        "    end repeat\n"
+        "  end repeat\n"
+        '  return ""\n'
+        "end tell"
+    )
+    try:
+        raw = (await macos.osascript(script, timeout_s=_CAL_TIMEOUT_S)).strip()
+    except macos.AppleScriptError:
+        return None
+    parts = raw.split(FIELD_SEP)
+    if len(parts) < 2 or not parts[0]:
+        return None
+    try:
+        start = dt.datetime.fromisoformat(parts[0])
+        end = dt.datetime.fromisoformat(parts[1])
+        dur = max(1, int((end - start).total_seconds() // 60))
+    except ValueError:
+        return None
+    return {"start_iso": parts[0], "duration_min": dur, "location": parts[2] if len(parts) > 2 else ""}
 
 
 def _enumerate_events_script(title_esc: str, limit: int) -> str:
@@ -225,6 +260,8 @@ async def delete_event(
             True,
         )
 
+    # 28.1-A2: snapshot the event BEFORE deleting so undo can recreate it.
+    snap = await _read_event_snapshot(chosen.id)
     uid = macos.esc_applescript(chosen.id)
     script = (
         'tell application "Calendar"\n'
@@ -238,6 +275,15 @@ async def delete_event(
     )
     if not ok:
         return ToolResult(False, None, out, False)
+    if snap:
+        reverse = episodic.blueprint_inverse("create_event", {"title": chosen.title, **snap})
+    else:
+        reverse = episodic.blueprint_manual(
+            "Revísalo manualmente en Calendar; no pude guardar una copia antes de borrar."
+        )
     return ToolResult(
-        True, {"deleted": 1, "title": chosen.title}, f"Listo, borré '{chosen.title}'.", False
+        True,
+        {"deleted": 1, "title": chosen.title, "_reverse_blueprint": reverse},
+        f"Listo, borré '{chosen.title}'.",
+        False,
     )

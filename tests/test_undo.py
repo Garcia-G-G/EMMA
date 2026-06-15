@@ -102,3 +102,82 @@ async def test_undo_inverse_failure_does_not_mark_reversed(monkeypatch) -> None:
     res = await ht.undo_last_action(confirmed=True)
     assert not res.success
     marked.assert_not_called()  # don't mark reversed if the reverse failed
+
+
+# ---- 28.1: calendar / reminders / codex blueprint coverage ------------------
+
+from pathlib import Path  # noqa: E402
+
+from tools.disambiguation import FIELD_SEP  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_calendar_create_event_inverse_blueprint_shape(monkeypatch) -> None:
+    import tools.calendar_tool as ct
+
+    monkeypatch.setattr(ct.macos, "osascript", AsyncMock(return_value=""))
+    res = await ct.create_event("TEST 28.1", "2026-06-16T15:00:00", confirmed=True)
+    bp = res.data["_reverse_blueprint"]
+    assert bp["kind"] == "inverse_call" and bp["tool"] == "delete_event"
+    assert bp["args"]["title"] == "TEST 28.1"
+
+
+@pytest.mark.asyncio
+async def test_calendar_delete_event_snapshot_blueprint_shape(monkeypatch) -> None:
+    import tools.calendar_tool as ct
+
+    enum = f"uid1{FIELD_SEP}2026-06-16T15:00:00{FIELD_SEP}TEST{FIELD_SEP}\n"
+    monkeypatch.setattr(ct.macos, "osascript", AsyncMock(return_value=enum))
+    monkeypatch.setattr(ct, "_read_event_snapshot",
+                        AsyncMock(return_value={"start_iso": "2026-06-16T15:00:00", "duration_min": 60, "location": "Office"}))
+    monkeypatch.setattr(ct.macos, "osascript_or_friendly", AsyncMock(return_value=(True, "")))
+    res = await ct.delete_event("TEST", confirmed=True)
+    bp = res.data["_reverse_blueprint"]
+    assert bp["tool"] == "create_event" and bp["args"]["location"] == "Office" and bp["args"]["duration_min"] == 60
+
+
+@pytest.mark.asyncio
+async def test_reminders_complete_blueprint_shape(monkeypatch) -> None:
+    import tools.reminders_tool as rt
+
+    enum = f"rid1{FIELD_SEP}2026-06-16{FIELD_SEP}TEST{FIELD_SEP}\n"
+    monkeypatch.setattr(rt.macos, "osascript", AsyncMock(return_value=enum))
+    monkeypatch.setattr(rt.macos, "osascript_or_friendly", AsyncMock(return_value=(True, "")))
+    res = await rt.complete_reminder("TEST", confirmed=True)
+    bp = res.data["_reverse_blueprint"]
+    assert bp["tool"] == "uncomplete_reminder" and bp["args"]["title"] == "TEST"
+
+
+@pytest.mark.asyncio
+async def test_reminders_create_delete_blueprint_shapes(monkeypatch) -> None:
+    import tools.reminders_tool as rt
+
+    monkeypatch.setattr(rt.macos, "osascript", AsyncMock(return_value=""))
+    res_c = await rt.add_reminder("TEST", confirmed=True)
+    assert res_c.data["_reverse_blueprint"]["tool"] == "delete_reminder"
+
+    enum = f"rid1{FIELD_SEP}2026-06-16{FIELD_SEP}TEST{FIELD_SEP}\n"
+    monkeypatch.setattr(rt.macos, "osascript", AsyncMock(return_value=enum))
+    monkeypatch.setattr(rt.macos, "osascript_or_friendly", AsyncMock(return_value=(True, "")))
+    res_d = await rt.delete_reminder("TEST", confirmed=True)
+    bp = res_d.data["_reverse_blueprint"]
+    assert bp["tool"] == "add_reminder" and bp["args"]["due_iso"] == "2026-06-16"
+
+
+@pytest.mark.asyncio
+async def test_codex_delegate_manual_blueprint_shape(monkeypatch) -> None:
+    import tools.codex_tool as cx
+
+    monkeypatch.setattr(cx.settings, "OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(cx, "setup_worktree", AsyncMock(return_value=Path("/tmp/emma-wt-feat")))
+
+    class _Reg:
+        def at_capacity(self):
+            return False
+        start = AsyncMock(return_value=type("Rec", (), {"id": "t1"})())
+
+    monkeypatch.setattr(cx, "registry", lambda: _Reg())
+    res = await cx.delegate_to_codex("añade un docstring", branch="feat", confirmed=True)
+    bp = res.data["_reverse_blueprint"]
+    assert bp["kind"] == "manual"
+    assert "branch -D feat" in bp["hint"] and "worktree remove" in bp["hint"]

@@ -18,6 +18,7 @@ from config.settings import settings
 from core import events_bus
 from core.background import MAX_PARALLEL_TASKS, registry
 from core.coding_agent import estimate_cost_usd, run_agent
+from memory import episodic
 from tools.agents_tool import setup_worktree
 from tools.base import ToolResult, tool
 
@@ -108,8 +109,17 @@ async def delegate_to_codex(
         meta={"task": task, "cwd": str(work_dir), "branch": branch, "model": chosen_model},
     )
     where = f"la rama '{branch}'" if branch else work_dir.name
+    data: dict[str, Any] = {"id": rec.id}
+    # 28.1-C1: reversing Codex is operational, not programmatic — Garcia may want
+    # to keep the work. Hand him the exact discard command (a manual blueprint).
+    if branch:
+        wt = f"emma-wt-{branch.replace('/', '-')}"
+        data["_reverse_blueprint"] = episodic.blueprint_manual(
+            f"Para descartar ese trabajo: git -C {repo} worktree remove ../{wt} --force "
+            f"&& git -C {repo} branch -D {branch}"
+        )
     return ToolResult(
-        True, {"id": rec.id}, f"Le pedí al agente en {where}. Te aviso cuando termine.", False
+        True, data, f"Le pedí al agente en {where}. Te aviso cuando termine.", False
     )
 
 
