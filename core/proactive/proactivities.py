@@ -227,14 +227,19 @@ async def birthday_alerts() -> ProactiveEvent | None:
         "(day of birthday) = (day of (current date))"
     )
     ok, names = await macos.osascript_or_friendly(script, timeout_s=5.0, on_error="")
-    names = names.strip()
-    if not ok or not names:
+    # 38-D: merge Emma's local birthday store (voice-saved) with Contacts.app.
+    from memory import birthdays
+
+    local = ", ".join(birthdays.today())
+    contacts = names.strip() if ok else ""
+    merged = ", ".join(x for x in (contacts, local) if x)
+    if not merged:
         return None
     return ProactiveEvent(
         source="birthday_alerts",
         priority=Priority.NOTIFY,
-        summary_es=f"Cumpleaños hoy: {names}",
-        detail=f"Garcia, hoy cumple {names}. ¿Le mando un mensaje?",
+        summary_es=f"Cumpleaños hoy: {merged}",
+        detail=f"Garcia, hoy cumple {merged}. ¿Le mando un mensaje?",
     )
 
 
