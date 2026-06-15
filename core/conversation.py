@@ -75,10 +75,12 @@ from pipecat.transports.local.audio import (
 
 from config.settings import settings
 from core import (
+    affect,
     audio_devices,
     capability_gaps,
     dictionary,
     events_bus,
+    runtime,
     runtime_state,
     session_memory,
     vocabulary,
@@ -246,6 +248,15 @@ class _BotTextTap(FrameProcessor):
                     append_turn(user, text)
                     schedule_reflection(last_turns(4))
                     log.debug("transcript_captured", user=user[:80], assistant=text[:80])
+                # 35: read the user's emotional tone and stash a style hint so
+                # the NEXT session opens already attuned (within-session the
+                # always-on attunement directive handles it via native audio).
+                if user:
+                    aff = affect.detect_affect(user)
+                    hint = affect.style_hint(aff)
+                    if hint and aff != "neutral":
+                        runtime.set_style_hint(hint)
+                        log.debug("affect_detected", affect=aff)
                 if settings.EMMA_TEST_MODE:
                     log.info("bot_text_test", text=text)
             self._bot_text = ""
@@ -848,6 +859,22 @@ async def _build_instructions() -> str:
         memory = ""
     if memory:
         base += f"\n# Memory\n{memory}\n"
+    # 35: emotion-aware tone. The Realtime model hears Garcia's voice, so the
+    # always-on directive is the live driver; a style hint (auto-detected affect
+    # or an explicit set_conversation_tone) is appended when present.
+    base += (
+        "\n# Emotional attunement\n"
+        "- You can hear Garcia's tone of voice. Read his emotional state and "
+        "match it: if he sounds frustrated or rushed, be calmer and shorter and "
+        "go straight to the point; if he sounds down, be warmer and unhurried; "
+        "if he sounds excited, share the energy. Never announce that you noticed "
+        "his mood — just adjust.\n"
+        "- 'Háblame más serio' / 'relájate' / 'ponte animada' / 'tono normal' "
+        "→ set_conversation_tone.\n"
+    )
+    hint = runtime.get_style_hint()
+    if hint:
+        base += f"- Tono para esta conversación: {hint}\n"
     return base
 
 
@@ -1202,11 +1229,20 @@ async def build_pipeline(
     # VAD. 18000 suppresses the echo while still letting a deliberate, close,
     # louder human voice barge in.
     speech_phase = SpeechPhase()  # fresh per session — the opener reset (22-B32)
+    # 35: per-machine calibration (python -m emma.calibrate) overrides the
+    # hand-measured defaults when ~/.emma/calibration.json exists.
+    from emma.calibrate import load_calibration
+
+    cal = load_calibration()
+    spike = cal.get("BARGE_IN_RMS_SPIKE", settings.BARGE_IN_RMS_SPIKE)
+    window = cal.get("BARGE_IN_RMS_WINDOW", settings.BARGE_IN_RMS_WINDOW)
+    if cal:
+        log.info("echo_calibration_loaded", spike=spike, window=window)
     echo_gate = EchoGateFilter(
         tail_ms=600,
-        barge_in_rms=settings.BARGE_IN_RMS_SPIKE,
+        barge_in_rms=spike,
         phase_provider=speech_phase.current,
-        barge_in_rms_window=settings.BARGE_IN_RMS_WINDOW,
+        barge_in_rms_window=window,
         window_ms=settings.BARGE_IN_WINDOW_MS,
         echo_cancel=settings.ECHO_CANCEL_ENABLED,
         echo_ref_buffer_ms=settings.ECHO_REF_BUFFER_MS,
