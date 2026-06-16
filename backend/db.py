@@ -1,0 +1,198 @@
+"""SQLite store for users + sessions + demo rate-limiting (Prompt 31, B3 / A3).
+
+Single-file SQLite (DATABASE_URL); fine for the free tier, swap for Postgres at
+scale. All money/usage accounting lives here so the cost guard + per-plan caps read
+one source of truth.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import time
+import uuid
+from typing import Any
+
+from backend.config import settings
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  provider TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  plan TEXT DEFAULT 'free',
+  stripe_customer_id TEXT,
+  created_at REAL NOT NULL,
+  monthly_session_count INTEGER DEFAULT 0,
+  monthly_seconds_used REAL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  started_at REAL NOT NULL,
+  ended_at REAL,
+  seconds_used REAL DEFAULT 0,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  cost_usd REAL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS demo_hits (
+  ip TEXT NOT NULL,
+  ts REAL NOT NULL
+);
+"""
+
+
+def connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.DATABASE_URL, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript(_SCHEMA)
+    return conn
+
+
+def init_db() -> None:
+    connect().close()
+
+
+# ---- users ------------------------------------------------------------------
+
+
+def upsert_user(email: str, name: str, provider: str, provider_id: str) -> dict[str, Any]:
+    conn = connect()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        if row is None:
+            conn.execute(
+                "INSERT INTO users(email,name,provider,provider_id,created_at) VALUES(?,?,?,?,?)",
+                (email, name, provider, provider_id, time.time()),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def get_user(user_id: int) -> dict[str, Any] | None:
+    conn = connect()
+    try:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def set_plan(user_id: int, plan: str, stripe_customer_id: str | None = None) -> None:
+    conn = connect()
+    try:
+        if stripe_customer_id:
+            conn.execute("UPDATE users SET plan=?, stripe_customer_id=? WHERE id=?",
+                         (plan, stripe_customer_id, user_id))
+        else:
+            conn.execute("UPDATE users SET plan=? WHERE id=?", (plan, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_plan_by_customer(stripe_customer_id: str, plan: str) -> None:
+    conn = connect()
+    try:
+        conn.execute("UPDATE users SET plan=? WHERE stripe_customer_id=?", (plan, stripe_customer_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---- sessions ---------------------------------------------------------------
+
+
+def create_session(user_id: int | None) -> str:
+    sid = uuid.uuid4().hex
+    conn = connect()
+    try:
+        conn.execute("INSERT INTO sessions(id,user_id,started_at) VALUES(?,?,?)",
+                     (sid, user_id, time.time()))
+        conn.commit()
+        return sid
+    finally:
+        conn.close()
+
+
+def end_session(sid: str, seconds: float, tokens_in: int, tokens_out: int, cost_usd: float) -> None:
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE sessions SET ended_at=?, seconds_used=?, tokens_in=?, tokens_out=?, cost_usd=? WHERE id=?",
+            (time.time(), seconds, tokens_in, tokens_out, round(cost_usd, 4), sid),
+        )
+        row = conn.execute("SELECT user_id FROM sessions WHERE id=?", (sid,)).fetchone()
+        if row and row["user_id"]:
+            conn.execute(
+                "UPDATE users SET monthly_session_count=monthly_session_count+1, "
+                "monthly_seconds_used=monthly_seconds_used+? WHERE id=?",
+                (seconds, row["user_id"]),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def recent_sessions(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM sessions WHERE user_id=? ORDER BY started_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ---- rate limit + budget ----------------------------------------------------
+
+
+def demo_count_24h(ip: str, now: float | None = None) -> int:
+    now = now or time.time()
+    conn = connect()
+    try:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM demo_hits WHERE ip=? AND ts > ?", (ip, now - 86400)
+        ).fetchone()[0])
+    finally:
+        conn.close()
+
+
+def record_demo_hit(ip: str) -> None:
+    conn = connect()
+    try:
+        conn.execute("INSERT INTO demo_hits(ip,ts) VALUES(?,?)", (ip, time.time()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def user_sessions_today(user_id: int, now: float | None = None) -> int:
+    now = now or time.time()
+    conn = connect()
+    try:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE user_id=? AND started_at > ?", (user_id, now - 86400)
+        ).fetchone()[0])
+    finally:
+        conn.close()
+
+
+def month_cost_usd(now: float | None = None) -> float:
+    now = now or time.time()
+    conn = connect()
+    try:
+        v = conn.execute(
+            "SELECT COALESCE(SUM(cost_usd),0) FROM sessions WHERE started_at > ?", (now - 2592000,)
+        ).fetchone()[0]
+        return float(v or 0.0)
+    finally:
+        conn.close()

@@ -1,0 +1,52 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — háblale a tu Mac</title>
+<style>
+  :root{--ink:#fff0d4;--body:#ff8c3a;--gold:#ffc77a;--amber:#ff7a1a}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,#1a0e02,#0a0400);
+    color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    display:flex;align-items:center;justify-content:center;text-align:center}
+  .wrap{max-width:560px;padding:32px}
+  h1{font-family:Georgia,serif;font-size:clamp(40px,8vw,72px);margin:0 0 8px}
+  p{color:var(--body);font-size:17px;line-height:1.5}
+  button{background:var(--amber);color:#0a0400;border:none;border-radius:10px;padding:14px 26px;
+    font-size:16px;font-weight:600;cursor:pointer;margin-top:18px}
+  button:disabled{opacity:.5;cursor:default}
+  #status{margin-top:18px;color:var(--gold);font-size:14px;min-height:20px}
+  .lock{margin-top:22px;padding:18px;border:1px solid rgba(255,122,26,.3);border-radius:12px;display:none}
+  .lock.on{display:block} a{color:var(--gold)}
+</style></head><body>
+<div class="wrap">
+  <h1>Emma</h1>
+  <p>Tu asistente de voz, en tu Mac. Pruébala 2 minutos aquí mismo — la voz corre por
+     nuestro servidor, tu navegador nunca toca la llave de OpenAI.</p>
+  <button id="talk" onclick="startDemo()">Hablar con Emma</button>
+  <div id="status"></div>
+  <div class="lock" id="lock">
+    <p>Se acabó tu demo de 2 minutos. <a href="/login">Inicia sesión</a> para seguir.</p>
+  </div>
+</div>
+<script>
+let ws=null;
+async function startDemo(){
+  const btn=document.getElementById("talk"), st=document.getElementById("status");
+  btn.disabled=true; st.textContent="Verificando…";
+  let r;
+  try{ r=await fetch("/api/session/start",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({captcha_token:window.__turnstile||""})}); }
+  catch(e){ st.textContent="No pude conectar."; btn.disabled=false; return; }
+  if(!r.ok){ const d=await r.json().catch(()=>({})); st.textContent=d.detail||"No disponible ahora.";
+    if(r.status===429||r.status===401) showLock(); btn.disabled=false; return; }
+  const {session_token,max_seconds}=await r.json();
+  st.textContent="Conectando con Emma…";
+  ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/realtime?token="+session_token);
+  ws.onopen=()=>{ st.textContent="Emma está escuchando. (demo "+max_seconds+"s)";
+    ws.send(JSON.stringify({type:"response.create"})); };
+  ws.onmessage=(e)=>{ try{ const ev=JSON.parse(e.data);
+    if(ev.type==="emma.session_expired"){ st.textContent="Tiempo agotado."; showLock(); ws.close(); } }catch(_){} };
+  ws.onclose=()=>{ btn.disabled=false; };
+  ws.onerror=()=>{ st.textContent="Se cerró la conexión."; btn.disabled=false; };
+}
+function showLock(){ document.getElementById("lock").classList.add("on"); }
+</script>
+</body></html>
