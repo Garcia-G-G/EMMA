@@ -12,7 +12,7 @@ You get a one-shot snapshot of what Emma "sees" right now:
 - the focused pane (PaneInfo)
 - the window's layout map
 
-Repeat across (app × focus target) combinations to fill the
+Repeat across (app x focus target) combinations to fill the
 27.1 acceptance matrix. The script is read-only — it never
 clicks, types, or modifies anything.
 
@@ -21,7 +21,7 @@ panes without re-launching:
 
     .venv/bin/python scripts/smoke_focus_matrix.py --watch
 
-Aim: ≥ 80% ✓ across at least 8 cells (app × focus target),
+Aim: ≥ 80% ✓ across at least 8 cells (app x focus target),
 picking apps NOT mentioned in core/screen_vision.py or
 tools/screen_vision_tool.py — that's the generalization test.
 """

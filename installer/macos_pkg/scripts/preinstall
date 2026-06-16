@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-install gate (Prompt 29.0): macOS version, Apple Silicon, disk space, and the
+# beta prerequisites (uv + ffmpeg). Abort with a clear bilingual message on failure.
+# Exit non-zero aborts the install before any files are written.
+
+abort() { echo "Emma: $1" >&2; osascript -e "display alert \"No se puede instalar Emma\" message \"$1\"" >/dev/null 2>&1 || true; exit 1; }
+
+# macOS 14+ (Sonoma)
+os_major="$(sw_vers -productVersion | cut -d. -f1)"
+[ "$os_major" -ge 14 ] 2>/dev/null || \
+  abort "Se requiere macOS 14 (Sonoma) o más nuevo. / macOS 14+ required. (found $(sw_vers -productVersion))"
+
+# Apple Silicon
+[ "$(uname -m)" = "arm64" ] || \
+  abort "Emma requiere un Mac con Apple Silicon. / Apple Silicon required. (found $(uname -m))"
+
+# Disk space — need ~3 GB free for the venv + Chromium.
+free_kb="$(df -k / | awk 'NR==2{print $4}')"
+[ "${free_kb:-0}" -ge 3145728 ] || \
+  abort "Necesitas al menos 3 GB libres. / At least 3 GB of free disk space required."
+
+# Beta prerequisites (the unsigned beta provisions the venv with uv at install time).
+have() { command -v "$1" >/dev/null 2>&1 || [ -x "/opt/homebrew/bin/$1" ]; }
+have uv || abort "Falta 'uv'. Instálalo con: brew install uv  / Install uv first: brew install uv"
+have ffmpeg || abort "Falta 'ffmpeg'. Instálalo con: brew install ffmpeg  / Install ffmpeg: brew install ffmpeg"
+
+exit 0

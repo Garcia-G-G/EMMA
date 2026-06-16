@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  productbuild distribution: the installer GUI (Prompt 29.0). Welcome → license →
+  install → conclusion. arm64 + macOS 14+ + disk-space gate. UNSIGNED (29.0); the
+  signing/notarization step is appended later by installer/sign_and_notarize.sh.
+-->
+<installer-gui-script minSpecVersion="2">
+    <title>Emma</title>
+    <organization>com.garcia</organization>
+    <welcome    file="Welcome.html"    mime-type="text/html"/>
+    <license    file="License.html"    mime-type="text/html"/>
+    <conclusion file="Conclusion.html" mime-type="text/html"/>
+    <background file="background.png" mime-type="image/png" alignment="bottomleft" scaling="none"/>
+
+    <volume-check>
+        <allowed-os-versions><os-version min="14.0"/></allowed-os-versions>
+    </volume-check>
+
+    <options customize="never" require-scripts="true" hostArchitectures="arm64" rootVolumeOnly="true"/>
+
+    <choices-outline>
+        <line choice="default"><line choice="com.garcia.emma"/></line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.garcia.emma" visible="false">
+        <pkg-ref id="com.garcia.emma"/>
+    </choice>
+    <pkg-ref id="com.garcia.emma" version="0" onConclusion="none">emma-component.pkg</pkg-ref>
+</installer-gui-script>
