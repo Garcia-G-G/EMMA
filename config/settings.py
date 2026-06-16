@@ -28,6 +28,7 @@ _CREDENTIAL_FIELDS = (
     "LINEAR_API_KEY",
     "JIRA_API_TOKEN",
     "NOTION_API_KEY",
+    "POSTMAN_API_KEY",
 )
 
 
@@ -56,6 +57,7 @@ class Settings(BaseSettings):
     JIRA_EMAIL: str = ""
     JIRA_API_TOKEN: str = ""
     NOTION_API_KEY: str = ""
+    POSTMAN_API_KEY: str = ""    # optional — resolve collections via the Postman API
     # Where Emma drops cloned repos by default (override in .env).
     CLONE_DIR: Path = Path.home() / "Documents" / "repos"
     ELEVENLABS_VOICE_ID_ES: str
