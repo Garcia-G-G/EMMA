@@ -1,0 +1,76 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — panel</title>
+<style>
+  :root{--ink:#fff0d4;--body:#ff8c3a;--gold:#ffc77a;--amber:#ff7a1a}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 70% 0%,#1a0e02,#0a0400);
+    color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:40px 24px}
+  .wrap{max-width:780px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px}
+  h1{font-family:Georgia,serif;font-size:30px;margin:0}
+  .plan{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);
+    border:1px solid rgba(255,122,26,.35);padding:5px 12px;border-radius:20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:rgba(255,122,26,.05);border:1px solid rgba(255,122,26,.14);border-radius:14px;padding:20px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--amber);margin:0 0 10px}
+  .big{font-size:30px;font-weight:600} .muted{color:#a86a2e;font-size:13px}
+  button,a.btn{background:var(--amber);color:#0a0400;border:none;border-radius:9px;padding:11px 18px;
+    font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block;margin:6px 6px 0 0}
+  a.btn.ghost,button.ghost{background:transparent;color:var(--body);border:1px solid rgba(255,122,26,.35)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  td,th{text-align:left;padding:7px 4px;border-bottom:1px solid rgba(255,122,26,.1);color:var(--body)}
+  th{color:var(--gold);font-weight:500}
+</style></head><body>
+<div class="wrap">
+  <header><h1>Hola, <span id="name">…</span></h1><span class="plan" id="plan">…</span></header>
+  <div class="grid">
+    <div class="card"><h2>Sesiones este mes</h2><div class="big" id="sessions">–</div></div>
+    <div class="card"><h2>Minutos usados</h2><div class="big" id="minutes">–</div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Tu plan</h2>
+    <div class="muted" id="capdesc">…</div>
+    <a class="btn" href="#" onclick="upgrade('pro');return false">Subir a Pro</a>
+    <a class="btn ghost" href="#" onclick="portal();return false">Cambiar plan</a>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Descarga Emma</h2>
+    <a class="btn" id="dlmac" href="#">Para Mac (.pkg)</a>
+    <a class="btn ghost" id="dlwin" href="#">Para Windows (.msi)</a>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Conecta servicios</h2>
+    <div class="muted">Autoriza X, Spotify y más con tu llave — el mismo flujo que en la app.</div>
+    <a class="btn ghost" href="/auth/google">Conectar servicios</a>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Tus sesiones</h2>
+    <table><thead><tr><th>Inicio</th><th>Duración</th><th>Costo</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="3" class="muted">…</td></tr></tbody></table>
+  </div>
+  <p style="margin-top:20px"><a href="/auth/logout" style="color:#a86a2e">Cerrar sesión</a></p>
+</div>
+<script>
+async function load(){
+  const r=await fetch("/api/dashboard"); if(r.status===401){ location.href="/login"; return; }
+  const d=await r.json();
+  document.getElementById("name").textContent=d.user.name||d.user.email;
+  document.getElementById("plan").textContent=d.user.plan;
+  document.getElementById("sessions").textContent=d.usage.sessions;
+  document.getElementById("minutes").textContent=(d.usage.seconds/60).toFixed(1);
+  document.getElementById("capdesc").textContent= d.caps.unlimited
+    ? "Sesiones ilimitadas de "+(d.caps.max_session_seconds/60)+" min."
+    : d.caps.daily_sessions+" sesiones/día de "+(d.caps.max_session_seconds/60)+" min.";
+  document.getElementById("dlmac").href=d.downloads.mac;
+  document.getElementById("dlwin").href=d.downloads.win;
+  const rows=d.recent.map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
+    `<td>${(s.seconds_used||0).toFixed(0)}s</td><td>$${(s.cost_usd||0).toFixed(3)}</td></tr>`).join("");
+  document.getElementById("rows").innerHTML=rows||'<tr><td colspan="3" class="muted">Aún no hay sesiones.</td></tr>';
+}
+async function upgrade(plan){
+  const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
+  if(r.ok){ const d=await r.json(); location.href=d.url; } else { alert("Pagos aún no están configurados."); }
+}
+async function portal(){
+  const r=await fetch("/api/billing/portal",{method:"POST"});
+  if(r.ok){ const d=await r.json(); location.href=d.url; } else { alert("Aún no tienes suscripción."); }
+}
+load();
+</script>
+</body></html>

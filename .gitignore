@@ -33,3 +33,9 @@ _landing/
 tests/acceptance/audio_cache/**/*.wav
 tests/acceptance/voice_run_*.md
 tests/acceptance/run_*.md
+
+# Backend dev databases (Prompt 31)
+backend/*.db
+backend_emma.db
+*.db-wal
+*.db-shm
