@@ -50,6 +50,20 @@ _SPOTIFY_GUIDE = """  Para Spotify, una sola vez:
     2. Redirect URI: http://127.0.0.1:8888/callback.
     3. Pega Client ID y Client Secret en .env como SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET."""
 
+_LINEAR_GUIDE = """  Para Linear, una sola vez:
+    1. Linear → Settings → Security & access → Personal API keys → New key.
+    2. Pega la key en .env como  LINEAR_API_KEY=...  (se mueve a tu Keychain)."""
+
+_JIRA_GUIDE = """  Para Jira, una sola vez:
+    1. https://id.atlassian.com/manage-profile/security/api-tokens → Create API token.
+    2. En .env:  JIRA_BASE_URL=https://tu-org.atlassian.net ,  JIRA_EMAIL=tu@correo ,
+       JIRA_API_TOKEN=...  (el token se mueve a tu Keychain)."""
+
+_NOTION_GUIDE = """  Para Notion, una sola vez:
+    1. https://www.notion.so/my-integrations → New integration (Internal).
+    2. Comparte las páginas que Emma usará con la integración (· · · → Connections).
+    3. Pega el Internal Integration Secret en .env como  NOTION_API_KEY=..."""
+
 SERVICES: list[dict[str, str]] = [
     {
         "name": "x",
@@ -66,6 +80,30 @@ SERVICES: list[dict[str, str]] = [
         "setup_callable": "tools.music:run_spotify_setup",
         "token_status_callable": "tools.music:spotify_token_status",
         "guide": _SPOTIFY_GUIDE,
+    },
+    {
+        "name": "linear",
+        "label": "Linear",
+        "client_id_setting": "LINEAR_API_KEY",
+        "setup_callable": "tools.linear_tool:run_linear_setup",
+        "token_status_callable": "tools.linear_tool:linear_token_status",
+        "guide": _LINEAR_GUIDE,
+    },
+    {
+        "name": "jira",
+        "label": "Jira",
+        "client_id_setting": "JIRA_API_TOKEN",
+        "setup_callable": "tools.jira_tool:run_jira_setup",
+        "token_status_callable": "tools.jira_tool:jira_token_status",
+        "guide": _JIRA_GUIDE,
+    },
+    {
+        "name": "notion",
+        "label": "Notion",
+        "client_id_setting": "NOTION_API_KEY",
+        "setup_callable": "tools.notion_tool:run_notion_setup",
+        "token_status_callable": "tools.notion_tool:notion_token_status",
+        "guide": _NOTION_GUIDE,
     },
 ]
 

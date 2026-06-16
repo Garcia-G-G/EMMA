@@ -25,6 +25,9 @@ _CREDENTIAL_FIELDS = (
     "PICOVOICE_ACCESS_KEY",
     "GITHUB_TOKEN",
     "X_CLIENT_SECRET",
+    "LINEAR_API_KEY",
+    "JIRA_API_TOKEN",
+    "NOTION_API_KEY",
 )
 
 
@@ -45,6 +48,14 @@ class Settings(BaseSettings):
     # Optional. If set, GitHub search uses 5000/hr instead of 60/hr. Credential
     # (ends in _TOKEN) — migrated to Keychain by bootstrap_from_env.
     GITHUB_TOKEN: str = ""
+    # Prompt 34 integrations (Linear / Jira / Notion REST+GraphQL). The tokens end
+    # in _KEY/_TOKEN → migrated to Keychain by bootstrap_from_env + _CREDENTIAL_FIELDS.
+    # Jira base URL + email are not secret (identifiers, stay in .env).
+    LINEAR_API_KEY: str = ""
+    JIRA_BASE_URL: str = ""        # e.g. https://your-org.atlassian.net
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    NOTION_API_KEY: str = ""
     # Where Emma drops cloned repos by default (override in .env).
     CLONE_DIR: Path = Path.home() / "Documents" / "repos"
     ELEVENLABS_VOICE_ID_ES: str
