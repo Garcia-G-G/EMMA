@@ -51,27 +51,28 @@ def _domain(url: str) -> str:
 
 def _rank(candidates: list[dict[str, str]], depth: int) -> list[dict[str, str]]:
     """Top `depth` candidates, original sources first, aggregators only as backfill."""
-    preferred = [c for c in candidates if not any(a in _domain(c.get("url", "")) for a in _AGGREGATORS)]
-    rest = [c for c in candidates if c not in preferred]
+    preferred: list[dict[str, str]] = []
+    rest: list[dict[str, str]] = []
+    for c in candidates:  # one pass; preserves duplicates, no O(n^2) membership test
+        bucket = rest if any(a in _domain(c.get("url", "")) for a in _AGGREGATORS) else preferred
+        bucket.append(c)
     return (preferred + rest)[:depth]
 
 
 async def _fetch_text(url: str) -> str:
     """Fetch + extract main text, truncated to ~2K chars. Returns "" on any failure
-    (timeout, HTTP error, empty extraction) so one bad source never sinks the call."""
+    (SSRF-blocked, timeout, HTTP error, empty extraction) so one bad source never
+    sinks the call. URLs come from a web search → the SSRF guard is load-bearing."""
     try:
-        import httpx
         import trafilatura
+
+        from core.url_safety import safe_get_text
     except ImportError:
         return ""
     try:
-        async with httpx.AsyncClient(
-            timeout=_FETCH_TIMEOUT_S, follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 Emma-Assistant"},
-        ) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            html = r.text
+        html = await safe_get_text(
+            url, timeout=_FETCH_TIMEOUT_S, headers={"User-Agent": "Mozilla/5.0 Emma-Assistant"}
+        )
     except Exception as exc:
         log.info("deep_research_fetch_skipped", url=url, error=str(exc)[:120])
         return ""

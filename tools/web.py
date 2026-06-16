@@ -198,17 +198,17 @@ async def summarize_page(url: str) -> ToolResult:
     """Fetch a web page and return a three-sentence spoken summary."""
     try:
         import trafilatura
+
+        from core.url_safety import safe_get_text
     except ImportError:
         return ToolResult(False, None, "Falta trafilatura.", False)
     try:
-        async with httpx.AsyncClient(
-            timeout=settings.API_TIMEOUT_S,
-            follow_redirects=True,
+        html = await safe_get_text(
+            url, timeout=settings.API_TIMEOUT_S,
             headers={"User-Agent": "Mozilla/5.0 Emma-Assistant"},
-        ) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            html = r.text
+        )
+    except ValueError:
+        return ToolResult(False, None, "No puedo leer esa dirección.", False)
     except httpx.HTTPError as exc:
         return ToolResult(False, None, f"No pude leer la página: {exc}", False)
     body = trafilatura.extract(html, include_comments=False, include_tables=False) or ""

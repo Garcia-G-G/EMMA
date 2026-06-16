@@ -22,17 +22,23 @@ _DEFAULT_TTL_DAYS = 14
 
 
 def _resolve_expiry(raw: str) -> str:
-    """ISO expiry string. Empty → default TTL; accepts ISO or a light natural form."""
+    """ISO expiry string. Empty/unparseable/in-the-past → default TTL; else ISO or a
+    light natural form. A past expiry would mark the conditional dead on its first tick."""
+    default = (dt.datetime.now() + dt.timedelta(days=_DEFAULT_TTL_DAYS)).isoformat()
     raw = (raw or "").strip()
     if not raw:
-        return (dt.datetime.now() + dt.timedelta(days=_DEFAULT_TTL_DAYS)).isoformat()
+        return default
+    parsed: dt.datetime | None = None
     try:
-        return dt.datetime.fromisoformat(raw).isoformat()
+        parsed = dt.datetime.fromisoformat(raw)
     except ValueError:
         try:
-            return cond._parse_when(raw).isoformat()
+            parsed = cond._parse_when(raw)
         except ValueError:
-            return (dt.datetime.now() + dt.timedelta(days=_DEFAULT_TTL_DAYS)).isoformat()
+            parsed = None
+    if parsed is None or parsed <= dt.datetime.now():
+        return default
+    return parsed.isoformat()
 
 
 @tool(destructive=True)
@@ -61,8 +67,15 @@ async def schedule_conditional(
             requires_confirmation=True,
         )
 
+    # Bake confirmed=True for a destructive action: Garcia confirmed the whole
+    # conditional here, so when it fires unattended later the action must execute
+    # (not bounce on its own confirmation gate and silently no-op).
+    args = dict(action_args or {})
+    entry = get_tool(action_tool)
+    if entry is not None and entry.destructive:
+        args["confirmed"] = True
     expiry = _resolve_expiry(expires_at)
-    cid = cond.add(trigger, action_tool, dict(action_args or {}), expiry)
+    cid = cond.add(trigger, action_tool, args, expiry)
     return ToolResult(
         True, {"id": cid},
         f"Listo, queda pendiente: {phrase} ejecuto «{action_tool}». Te aviso cuando pase.",

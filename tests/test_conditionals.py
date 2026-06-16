@@ -81,6 +81,22 @@ async def test_calendar_event_matches_on_title() -> None:
 # ---- store + watcher tick ---------------------------------------------------
 
 
+@pytest.mark.asyncio
+async def test_schedule_bakes_confirmed_for_destructive_action() -> None:
+    import json as _json
+
+    import tools.conditional_tool as ct
+
+    # send_to is destructive → its stored args must carry confirmed=True so the
+    # unattended fire actually sends instead of bouncing on its confirm gate.
+    res = await ct.schedule_conditional(
+        'time_at("2027-01-01T09:00:00")', "send_to",
+        {"recipient": "a@b.com", "subject": "s", "body": "b"}, confirmed=True)
+    assert res.success
+    args = _json.loads(cond.active()[0]["action_args"])
+    assert args.get("confirmed") is True
+
+
 def test_add_and_active() -> None:
     cid = cond.add('time_at("2026-06-17T09:00:00")', "create_note", {"title": "x"}, None)
     rows = cond.active()
@@ -104,6 +120,43 @@ async def test_check_once_fires_exactly_once() -> None:
     assert len(fired1) == 1 and fired2 == []   # no double-fire
     assert calls == [("create_note", {"title": "x"})]
     assert cond.active() == []
+
+
+@pytest.mark.asyncio
+async def test_check_once_does_not_burn_on_failed_action() -> None:
+    # action fails → conditional must STAY active (retry), not be marked fired (audit fix)
+    cond.add('time_at("2026-06-17T09:00:00")', "create_note", {"title": "x"}, None)
+
+    async def dispatch(tool, args):
+        return ToolResult(False, None, "Notes no respondió", False)
+
+    fired = await cond.check_once(dispatch, dt.datetime(2026, 6, 17, 9, 5))
+    assert fired == []
+    assert len(cond.active()) == 1  # still armed for the next tick
+
+
+@pytest.mark.asyncio
+async def test_check_once_does_not_burn_on_requires_confirmation() -> None:
+    # a destructive action that bounces on its own confirm gate must not be marked fired
+    cond.add('time_at("2026-06-17T09:00:00")', "send_to", {"recipient": "a"}, None)
+
+    async def dispatch(tool, args):
+        return ToolResult(True, None, "¿confirmas?", requires_confirmation=True)
+
+    fired = await cond.check_once(dispatch, dt.datetime(2026, 6, 17, 9, 5))
+    assert fired == [] and len(cond.active()) == 1
+
+
+def test_time_at_rolls_forward_when_natural_time_already_past() -> None:
+    now = dt.datetime.now()
+    earlier = (now - dt.timedelta(hours=2)).strftime("%-I%p").lower()  # e.g. "1pm"
+    when = cond._parse_when(earlier)
+    assert when > now  # past-today natural time rolls to tomorrow
+
+
+def test_time_at_requires_real_time_of_day() -> None:
+    with pytest.raises(ValueError):
+        cond._parse_when("junio 17")  # "17" must not parse as hour 17
 
 
 @pytest.mark.asyncio
