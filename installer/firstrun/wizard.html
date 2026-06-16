@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configurar Emma</title>
+<style>
+  :root{--ink:#fff0d4;--body:#ff9a3e;--gold:#ffc77a;--amber:#ff7a1a;--bg:#0f0700}
+  *{box-sizing:border-box} body{margin:0;background:radial-gradient(ellipse at 50% 0%,#1a0e02,#0a0400);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{width:560px;max-width:92vw;background:rgba(255,122,26,0.04);border:1px solid rgba(255,122,26,0.18);
+    border-radius:16px;padding:34px 36px}
+  h1{font-size:24px;margin:0 0 6px} h2{font-size:18px;margin:0 0 14px;color:var(--gold)}
+  p{color:var(--body);font-size:14px;line-height:1.55} .muted{color:#a86a2e;font-size:12px}
+  .steps{display:flex;gap:6px;margin-bottom:24px} .dot{height:4px;flex:1;border-radius:2px;background:rgba(255,122,26,0.2)}
+  .dot.on{background:var(--amber)}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(255,122,26,0.1)}
+  .pill{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid rgba(255,122,26,0.3)}
+  .ok{color:#7CFFA0;border-color:#2f6b3f} .no{color:#ff8c6b;border-color:#6b2f2f}
+  input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,122,26,0.4);
+    color:var(--gold);font-size:15px;padding:10px 0;outline:none;margin-bottom:16px}
+  input::placeholder{color:rgba(255,122,26,0.4)}
+  button{background:var(--amber);color:#0a0400;border:none;border-radius:8px;padding:11px 20px;font-size:14px;
+    font-weight:600;cursor:pointer} button.ghost{background:transparent;color:var(--body);border:1px solid rgba(255,122,26,0.3)}
+  button:disabled{opacity:0.45;cursor:default}
+  .actions{display:flex;justify-content:space-between;margin-top:26px}
+  .svc{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px}
+  .log{font-family:ui-monospace,monospace;font-size:11px;color:#a86a2e;white-space:pre-wrap;max-height:120px;overflow:auto;margin-top:10px}
+</style></head>
+<body>
+<div class="card">
+  <div class="steps" id="steps"></div>
+  <div id="view"></div>
+  <div class="actions">
+    <button class="ghost" id="back" onclick="go(step-1)">Atrás</button>
+    <button id="next" onclick="onNext()">Siguiente</button>
+  </div>
+</div>
+<script>
+let step = 0;
+const N = 5;
+async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
+
+const VIEWS = [
+  // 0 — Bienvenida
+  () => `<h1>Hola, soy Emma.</h1>
+    <p>Tu asistente de voz, en tu Mac. En unos pasos quedo lista: permisos, tu llave de
+    OpenAI, tus servicios y una prueba de voz. No tienes que escribir comandos.</p>
+    <p class="muted">Tus llaves se guardan en el Llavero de macOS, nunca en texto plano.</p>`,
+  // 1 — Permisos
+  () => `<h2>Permisos del sistema</h2>
+    <p>Emma necesita estos permisos. Toca «Abrir Ajustes» y vuelve aquí — la marca se
+    actualiza sola.</p><div id="perms">Revisando…</div>`,
+  // 2 — Llaves
+  () => `<h2>Tu llave de OpenAI</h2>
+    <p>La voz de Emma corre sobre OpenAI. Pega tu API key (empieza con <code>sk-</code>).</p>
+    <input id="oa" placeholder="sk-..." autocomplete="off">
+    <input id="el" placeholder="ElevenLabs API key (opcional)" autocomplete="off">
+    <div class="muted" id="keymsg"></div>`,
+  // 3 — Servicios
+  () => `<h2>Servicios externos</h2>
+    <p>Conecta lo que uses (opcional). Se abre el navegador para autorizar.</p>
+    <div class="svc">${["x","spotify","linear","jira","notion"].map(s=>
+      `<button class="ghost" onclick="setup('${s}')">Autorizar ${s}</button>`).join("")}</div>
+    <div class="log" id="svclog"></div>`,
+  // 4 — Prueba
+  () => `<h2>Prueba de voz</h2>
+    <p>Di «hola, soy Garcia» cuando toques el botón. Confirmo que el micrófono te escucha.</p>
+    <button class="ghost" id="rec" onclick="voiceTest()">Probar micrófono</button>
+    <div class="muted" id="vmsg" style="margin-top:12px"></div>`,
+];
+
+function renderSteps(){ document.getElementById("steps").innerHTML =
+  Array.from({length:N},(_,i)=>`<div class="dot ${i<=step?'on':''}"></div>`).join(""); }
+
+function go(s){ if(s<0||s>=N) return; step=s; render(); }
+function render(){
+  renderSteps();
+  document.getElementById("view").innerHTML = VIEWS[step]();
+  document.getElementById("back").style.visibility = step? "visible":"hidden";
+  document.getElementById("next").textContent = step===N-1? "Terminar":"Siguiente";
+  if(step===1) loadPerms();
+}
+
+async function loadPerms(){
+  const p = await api("/api/permissions");
+  const labels = {microphone:"Micrófono", accessibility:"Accesibilidad", calendar:"Calendario", automation:"Automatización"};
+  document.getElementById("perms").innerHTML = Object.entries(labels).map(([k,l])=>
+    `<div class="row"><span>${l}</span><span class="pill ${p[k]?'ok':'no'}">${p[k]?'concedido':'pendiente'}</span></div>`).join("")
+    + `<div style="margin-top:14px"><button class="ghost" onclick="openSettings()">Abrir Ajustes</button>
+       <button class="ghost" onclick="loadPerms()">Revisar de nuevo</button></div>`;
+}
+function openSettings(){ location.href="x-apple.systempreferences:com.apple.preference.security?Privacy"; }
+
+async function setup(name){
+  const log = document.getElementById("svclog"); log.textContent = `Autorizando ${name}…`;
+  const r = await api("/api/service",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
+  log.textContent = (r.output||r.error||"").trim() + (r.ok? `\n✓ ${name} listo`:`\n· ${name} pendiente`);
+}
+
+async function voiceTest(){
+  const m=document.getElementById("vmsg"); m.textContent="Escuchando…";
+  const r = await api("/api/voicetest",{method:"POST"});
+  m.textContent = r.ok? "✓ Te escucho. Listo, Emma está activa." :
+    ("No detecté audio. Revisa el permiso de micrófono. "+(r.error||""));
+}
+
+async function onNext(){
+  if(step===2){
+    const oa=document.getElementById("oa").value, el=document.getElementById("el").value;
+    const msg=document.getElementById("keymsg"); msg.textContent="Validando…";
+    const r = await api("/api/keys",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({openai:oa, elevenlabs:el})});
+    if(!r.ok){ msg.textContent = r.error||"No se pudo guardar."; return; }
+    msg.textContent="✓ Guardado en el Llavero.";
+  }
+  if(step===N-1){ await api("/api/done",{method:"POST"}); document.body.innerHTML=
+    '<div class="card"><h1>Listo, Emma está activa.</h1><p>Ya puedes cerrar esta ventana. '+
+    'Di «hola Emma» cuando la necesites.</p></div>'; return; }
+  go(step+1);
+}
+render();
+</script>
+</body></html>

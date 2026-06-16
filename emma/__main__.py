@@ -88,6 +88,12 @@ def _parse_args() -> argparse.Namespace:
         "activating test-only hooks (input-device override, arg/transcript "
         "logging). Equivalent to env EMMA_TEST_MODE=true. Never set by launchd.",
     )
+    p.add_argument(
+        "--first-run",
+        action="store_true",
+        help="open the first-run setup wizard (Prompt 29) instead of the daemon. "
+        "Emma.app passes this on the post-install launch.",
+    )
     return p.parse_args()
 
 
@@ -182,6 +188,15 @@ def main() -> int:
     args = _parse_args()
     _setup_logging(args.debug)
     log = structlog.get_logger("emma")
+
+    # First-run setup wizard (Prompt 29): the installer launches Emma.app with
+    # --first-run; serve the guided wizard instead of starting the daemon.
+    if args.first_run:
+        from installer.firstrun import wizard
+
+        log.info("first_run_wizard")
+        wizard.run()
+        return 0
     if args.test:
         settings.EMMA_TEST_MODE = True  # same switch the harness env sets
     log.info(

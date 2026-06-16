@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sparkle appcast feed (Prompt 29, Part D1). Host this at the SUFeedURL the app's
+  Info.plist points to (GitHub Pages is free: https://<user>.github.io/emma/appcast.xml).
+  release.sh appends a new <item> per release. sparkle:edSignature is produced by
+  Sparkle's `sign_update` with the EdDSA private key (installer/README.md).
+-->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Emma Updates</title>
+    <link>https://garcia.github.io/emma/appcast.xml</link>
+    <description>Actualizaciones de Emma para macOS.</description>
+    <language>es</language>
+    <item>
+      <title>Emma 1.0.0</title>
+      <description><![CDATA[<p>Primera versión: asistente de voz para tu Mac.</p>]]></description>
+      <pubDate>Mon, 16 Jun 2026 12:00:00 +0000</pubDate>
+      <sparkle:version>1.0.0</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/garcia/emma/releases/download/v1.0.0/Emma-Installer.pkg"
+        sparkle:version="1.0.0"
+        sparkle:edSignature="@ED_SIGNATURE_1_0_0@"
+        length="@PKG_LENGTH_1_0_0@"
+        type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>

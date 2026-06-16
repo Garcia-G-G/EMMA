@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- pkgbuild component options: install Emma.app to a fixed location, not relocatable
+     (the LaunchAgent points at /Applications/Emma.app). -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+  <dict>
+    <key>RootRelativeBundlePath</key>
+    <string>Emma.app</string>
+    <key>BundleIsRelocatable</key>
+    <false/>
+    <key>BundleIsVersionChecked</key>
+    <true/>
+    <key>BundleOverwriteAction</key>
+    <string>upgrade</string>
+  </dict>
+</array>
+</plist>
