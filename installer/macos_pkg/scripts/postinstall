@@ -1,0 +1,65 @@
+#!/bin/bash
+# Post-install (Prompt 29.0). The payload landed at /Library/Application Support/Emma
+# (root-owned). Relocate it to the console user's ~/Library, provision the venv with
+# uv, install the per-user LaunchAgent, surface the TCC prompts, and open the first-run
+# window. Everything user-facing lands under the user's ~/Library — never elsewhere.
+set -u
+
+STAGED="/Library/Application Support/Emma"
+PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"; export PATH
+
+CONSOLE_USER="$(stat -f '%Su' /dev/console)"
+{ [ -z "$CONSOLE_USER" ] || [ "$CONSOLE_USER" = "root" ]; } && CONSOLE_USER="${USER:-}"
+USER_HOME="$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+[ -z "$USER_HOME" ] && USER_HOME="/Users/$CONSOLE_USER"
+UID_NUM="$(id -u "$CONSOLE_USER" 2>/dev/null)"
+
+APP_DIR="$USER_HOME/Library/Application Support/Emma"
+LA_DIR="$USER_HOME/Library/LaunchAgents"
+PLIST="$LA_DIR/com.garcia.emma.plist"
+VENV_PY="$APP_DIR/.venv/bin/python"
+LOG_DIR="$USER_HOME/Library/Logs/Emma"
+asuser() { sudo -u "$CONSOLE_USER" /bin/bash -lc "$1"; }
+
+mkdir -p "$LA_DIR" "$LOG_DIR" "$(dirname "$APP_DIR")"
+
+# Relocate the app tree into the user's Application Support and hand it to the user.
+rm -rf "$APP_DIR"
+ditto "$STAGED" "$APP_DIR"
+rm -rf "$STAGED"
+chown -R "$CONSOLE_USER" "$APP_DIR" "$LA_DIR" "$LOG_DIR"
+
+# Provision the venv (and Playwright Chromium) as the user.
+asuser "cd '$APP_DIR' && uv sync" || echo "Emma: uv sync falló (revisa la red)." >&2
+asuser "cd '$APP_DIR' && uv run playwright install chromium >/dev/null 2>&1" || true
+
+# Per-user LaunchAgent → the provisioned venv.
+cat > "$PLIST" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.garcia.emma</string>
+  <key>ProgramArguments</key><array><string>$VENV_PY</string><string>-m</string><string>emma</string></array>
+  <key>WorkingDirectory</key><string>$APP_DIR</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>EMMA_ROOT</key><string>$APP_DIR</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/><key>Crashed</key><true/></dict>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$LOG_DIR/stdout.log</string>
+  <key>StandardErrorPath</key><string>$LOG_DIR/stderr.log</string>
+  <key>ProcessType</key><string>Interactive</string>
+</dict></plist>
+PLISTEOF
+chown "$CONSOLE_USER" "$PLIST"
+
+# Surface the TCC prompts (Microphone / Accessibility / …) now, then load the agent.
+asuser "cd '$APP_DIR' && uv run python -m emma.permissions bootstrap" || true
+launchctl bootout "gui/$UID_NUM/com.garcia.emma" 2>/dev/null || true
+asuser "launchctl bootstrap gui/$UID_NUM '$PLIST'" || true
+
+# First-run window (HTML wizard in the browser) with the beta note.
+asuser "cd '$APP_DIR' && uv run python -m emma --first-run >/dev/null 2>&1 &" || true
+exit 0
