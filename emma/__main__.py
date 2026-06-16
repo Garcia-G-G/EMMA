@@ -140,6 +140,13 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         _bg_tasks.append(asyncio.create_task(proactive_engine.run(), name="emma-proactive"))
         log.info("proactive_engine_spawned")
 
+    # Conditional-trigger watcher (Prompt 32): polls mail / calendar / clock and
+    # fires "si X pasa, haz Y" actions once. Independent of the proactive engine.
+    from core import conditionals
+
+    _bg_tasks.append(asyncio.create_task(conditionals.watch(), name="emma-conditionals"))
+    log.info("conditionals_watcher_spawned")
+
     def _shutdown(sig: int) -> None:
         log.info("signal_received", sig=signal.Signals(sig).name)
         # Set the flag first so the loop exits even if Pipecat swallows the
