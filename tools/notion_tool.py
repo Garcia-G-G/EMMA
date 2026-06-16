@@ -45,19 +45,19 @@ def _page_title(page: dict[str, Any]) -> str:
     return str(page.get("id", ""))
 
 
-async def _find_page(title: str) -> tuple[str | None, list[str]]:
-    """(page_id, options). id None + options → ambiguous; None + [] → none found."""
+async def _find_page(title: str) -> tuple[str | None, str, list[str]]:
+    """(page_id, resolved_title, options). id None + options → ambiguous; None + [] → none."""
     data = await _notion("POST", "/search",
                          {"query": title, "filter": {"value": "page", "property": "object"}})
     results = [p for p in data.get("results", []) if p.get("object") == "page"]
     if not results:
-        return None, []
+        return None, "", []
     exact = [p for p in results if _page_title(p).lower() == title.lower()]
     if len(exact) == 1:
-        return exact[0]["id"], []
+        return exact[0]["id"], _page_title(exact[0]), []
     if len(results) == 1:
-        return results[0]["id"], []
-    return None, [_page_title(p) for p in results[:5]]
+        return results[0]["id"], _page_title(results[0]), []
+    return None, "", [_page_title(p) for p in results[:5]]
 
 
 @tool(destructive=True)
@@ -76,7 +76,7 @@ async def notion_append(page_title: str, text: str, confirmed: bool = False) -> 
         return ToolResult(False, None, "Necesito la página y el texto a agregar.", False)
 
     try:
-        page_id, options = await _find_page(page_title)
+        page_id, resolved_title, options = await _find_page(page_title)
     except httpx.HTTPError as exc:
         log.error("notion_search_failed", error=str(exc))
         return ToolResult(False, None, "No pude buscar en Notion.", False)
@@ -87,8 +87,10 @@ async def notion_append(page_title: str, text: str, confirmed: bool = False) -> 
         return ToolResult(False, None, f"No encontré la página «{page_title}».", False)
 
     if not confirmed:
-        return ToolResult(True, {"page_title": page_title},
-                          f"Voy a agregar a «{page_title}»: «{text}». ¿Lo hago?",
+        # Confirm the page Notion actually resolved (its real title), not the raw
+        # query — a fuzzy search for "ideas" can land on "Bad ideas archive".
+        return ToolResult(True, {"page_title": resolved_title},
+                          f"Voy a agregar a «{resolved_title}»: «{text}». ¿Lo hago?",
                           requires_confirmation=True)
 
     block = {
@@ -102,7 +104,7 @@ async def notion_append(page_title: str, text: str, confirmed: bool = False) -> 
     except httpx.HTTPError as exc:
         log.error("notion_append_failed", error=str(exc))
         return ToolResult(False, None, "No pude agregar el texto en Notion.", False)
-    return ToolResult(True, {"page_id": page_id}, f"Listo, lo agregué a «{page_title}».", False)
+    return ToolResult(True, {"page_id": page_id}, f"Listo, lo agregué a «{resolved_title}».", False)
 
 
 # ---- 26.2 setup orchestrator hooks ------------------------------------------

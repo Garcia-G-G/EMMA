@@ -66,6 +66,14 @@ def _jira_creds(monkeypatch):
     monkeypatch.setattr(settings, "JIRA_API_TOKEN", "t")
 
 
+def test_jira_type_synonym_normalization() -> None:
+    assert jt._norm_type("tarea") == "Task"
+    assert jt._norm_type("error") == "Bug"
+    assert jt._norm_type("historia") == "Story"
+    assert jt._norm_type("") == "Task"          # default
+    assert jt._norm_type("Custom") == "Custom"  # unknown passes through
+
+
 @pytest.mark.asyncio
 async def test_jira_missing_config(monkeypatch) -> None:
     monkeypatch.setattr(settings, "JIRA_BASE_URL", "")
@@ -132,6 +140,19 @@ async def test_notion_disambiguation(monkeypatch) -> None:
     res = await nt.notion_append("Ideas", "x")
     assert res.success and not res.requires_confirmation
     assert "Ideas A" in res.user_message and "Ideas B" in res.user_message
+
+
+@pytest.mark.asyncio
+async def test_notion_confirms_resolved_title_not_query(monkeypatch) -> None:
+    # fuzzy single match: confirm the page's REAL title, not the raw query (audit fix)
+    monkeypatch.setattr(settings, "NOTION_API_KEY", "k")
+
+    async def fake(method, path, body=None):
+        return {"results": [_page("Bad ideas archive")]}
+
+    monkeypatch.setattr(nt, "_notion", fake)
+    res = await nt.notion_append("ideas", "x")
+    assert res.requires_confirmation and "Bad ideas archive" in res.user_message
 
 
 @pytest.mark.asyncio

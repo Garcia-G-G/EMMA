@@ -26,6 +26,23 @@ def _base() -> str:
     return settings.JIRA_BASE_URL.rstrip("/")
 
 
+_TYPE_SYNONYMS = {
+    "task": "Task", "tarea": "Task", "todo": "Task",
+    "bug": "Bug", "error": "Bug", "defecto": "Bug", "fallo": "Bug",
+    "story": "Story", "historia": "Story", "us": "Story",
+    "epic": "Epic", "épica": "Epic", "epica": "Epic",
+}
+
+
+def _norm_type(issue_type: str) -> str:
+    """Map a loose ES/EN type to a canonical Jira issue-type name; default Task.
+
+    Jira rejects an unknown issuetype name with a 400, so we normalise the common
+    synonyms rather than pass arbitrary input straight through.
+    """
+    return _TYPE_SYNONYMS.get((issue_type or "").strip().lower(), issue_type.strip() or "Task")
+
+
 def _adf(text: str) -> dict[str, Any]:
     """Minimal Atlassian Document Format paragraph for `text`."""
     content = [{"type": "text", "text": text}] if text.strip() else []
@@ -62,10 +79,11 @@ async def create_jira_issue(
     if not (project.strip() and summary.strip()):
         return ToolResult(False, None, "Necesito el proyecto y el resumen del issue.", False)
 
+    itype = _norm_type(issue_type)
     if not confirmed:
         return ToolResult(
             True, {"project": project, "summary": summary},
-            f"Voy a crear «{summary}» en el proyecto {project} ({issue_type}). ¿Lo creo?",
+            f"Voy a crear «{summary}» en el proyecto {project} ({itype}). ¿Lo creo?",
             requires_confirmation=True,
         )
 
@@ -73,7 +91,7 @@ async def create_jira_issue(
         "fields": {
             "project": {"key": project.strip()},
             "summary": summary,
-            "issuetype": {"name": issue_type},
+            "issuetype": {"name": itype},
             "description": _adf(description),
         }
     }

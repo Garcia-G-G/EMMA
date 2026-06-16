@@ -95,17 +95,22 @@ def _parse_when(s: str) -> dt.datetime:
     except ValueError:
         pass
     low = s.lower()
-    day = dt.date.today()
-    if any(w in low for w in ("mañana", "manana", "tomorrow")):
-        day = day + dt.timedelta(days=1)
-    m = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", low)
+    explicit_day = any(w in low for w in ("mañana", "manana", "tomorrow"))
+    day = dt.date.today() + (dt.timedelta(days=1) if explicit_day else dt.timedelta())
+    # Require a real time-of-day (":MM" or am/pm) so "junio 17" doesn't parse 17 as
+    # an hour. A bare clock time with no day → roll to tomorrow if it's already past
+    # (else a "9am" set at 2pm would fire instantly on the next watcher tick).
+    m = re.search(r"\b(\d{1,2})(?::(\d{2})|\s*(am|pm))", low)
     if m:
         h, mn, ap = int(m.group(1)), int(m.group(2) or 0), m.group(3)
         if ap == "pm" and h < 12:
             h += 12
         if ap == "am" and h == 12:
             h = 0
-        return dt.datetime(day.year, day.month, day.day, h, mn)
+        when = dt.datetime(day.year, day.month, day.day, h, mn)
+        if when < dt.datetime.now() and not explicit_day:
+            when += dt.timedelta(days=1)
+        return when
     raise ValueError(f"no entiendo la hora: {s!r}")
 
 
@@ -148,7 +153,9 @@ async def trigger_matches(trigger: Trigger, dispatcher: Dispatcher, now: dt.date
     if trigger.kind == "email_from":
         addr = trigger.params["addr"].lower()
         contains = (trigger.params.get("contains") or "").lower()
-        res = await dispatcher("search_mail", {"query": contains or addr, "limit": 15})
+        # Filter by SENDER (not subject) and read the body preview, so `contains`
+        # can match the email body — the documented use ("contains=confirmo").
+        res = await dispatcher("recent_from", {"sender": addr, "limit": 15})
         blob = _blob(res)
         return addr in blob and (not contains or contains in blob)
 
@@ -262,10 +269,18 @@ async def check_once(dispatcher: Dispatcher, now: dt.datetime | None = None) -> 
             continue
         if not matched:
             continue
+        # The action's confirmed flag (for destructive tools) was baked in at
+        # schedule time — Garcia already confirmed the whole conditional. Only
+        # mark fired on a REAL success: a failure or a requires_confirmation
+        # bounce must NOT burn the one-shot, or the action silently never happens.
         try:
-            await dispatcher(row["action_tool"], json.loads(row["action_args"]))
+            res = await dispatcher(row["action_tool"], json.loads(row["action_args"]))
         except Exception as exc:
             log.error("conditional_action_failed", id=cid, tool=row["action_tool"], error=str(exc))
+            continue
+        if not getattr(res, "success", False) or getattr(res, "requires_confirmation", False):
+            log.warning("conditional_action_not_executed", id=cid, tool=row["action_tool"])
+            continue  # retry next tick (bounded by expiry)
         mark_fired(cid)
         fired.append(cid)
         log.info("conditional_fired", id=cid, tool=row["action_tool"])
