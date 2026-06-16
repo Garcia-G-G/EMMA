@@ -67,6 +67,41 @@ def _format_tavily(payload: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+async def search_results(query: str, count: int = 5) -> list[dict[str, str]]:
+    """Raw search candidates (title/url/snippet) for `query`.
+
+    Shared by ``search_web`` and ``deep_research`` (Prompt 33). Returns an empty
+    list on any error or when no search credentials are configured — callers
+    decide how to surface that.
+    """
+    count = max(1, min(int(count), 10))
+    async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
+        if settings.BRAVE_API_KEY:
+            try:
+                r = await client.get(
+                    _BRAVE,
+                    params={"q": query, "count": str(count)},
+                    headers={"X-Subscription-Token": settings.BRAVE_API_KEY, "Accept": "application/json"},
+                )
+                r.raise_for_status()
+            except httpx.HTTPError as exc:
+                log.error("brave_search_failed", error=str(exc))
+                return []
+            return _format_brave(r.json())[:count]
+        if settings.TAVILY_API_KEY:
+            try:
+                r = await client.post(
+                    _TAVILY,
+                    json={"api_key": settings.TAVILY_API_KEY, "query": query, "max_results": count},
+                )
+                r.raise_for_status()
+            except httpx.HTTPError as exc:
+                log.error("tavily_search_failed", error=str(exc))
+                return []
+            return _format_tavily(r.json())[:count]
+    return []
+
+
 @tool()
 async def search_web(query: str) -> ToolResult:
     """Search the web for `query` and return a short spoken synthesis plus the top results."""
