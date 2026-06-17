@@ -1,0 +1,41 @@
+# Build + sign + notarize the macOS .pkg on a tag push (Prompt 30, Part D).
+# Secrets (repo settings → Actions): APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,
+# EMMA_SIGN_IDENTITY, EMMA_INSTALLER_IDENTITY, APPLE_ID, TEAM_ID, APP_SPECIFIC_PASSWORD.
+name: release-mac
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build-mac:
+    runs-on: macos-14   # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv + deps
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv sync
+      - name: Import signing cert
+        env:
+          P12: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          P12_PW: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          echo "$P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p ci build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$P12_PW" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security unlock-keychain -p ci build.keychain
+      - name: Build .pkg
+        run: make pkg
+      - name: Sign + notarize
+        env:
+          EMMA_SIGN_IDENTITY: ${{ secrets.EMMA_SIGN_IDENTITY }}
+          EMMA_INSTALLER_IDENTITY: ${{ secrets.EMMA_INSTALLER_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+        run: ./installer/sign_and_notarize.sh dist/Emma.pkg
+      - name: Upload to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Emma*.pkg

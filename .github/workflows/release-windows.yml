@@ -1,0 +1,44 @@
+# Build + sign the Windows .msi on a tag push (Prompt 30, Part D).
+# Secrets: WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD (EV code-signing cert).
+name: release-windows
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps (+ windows extras)
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[windows]"
+          pip install -r requirements-dev.txt || pip install pytest pytest-asyncio
+      - name: Tier-1 smoke (platform layer loads, stubs degrade)
+        run: python -m pytest tests/test_platform.py -q
+      - name: Build Emma.exe (PyInstaller)
+        run: python installer/build_windows.py
+      - name: Build .msi (WiX)
+        run: |
+          choco install wixtoolset -y
+          heat dir dist\Emma-Windows -cg EmmaFiles -dr INSTALLDIR -srd -sreg -gg -out files.wxs
+          candle installer\wix-installer.xml files.wxs
+          light -ext WixUIExtension wix-installer.wixobj files.wixobj -o dist\Emma-Windows.msi
+      - name: Sign .msi
+        env:
+          PFX: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          PFX_PW: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String($env:PFX))
+          & "${env:ProgramFiles(x86)}\Windows Kits\10\bin\x64\signtool.exe" sign `
+            /f cert.pfx /p $env:PFX_PW /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+            dist\Emma-Windows.msi
+        shell: pwsh
+      - name: Upload to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Emma-Windows.msi

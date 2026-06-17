@@ -38,6 +38,17 @@ dependencies = [
     "pyobjc-framework-applicationservices>=12.2",
 ]
 
+[project.optional-dependencies]
+# Windows-only (Prompt 30). Installed ONLY on Windows (`pip install -e .[windows]`);
+# never pulled on macOS, so they can't break the Mac build. Real Tier-3 impls (30.x)
+# use these; the cross-platform stubs need none of them.
+windows = [
+    "pywin32>=306",
+    "comtypes>=1.4",
+    "keyring>=25.0",     # Windows Credential Manager (cross-platform secrets API)
+    "pyinstaller>=6.0",  # build the .exe
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
