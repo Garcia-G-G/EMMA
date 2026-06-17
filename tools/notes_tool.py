@@ -248,25 +248,17 @@ async def create_note(
                 requires_confirmation=True,
             )
 
-    t = macos.esc_applescript(title)
-    b = macos.esc_applescript(body)
-    # HTML body so Notes keeps the title (first line) clean and SEPARATE from the
-    # body. A plain "title\nbody" flattens into one title, which then breaks
-    # exact-title lookup in read_note/delete_note (19.4-followup fix).
-    html_body = f"<div>{t}</div><div>{b}</div>" if body else f"<div>{t}</div>"
-    note_props = f'{{body:"{html_body}"}}'
-    if folder:
-        f = macos.esc_applescript(folder)
-        # Create the folder on demand instead of failing with -1728.
-        make = (
-            f'if not (exists folder "{f}") then make new folder with properties {{name:"{f}"}}\n'
-            f'tell folder "{f}" to make new note with properties {note_props}'
-        )
-    else:
-        make = f"make new note with properties {note_props}"
-    script = f'tell application "Notes"\n{make}\nend tell'
+    # 30: platform-specific note creation lives in core.platform.notes (Apple Notes
+    # on mac; OneNote on Windows in 30.x). The osascript moved to _mac/notes.py — same
+    # behavior on Mac, but on a platform without an impl the cross-platform error
+    # becomes a friendly line instead of a stack trace.
+    from core.platform import UnsupportedOnPlatform
+    from core.platform import notes as platform_notes
+
     try:
-        await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
+        await platform_notes.get().create(title, body, folder)
+    except UnsupportedOnPlatform as exc:
+        return ToolResult(False, None, f"En este sistema no tengo {exc.capability} todavía.", False)
     except macos.AppleScriptError as exc:
         return ToolResult(False, None, f"No pude crear la nota: {exc}", False)
     # 28: undo a creation by deleting it.

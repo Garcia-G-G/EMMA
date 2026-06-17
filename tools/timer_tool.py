@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from actions import macos
+from core.platform import notify as platform_notify
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.timer")
@@ -29,7 +29,7 @@ async def _run_timer(tid: str, duration_min: int, label: str) -> None:
         return
     _timers.pop(tid, None)
     phrase = f"{_mins(label, duration_min).capitalize()} terminó."
-    macos.notify("Emma — Timer", phrase)
+    platform_notify.get().send("Emma — Timer", phrase)  # 30: via the platform layer
     # Spoken alert that works even with no live session (macOS TTS).
     try:
         proc = await asyncio.create_subprocess_exec(
