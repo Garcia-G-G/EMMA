@@ -4,6 +4,9 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv-train/
+scripts/wake_data/
+models/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
