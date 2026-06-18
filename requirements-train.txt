@@ -1,0 +1,29 @@
+# Wake-word TRAINING dependencies (Prompt 16.2) — heavy, TRAINING-ONLY.
+# NOT part of the daemon's pyproject (the runtime only needs `openwakeword` to
+# *load* the produced .onnx). Install in a SEPARATE throwaway venv:
+#
+#     python3 -m venv .venv-train
+#     . .venv-train/bin/activate
+#     pip install -r requirements-train.txt
+#
+# A GPU helps but isn't required; CPU training of one wake word takes ~10-30 min.
+openwakeword==0.6.0
+
+# Synthetic positive-sample generation via Piper TTS (piper-sample-generator).
+# piper-phonemize wheels exist for linux/x86_64 + macOS; on Apple Silicon, prefer
+# running the data step under Rosetta or on a Linux box if a wheel is missing.
+piper-tts==1.2.0
+piper-phonemize==1.1.0
+
+# Training stack + audio augmentation.
+torch>=2.1
+torchaudio>=2.1
+numpy>=1.24
+scipy>=1.11
+tqdm>=4.66
+pyyaml>=6.0
+soundfile>=0.12          # read/write wavs
+sounddevice>=0.4         # record_wake_validation.py mic capture
+datasets>=2.16           # pull background/negative audio (AudioSet-derived clips)
+mutagen>=1.47            # audio metadata for the negative corpus
+onnx>=1.15               # export the trained model to ONNX
