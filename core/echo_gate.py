@@ -272,6 +272,11 @@ class EchoGateFilter(BaseAudioFilter):
         return released
 
     async def filter(self, audio: bytes) -> bytes:
+        # 35.1: tap the raw mic frame for speaker ID. No-op unless resemblyzer is
+        # installed (one cached bool check per frame), so this never affects timing.
+        from core import speaker
+
+        speaker.feed_audio(audio, self._sample_rate)
         phase = self._phase_provider() if self._phase_provider else None
 
         # Opener phase (22-B32): the gate is FULLY closed — Emma always

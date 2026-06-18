@@ -83,6 +83,7 @@ from core import (
     runtime,
     runtime_state,
     session_memory,
+    speaker,
     vocabulary,
 )
 from core.confidence import is_low_confidence
@@ -658,6 +659,13 @@ async def _build_instructions() -> str:
         "varias, pregunta cuál). Confirma antes de escribir.\n"
         "- Si falta el token, di que se configura con «python -m emma.setup --only "
         "<servicio>» y no inventes que ya está hecho.\n\n"
+        "# Speaker ID\n"
+        "- «Esta es mi voz» / «enrolla mi voz» / «aprende mi voz» → enroll_my_voice.\n"
+        "- «¿quién está hablando?» / «¿soy yo?» → who_is_speaking.\n"
+        "- «olvida la voz de X» → forget_my_voice (confirma primero).\n"
+        "- Si una acción destructiva se rechaza porque no reconozco la voz, explica: "
+        "«no te reconozco bien la voz; di 'Emma, esta es mi voz' para enrollarla, o "
+        "pásale el dispositivo a Garcia para que confirme».\n\n"
         "# Forbidden\n"
         "- No filler: 'Great question!', 'Absolutely!', 'Of course!'\n"
         "- No closers: '¿Algo más?', 'Anything else?'\n"
@@ -1118,6 +1126,29 @@ def _make_function_handler(
             )
             return
 
+        # ---- Speaker gate (35.1). A destructive tool from a voice we can't confirm
+        # as Garcia is refused — a guest in the room can read ("¿qué hora es?"), not
+        # delete. Off by default until resemblyzer is installed AND a profile exists,
+        # so the daemon never locks itself out. Lazily identifies the buffered clip.
+        if (
+            entry is not None
+            and entry.destructive
+            and speaker.should_gate()
+            and await speaker.identify_now() is None  # only runs when gating (short-circuit)
+        ):
+            log.info("speaker_gate_refused", tool=name)
+            events_bus.publish("speaker_gate_refused", name=name)
+            await params.result_callback(
+                {
+                    "success": False,
+                    "user_message": "No te reconozco bien la voz. Que Garcia confirme "
+                    "primero, o enrolla la tuya con 'Emma, esta es mi voz'.",
+                    "data": None,
+                    "requires_confirmation": False,
+                }
+            )
+            return
+
         t_start = time.monotonic()
         try:
             result = await asyncio.wait_for(dispatch(name, args), timeout=20.0)
@@ -1257,6 +1288,7 @@ async def build_pipeline(
     # VAD. 18000 suppresses the echo while still letting a deliberate, close,
     # louder human voice barge in.
     speech_phase = SpeechPhase()  # fresh per session — the opener reset (22-B32)
+    speaker.reset()  # 35.1: new session → clear the mic buffer + last-identified speaker
     # 35: per-machine calibration (python -m emma.calibrate) overrides the
     # hand-measured defaults when ~/.emma/calibration.json exists.
     from emma.calibrate import load_calibration
