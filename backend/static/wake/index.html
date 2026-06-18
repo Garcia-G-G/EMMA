@@ -1,0 +1,305 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2a1206">
+<title>Wake Word Studio — Emma</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Cg transform=%27translate(50 50)%27 fill=%27none%27 stroke=%27%23ff7a1a%27 stroke-width=%274%27 stroke-linecap=%27round%27%3E%3Cellipse rx=%2742%27 ry=%2714%27/%3E%3Cellipse rx=%2742%27 ry=%2714%27 transform=%27rotate(60)%27/%3E%3Cellipse rx=%2742%27 ry=%2714%27 transform=%27rotate(-60)%27/%3E%3C/g%3E%3Ccircle cx=%2750%27 cy=%2750%27 r=%2710%27 fill=%27%23ffd28a%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Mona+Sans:wght@300;400&family=JetBrains+Mono:wght@300;400;500&display=swap">
+<style>
+/* Palette + themes lifted verbatim from the landing (Prompt 24.5) so the Studio
+   shares one visual DNA. tarde = golden-hour lamplight; nocturna = a lamp in a dark room. */
+:root{--c-primary:#ff7a1a;--live:#ff5018}
+[data-theme="tarde"]{--c-canvas-top:#3a1f0c;--c-canvas-mid:#2a1608;--c-canvas-bottom:#5a2810;
+  --c-headline:#fff4dc;--c-body:#ffa850;--c-highlight:#ffd28a;--c-meta:#8a4a1e}
+[data-theme="nocturna"]{--c-canvas-top:#04020a;--c-canvas-mid:#060306;--c-canvas-bottom:#0c0500;
+  --c-headline:#fff0d4;--c-body:#ff8c3a;--c-highlight:#ffc77a;--c-meta:#4a2c0e}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;min-height:100vh;color:var(--c-headline);
+  font-family:'Mona Sans','Helvetica Neue',system-ui,sans-serif;font-weight:300;font-size:16px;
+  line-height:1.55;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+[data-theme="tarde"] body{background:radial-gradient(ellipse 90% 50% at 50% 112%,var(--c-canvas-bottom) 0%,transparent 58%),linear-gradient(180deg,var(--c-canvas-top) 0%,var(--c-canvas-mid) 60%,var(--c-canvas-bottom) 100%) fixed}
+[data-theme="nocturna"] body{background:radial-gradient(ellipse at 75% 30%,rgba(255,122,26,0.16) 0%,transparent 38%),linear-gradient(180deg,var(--c-canvas-top) 0%,var(--c-canvas-mid) 100%) fixed}
+a{color:var(--c-highlight);text-decoration:none}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+
+/* ---- header ---- */
+.nav{display:flex;justify-content:space-between;align-items:center;padding:22px 30px}
+.brand{display:flex;align-items:center;gap:11px}
+.brand svg{width:30px;height:30px;animation:breathe 6s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.82;transform:scale(1)}50%{opacity:1;transform:scale(1.045)}}
+.brand .nm{font-family:'Instrument Serif',Georgia,serif;font-size:19px;letter-spacing:.02em;color:var(--c-headline)}
+.brand .sub{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--c-meta);margin-left:2px}
+.toggles{display:flex;align-items:center;gap:18px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em}
+.lang span,.theme button{cursor:pointer;color:var(--c-meta);background:none;border:none;font:inherit;padding:0 3px}
+.lang span.on{color:var(--c-headline)}
+.theme button{display:inline-flex;color:var(--c-meta)}.theme button.on{color:var(--c-primary)}
+.theme svg{width:16px;height:16px}
+
+/* ---- shell ---- */
+.wrap{max-width:620px;margin:0 auto;padding:30px 28px 70px}
+h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:clamp(34px,5.4vw,52px);
+  line-height:1.02;letter-spacing:-.015em;margin:14px 0 14px}
+.intro{color:var(--c-body);font-size:15px;line-height:1.6;max-width:520px;margin:0 0 30px}
+.region{transition:opacity .3s ease}.region[hidden]{display:none}
+
+/* ---- form ---- */
+label{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--c-meta);margin:0 0 7px}
+.phrase{width:100%;background:rgba(255,122,26,.05);border:1px solid rgba(255,122,26,.22);border-radius:12px;
+  color:var(--c-highlight);font-family:'Instrument Serif',Georgia,serif;font-size:26px;padding:16px 18px;outline:none}
+.phrase:focus{border-color:var(--c-primary)}
+.help{color:var(--c-meta);font-size:12px;margin:8px 2px 0}
+.adv{margin:22px 0 0;border-top:1px solid rgba(255,122,26,.14);padding-top:14px}
+.adv>summary{cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--c-body);list-style:none}
+.adv>summary::-webkit-details-marker{display:none}
+.adv>summary::before{content:'+ ';color:var(--c-meta)}
+.adv[open]>summary::before{content:'– '}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin:16px 0 0}
+.grid input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,122,26,.25);
+  color:var(--c-highlight);font-family:'JetBrains Mono',monospace;font-size:14px;padding:6px 2px;outline:none}
+.grid input:focus{border-color:var(--c-primary)}
+.grid .full{grid-column:1/3}
+.cta{display:flex;align-items:center;gap:18px;margin:28px 0 0;flex-wrap:wrap}
+button.primary{background:var(--c-primary);color:#1a0c02;border:none;border-radius:11px;padding:14px 26px;
+  font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+  font-weight:500;cursor:pointer;transition:filter .2s,transform .2s}
+button.primary:hover{filter:brightness(1.08)}button.primary:active{transform:translateY(1px)}
+button.primary:disabled{opacity:.45;cursor:default}
+button.ghost{background:transparent;color:var(--c-body);border:1px solid rgba(255,122,26,.3);border-radius:11px;
+  padding:13px 22px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.16em;
+  text-transform:uppercase;cursor:pointer}
+button.ghost:hover{border-color:var(--c-primary);color:var(--c-highlight)}
+.cost{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--c-body)}
+.cost b{color:var(--c-highlight);font-weight:500}
+
+/* ---- progress ---- */
+.phase{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 12px}
+.phase .nm{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--c-primary)}
+.phase .pct{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--c-headline)}
+.bar{height:3px;background:rgba(255,122,26,.16);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--c-primary),var(--c-highlight));
+  border-radius:3px;transition:width .5s ease}
+.log{margin:20px 0 0;min-height:120px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.9}
+.log div{color:var(--c-body);transition:opacity .4s}
+.stat{display:flex;gap:26px;margin:18px 0 0;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--c-meta)}
+.stat b{color:var(--c-highlight);font-weight:500;font-size:15px;display:block}
+
+/* ---- result ---- */
+.accuracy{display:flex;gap:30px;margin:18px 0 26px}
+.accuracy .k{font-family:'JetBrains Mono',monospace}
+.accuracy .k .v{font-size:26px;color:var(--c-headline);display:block}
+.accuracy .k .l{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--c-meta)}
+.note{margin:16px 0 0;font-size:13px;color:var(--c-body);min-height:18px}
+.err{color:var(--live)}
+.preview{font-family:'Instrument Serif',Georgia,serif;font-size:22px;color:var(--c-highlight)}
+
+/* ---- auth lock ---- */
+.lock{margin:28px 0 0;padding:22px;border:1px solid rgba(255,122,26,.26);border-radius:14px;background:rgba(255,122,26,.04)}
+.lock h3{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:22px;margin:0 0 8px}
+.lock p{color:var(--c-body);font-size:14px;margin:0 0 16px}
+@media(max-width:520px){.grid,.accuracy{grid-template-columns:1fr;gap:14px}}
+</style></head>
+<body>
+<script>
+/* No-flash theme + language, before paint (same logic as the landing). */
+(function(){try{
+  var th=localStorage.getItem('theme');
+  if(th!=='tarde'&&th!=='nocturna'){var h=new Date().getHours();th=(h>=6&&h<18)?'tarde':'nocturna';}
+  document.documentElement.dataset.theme=th;
+  var L=localStorage.getItem('lang')||((navigator.language||'en').toLowerCase().indexOf('es')===0?'es':'en');
+  window.__lang=L;document.documentElement.lang=L;
+}catch(e){document.documentElement.dataset.theme='tarde';}})();
+</script>
+
+<nav class="nav">
+  <div class="brand">
+    <svg viewBox="0 0 100 100" aria-hidden="true"><defs><radialGradient id="b" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff6dc"/><stop offset="50%" stop-color="#ffd28a"/><stop offset="100%" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient></defs><g transform="translate(50 50)" fill="none" stroke="#ff7a1a" stroke-width="2.4" stroke-linecap="round"><ellipse rx="42" ry="14"/><ellipse rx="42" ry="14" transform="rotate(60)"/><ellipse rx="42" ry="14" transform="rotate(-60)"/></g><circle cx="50" cy="50" r="14" fill="url(#b)"/><circle cx="50" cy="50" r="6" fill="#fff6dc"/></svg>
+    <span class="nm">Emma</span><span class="sub" data-i18n="studio">Wake Word Studio</span>
+  </div>
+  <div class="toggles">
+    <div class="lang"><span data-lang="es">ES</span><span data-lang="en">EN</span></div>
+    <div class="theme">
+      <button data-theme-set="nocturna" aria-label="noche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.2 6.2 0 0 0 10.5 10.5Z"/></svg></button>
+      <button data-theme-set="tarde" aria-label="tarde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="4"/><path d="M12 6.5V5M6.5 9 5.4 7.9M17.5 9l1.1-1.1M3 14.5h2M19 14.5h2M2 18.5h20"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+  <h1 data-i18n="title">Crea tu wake word.</h1>
+  <p class="intro" data-i18n="intro">Escribe la frase con la que quieres llamar a tu Emma. Aprenderá a reconocerla con voces sintéticas generadas para ti — y la instalas con un clic.</p>
+
+  <!-- AUTH LOCK -->
+  <div class="lock region" id="lock" hidden>
+    <h3 data-i18n="lockH">Inicia sesión para continuar</h3>
+    <p data-i18n="lockP">El Studio está protegido. Entra con tu cuenta para crear un wake word.</p>
+    <a href="/login"><button class="primary" data-i18n="lockBtn">Entrar</button></a>
+  </div>
+
+  <!-- IDLE / FORM -->
+  <div class="region" id="idle" hidden>
+    <label data-i18n="phraseLbl">Frase de activación</label>
+    <input class="phrase" id="phrase" value="Hey Emma" autocomplete="off" spellcheck="false">
+    <p class="help" data-i18n="phraseHelp">Escribe hasta 3 frases separadas por comas.</p>
+
+    <details class="adv">
+      <summary data-i18n="advanced">Opciones avanzadas</summary>
+      <div class="grid">
+        <div><label data-i18n="voicesEs">Voces ES</label><input type="number" id="voices_es" value="1" min="0"></div>
+        <div><label data-i18n="voicesEn">Voces EN</label><input type="number" id="voices_en" value="1" min="0"></div>
+        <div><label data-i18n="nPer">Muestras por voz</label><input type="number" id="n_per_voice" value="50" min="1"></div>
+        <div><label data-i18n="epochs">Épocas</label><input type="number" id="epochs" value="40" min="1"></div>
+        <div class="full"><label data-i18n="maxCost">Límite de costo (USD)</label><input type="number" id="max_cost_usd" value="5" min="0" step="0.5"></div>
+      </div>
+    </details>
+
+    <div class="cta">
+      <button class="primary" id="go" data-i18n="generate">Generar</button>
+      <span class="cost"><span data-i18n="estCost">Costo estimado:</span> <b id="estCost">$0.00</b></span>
+    </div>
+    <p class="note err" id="formErr"></p>
+  </div>
+
+  <!-- GENERATING / TRAINING -->
+  <div class="region" id="running" hidden>
+    <div class="phase"><span class="nm" id="phaseName">—</span><span class="pct mono" id="pct">0%</span></div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="log" id="log"></div>
+    <div class="stat">
+      <div><b id="sGen">0</b><span data-i18n="sGenLbl">muestras</span></div>
+      <div><b class="mono" id="sCost">$0.00</b><span data-i18n="sCostLbl">costo en ElevenLabs</span></div>
+      <div><b id="sEta">—</b><span data-i18n="sEtaLbl">restante</span></div>
+    </div>
+    <div class="cta"><button class="ghost" id="cancel" data-i18n="cancel">Cancelar</button></div>
+  </div>
+
+  <!-- DONE -->
+  <div class="region" id="done" hidden>
+    <p class="preview" id="donePhrase">«Hey Emma»</p>
+    <div class="accuracy" id="accuracy"></div>
+    <div class="cta">
+      <button class="primary" id="install" data-i18n="install">Instalar en Emma</button>
+      <button class="ghost" id="download" data-i18n="download">Descargar modelo</button>
+      <a href="#" id="again" class="cost" data-i18n="again">Crear otro</a>
+    </div>
+    <p class="note" id="doneNote"></p>
+  </div>
+
+  <!-- FAILED -->
+  <div class="region" id="failed" hidden>
+    <p class="note err" id="failMsg"></p>
+    <div class="cta"><button class="ghost" id="retry" data-i18n="retry">Intentar de nuevo</button></div>
+  </div>
+</div>
+
+<script>
+const STR={
+ es:{studio:"Wake Word Studio",title:"Crea tu wake word.",intro:"Escribe la frase con la que quieres llamar a tu Emma. Aprenderá a reconocerla con voces sintéticas generadas para ti — y la instalas con un clic.",
+  lockH:"Inicia sesión para continuar",lockP:"El Studio está protegido. Entra con tu cuenta para crear un wake word.",lockBtn:"Entrar",
+  phraseLbl:"Frase de activación",phraseHelp:"Escribe hasta 3 frases separadas por comas.",advanced:"Opciones avanzadas",
+  voicesEs:"Voces ES",voicesEn:"Voces EN",nPer:"Muestras por voz",epochs:"Épocas",maxCost:"Límite de costo (USD)",
+  generate:"Generar",estCost:"Costo estimado:",cancel:"Cancelar",install:"Instalar en Emma",download:"Descargar modelo",
+  again:"Crear otro",retry:"Intentar de nuevo",sGenLbl:"muestras",sCostLbl:"costo en ElevenLabs",sEtaLbl:"restante",
+  ph_queued:"En cola",ph_generating_voices:"Generando voces",ph_training:"Entrenando",ph_validating:"Validando",ph_done:"Listo"},
+ en:{studio:"Wake Word Studio",title:"Create your wake word.",intro:"Type the phrase you want to call your Emma with. She'll learn to recognize it from synthetic voices generated for you — and you install it in one click.",
+  lockH:"Sign in to continue",lockP:"The Studio is protected. Sign in to create a wake word.",lockBtn:"Sign in",
+  phraseLbl:"Wake phrase",phraseHelp:"Type up to 3 phrases separated by commas.",advanced:"Advanced options",
+  voicesEs:"ES voices",voicesEn:"EN voices",nPer:"Samples per voice",epochs:"Epochs",maxCost:"Cost cap (USD)",
+  generate:"Generate",estCost:"Estimated cost:",cancel:"Cancel",install:"Install in Emma",download:"Download model",
+  again:"Create another",retry:"Try again",sGenLbl:"samples",sCostLbl:"ElevenLabs cost",sEtaLbl:"remaining",
+  ph_queued:"Queued",ph_generating_voices:"Generating voices",ph_training:"Training",ph_validating:"Validating",ph_done:"Done"}
+};
+let lang=window.__lang||'es', cfg={cost_per_1k_chars:0.30,authenticated:true,require_auth:true}, job=null, es=null;
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const t=k=>(STR[lang][k]!==undefined?STR[lang][k]:k);
+
+function applyLang(L){lang=L;localStorage.setItem('lang',L);document.documentElement.lang=L;
+  $$('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));
+  $$('.lang span').forEach(s=>s.classList.toggle('on',s.dataset.lang===L));
+  updateCost();}
+function applyTheme(T){document.documentElement.dataset.theme=T;localStorage.setItem('theme',T);
+  $$('.theme button').forEach(b=>b.classList.toggle('on',b.dataset.themeSet===T));}
+$$('.lang span').forEach(s=>s.onclick=()=>applyLang(s.dataset.lang));
+$$('.theme button').forEach(b=>b.onclick=()=>applyTheme(b.dataset.themeSet));
+
+function show(id){['lock','idle','running','done','failed'].forEach(r=>{const el=$('#'+r);
+  if(r===id){el.hidden=false;requestAnimationFrame(()=>el.style.opacity=1);}else{el.style.opacity=0;el.hidden=true;}});}
+
+function phrases(){return $('#phrase').value.split(',').map(s=>s.trim()).filter(Boolean).slice(0,3);}
+function num(id){return Math.max(0,parseInt($('#'+id).value||'0',10));}
+const N_NEG_PER_VOICE=8; // server default; not surfaced in the form
+const NEG_DEFAULTS=["Emma","Anna","hey there","hola","ya terminé","abre el navegador"];
+function updateCost(){
+  const nv=num('voices_es')+num('voices_en');
+  let chars=0; phrases().forEach(p=>chars+=p.length*num('n_per_voice')*nv);
+  NEG_DEFAULTS.forEach(p=>chars+=p.length*N_NEG_PER_VOICE*nv);
+  const usd=chars*cfg.cost_per_1k_chars/1000;
+  $('#estCost').textContent='$'+usd.toFixed(2);
+}
+['phrase','voices_es','voices_en','n_per_voice','epochs','max_cost_usd'].forEach(id=>{
+  const el=$('#'+id); if(el) el.addEventListener('input',updateCost);});
+
+function pushLog(msg){const l=$('#log');const d=document.createElement('div');d.textContent='› '+msg;l.prepend(d);
+  [...l.children].forEach((c,i)=>{c.style.opacity=Math.max(0,1-i*0.16);if(i>=6)c.remove();});}
+
+function render(v){
+  $('#phaseName').textContent=t('ph_'+v.phase)||v.phase;
+  const pct=Math.round((v.progress_pct||0)*100);
+  $('#pct').textContent=pct+'%'; $('#barFill').style.width=pct+'%';
+  const sg=v.samples_generated||{}; $('#sGen').textContent=(sg.positive||0)+(sg.negative||0);
+  $('#sCost').textContent='$'+(v.cost_so_far_usd||0).toFixed(2);
+  $('#sEta').textContent=v.eta_seconds==null?'—':Math.ceil(v.eta_seconds/60)+'m';
+  if(v.message) pushLog(v.message);
+  if(v.phase==='done'){finish(v);} else if(v.phase==='failed'){fail(v.error||'Error');}
+  else if(v.phase==='cancelled'){show('idle');}
+}
+function finish(v){
+  $('#donePhrase').textContent='«'+phrases()[0]+'»';
+  const val=v.validation, acc=$('#accuracy'); acc.innerHTML='';
+  if(val){const row=(val.thresholds||[]).find(r=>r.threshold===v.recommended_threshold)||val.thresholds[0]||{};
+    const mk=(value,label)=>`<div class="k"><span class="v">${value}</span><span class="l">${label}</span></div>`;
+    acc.innerHTML=mk((row.detected||0)+'/'+(val.positives_total||0),lang==='es'?'tu voz':'your voice')
+      +mk((row.false_wakes||0)+'/'+(val.negatives_total||0),lang==='es'?'falsos':'false wakes')
+      +mk(v.recommended_threshold,lang==='es'?'umbral':'threshold');}
+  show('done');
+}
+function fail(msg){$('#failMsg').textContent=msg;show('failed');}
+
+async function start(){
+  $('#formErr').textContent=''; $('#go').disabled=true; $('#log').innerHTML='';
+  const body={phrases:phrases(),voices_es:num('voices_es'),voices_en:num('voices_en'),
+    n_per_voice:num('n_per_voice'),epochs:num('epochs'),max_cost_usd:parseFloat($('#max_cost_usd').value||'5')};
+  try{
+    const r=await fetch('/wake/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok){$('#go').disabled=false;$('#formErr').textContent=d.detail||'No se pudo iniciar.';return;}
+    job=d.job_id; show('running'); listen(d.stream_url);
+  }catch(e){$('#go').disabled=false;$('#formErr').textContent=String(e);}
+}
+function listen(url){ if(es)es.close(); es=new EventSource(url);
+  es.onmessage=ev=>{try{const v=JSON.parse(ev.data);render(v);
+    if(['done','failed','cancelled'].includes(v.phase)){es.close();}}catch(e){}};
+  es.onerror=()=>{/* EventSource auto-reconnects; nothing to do */};
+}
+$('#go').onclick=start;
+$('#retry').onclick=()=>{$('#go').disabled=false;show('idle');};
+$('#again').onclick=e=>{e.preventDefault();$('#go').disabled=false;show('idle');};
+$('#cancel').onclick=async()=>{if(job&&confirm(lang==='es'?'¿Cancelar el trabajo?':'Cancel the job?')){
+  await fetch('/wake/jobs/'+job,{method:'DELETE'}); if(es)es.close(); show('idle'); $('#go').disabled=false;}};
+$('#download').onclick=()=>{if(job)window.location='/wake/jobs/'+job+'/model';};
+$('#install').onclick=async()=>{ const n=$('#doneNote'); n.textContent='…';
+  try{const r=await fetch('/wake/jobs/'+job+'/install',{method:'POST'});const d=await r.json();
+    n.textContent=r.ok?(lang==='es'?'Listo. Tu Emma ya responde a «'+phrases()[0]+'».':'Done. Your Emma now answers to "'+phrases()[0]+'".')
+      :(d.detail||'No se pudo instalar.');}catch(e){n.textContent=String(e);}};
+
+(async function init(){
+  applyTheme(document.documentElement.dataset.theme); applyLang(lang);
+  try{const r=await fetch('/wake/config');cfg=await r.json();}catch(e){}
+  updateCost();
+  if(cfg.require_auth&&!cfg.authenticated){show('lock');}else{show('idle');$('#phrase').focus();}
+})();
+</script>
+</body></html>

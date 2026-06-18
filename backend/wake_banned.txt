@@ -1,0 +1,9 @@
+# Wake Word Studio — banned phrase tokens (Prompt 16.3, A1).
+# One token per line; a phrase containing any (case-insensitive, word-ish) is
+# rejected. Intentionally shallow — this is a guardrail, not content moderation.
+fuck
+shit
+puta
+pendejo
+mierda
+cabron
