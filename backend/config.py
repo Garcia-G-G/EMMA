@@ -8,6 +8,7 @@ lives here server-side and is NEVER sent to the browser (the WS proxy is the sea
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 # Per-plan session caps. Free is the default; paid tiers lift the limits.
 PLAN_CAPS: dict[str, dict[str, object]] = {
@@ -50,6 +51,27 @@ class Settings:
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "")
     STRIPE_PRICE_TEAM = os.environ.get("STRIPE_PRICE_TEAM", "")
+
+    # ---- Wake Word Studio (Prompt 16.3) ----
+    # Auth-gate the Studio by default; flip to false only for local dev.
+    WAKE_STUDIO_REQUIRE_AUTH = os.environ.get("WAKE_STUDIO_REQUIRE_AUTH", "true").lower() != "false"
+    # ElevenLabs character price. Default $0.30 / 1000 chars (Starter plan ballpark);
+    # the runner multiplies live spend by this to surface cost_so_far_usd.
+    WAKE_COST_PER_1K_CHARS = float(os.environ.get("WAKE_COST_PER_1K_CHARS", "0.30"))
+    # Hard sanity cap on a single job's estimated spend (raise via env for power users).
+    WAKE_MAX_COST_USD = float(os.environ.get("WAKE_MAX_COST_USD", "20"))
+    # Comma-separated ElevenLabs voice-ID pools the Studio draws from for diversity.
+    # Default: the daemon's two configured voices (ES + EN) so this works out of the
+    # box; add more library voice IDs here to widen the acoustic spread.
+    WAKE_VOICE_POOL_ES = os.environ.get("WAKE_VOICE_POOL_ES", "")
+    WAKE_VOICE_POOL_EN = os.environ.get("WAKE_VOICE_POOL_EN", "")
+    # Where trained models + scratch data live (under the daemon's ~/.emma by default).
+    WAKE_MODELS_DIR = os.environ.get("WAKE_MODELS_DIR", str(Path.home() / ".emma" / "wake_models"))
+    WAKE_DATA_DIR = os.environ.get("WAKE_DATA_DIR", str(Path.home() / ".emma" / "wake_jobs"))
+    # The daemon's .env that "install" rewrites (WAKE_WORD_* keys only). Overridable
+    # so tests never touch the real one.
+    WAKE_DAEMON_ENV_FILE = os.environ.get(
+        "WAKE_DAEMON_ENV_FILE", str(Path(__file__).resolve().parent.parent / ".env"))
 
     # ---- misc ----
     DATABASE_URL = os.environ.get("DATABASE_URL", "backend_emma.db")

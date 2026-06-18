@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from backend import auth, db, realtime_proxy, stripe_routes
+from backend import auth, db, realtime_proxy, stripe_routes, wake_routes
 from backend import session as session_mod
 from backend.auth import current_user, require_user
 from backend.config import PLAN_CAPS, settings
@@ -26,6 +26,7 @@ app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
 app.include_router(auth.router)
 app.include_router(stripe_routes.router)
+app.include_router(wake_routes.router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")

@@ -31,7 +31,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 import wave
+from collections.abc import Callable
 from pathlib import Path
 
 # Anchor imports to the project root so `python scripts/wake_word_data_eleven.py`
@@ -99,31 +101,56 @@ def _pcm_to_wav(pcm: bytes) -> bytes:
     return buf.getvalue()
 
 
-def _fetch(text: str, voice_id: str, voice_settings: dict) -> bytes:
-    """One ElevenLabs synthesis → raw pcm_16000 bytes. The only network seam."""
-    try:
-        resp = httpx.post(
-            f"{_API_BASE}/{voice_id}",
-            params={"output_format": f"pcm_{_SAMPLE_RATE}"},
-            headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
-            json={
-                "text": text,
-                "model_id": settings.ELEVENLABS_MODEL_ID,
-                "voice_settings": voice_settings,
-            },
-            timeout=30.0,
-        )
-    except httpx.HTTPError as exc:
-        raise VoiceGenError(f"No pude conectar con ElevenLabs: {exc}") from exc
-    if resp.status_code == 401:
-        raise VoiceGenError("ElevenLabs rechazó la API key (401). Revisa ELEVENLABS_API_KEY.")
-    if resp.status_code != 200:
+_MAX_RETRIES = 4  # 429 backoff attempts before giving up
+
+
+class OutOfCreditsError(VoiceGenError):
+    """ElevenLabs 402 — distinct so the caller can show a 'recarga' message."""
+
+
+def _fetch(text: str, voice_id: str, voice_settings: dict,
+           on_retry: Callable[[float], None] | None = None) -> bytes:
+    """One ElevenLabs synthesis → raw pcm_16000 bytes. The only network seam.
+
+    Retries 429 (rate limit) with exponential backoff rather than failing — the
+    run keeps going, just slower. 402 (out of credits) raises OutOfCreditsError.
+    """
+    for attempt in range(_MAX_RETRIES):
+        try:
+            resp = httpx.post(
+                f"{_API_BASE}/{voice_id}",
+                params={"output_format": f"pcm_{_SAMPLE_RATE}"},
+                headers={"xi-api-key": settings.ELEVENLABS_API_KEY},
+                json={
+                    "text": text,
+                    "model_id": settings.ELEVENLABS_MODEL_ID,
+                    "voice_settings": voice_settings,
+                },
+                timeout=30.0,
+            )
+        except httpx.HTTPError as exc:
+            raise VoiceGenError(f"No pude conectar con ElevenLabs: {exc}") from exc
+        if resp.status_code == 200:
+            return resp.content
+        if resp.status_code == 401:
+            raise VoiceGenError("ElevenLabs rechazó la API key (401). Revisa ELEVENLABS_API_KEY.")
+        if resp.status_code == 402:
+            raise OutOfCreditsError("Sin créditos en ElevenLabs. Recarga o usa menos muestras.")
+        if resp.status_code == 429:
+            if attempt < _MAX_RETRIES - 1:
+                wait = float(2**attempt)  # 1, 2, 4 s
+                if on_retry:
+                    on_retry(wait)
+                time.sleep(wait)
+                continue
+            raise VoiceGenError("ElevenLabs siguió limitando la tasa (429). Intenta más tarde.")
         raise VoiceGenError(f"ElevenLabs devolvió {resp.status_code}: {resp.text[:200]}")
-    return resp.content
+    raise VoiceGenError("ElevenLabs siguió limitando la tasa (429). Intenta más tarde.")
 
 
-def _synthesize_to(text: str, voice_id: str, voice_settings: dict, out_wav: Path) -> None:
-    out_wav.write_bytes(_pcm_to_wav(_fetch(text, voice_id, voice_settings)))
+def _synthesize_to(text: str, voice_id: str, voice_settings: dict, out_wav: Path,
+                   on_retry: Callable[[float], None] | None = None) -> None:
+    out_wav.write_bytes(_pcm_to_wav(_fetch(text, voice_id, voice_settings, on_retry)))
 
 
 def _plan(phrases: list[str], voices: list[str], n_per_voice: int):
@@ -148,23 +175,40 @@ def estimate(phrases: list[str], neg_phrases: list[str], voices: list[str],
 
 
 def generate(out: Path, phrases: list[str], neg_phrases: list[str], voices: list[str],
-             n_pos: int, n_neg: int) -> tuple[int, int]:
-    """Synthesize every clip into <out>/{positive,negative}. Returns (pos, neg)."""
+             n_pos: int, n_neg: int,
+             progress_cb: Callable[[str, int, int, int], None] | None = None,
+             on_retry: Callable[[float], None] | None = None) -> tuple[int, int]:
+    """Synthesize every clip into <out>/{positive,negative}. Returns (pos, neg).
+
+    progress_cb(kind, done, total, chars) fires after each clip — kind is
+    "positive" or "negative", chars is the cumulative character spend so the
+    caller can convert it to a live dollar figure.
+    """
     pos_dir = out / "positive"
     neg_dir = out / "negative"
     pos_dir.mkdir(parents=True, exist_ok=True)
     neg_dir.mkdir(parents=True, exist_ok=True)
 
+    total_pos = len(voices) * len(phrases) * n_pos
+    total_neg = len(voices) * len(neg_phrases) * n_neg
+    chars = 0
+
     n_positive = 0
     for phrase, vid, vset, i in _plan(phrases, voices, n_pos):
         slug = phrase.replace(" ", "_")
-        _synthesize_to(phrase, vid, vset, pos_dir / f"{vid}_{slug}_{i:04d}.wav")
+        _synthesize_to(phrase, vid, vset, pos_dir / f"{vid}_{slug}_{i:04d}.wav", on_retry)
         n_positive += 1
+        chars += len(phrase)
+        if progress_cb:
+            progress_cb("positive", n_positive, total_pos, chars)
 
     n_negative = 0
     for phrase, vid, vset, _i in _plan(neg_phrases, voices, n_neg):
-        _synthesize_to(phrase, vid, vset, neg_dir / f"neg_{vid}_{n_negative:05d}.wav")
+        _synthesize_to(phrase, vid, vset, neg_dir / f"neg_{vid}_{n_negative:05d}.wav", on_retry)
         n_negative += 1
+        chars += len(phrase)
+        if progress_cb:
+            progress_cb("negative", n_negative, total_neg, chars)
     return n_positive, n_negative
 
 

@@ -31,7 +31,7 @@ mod = _load()
 _FAKE_PCM = b"\x00\x00" * 4000
 
 
-def _fake_fetch(text, voice_id, voice_settings):
+def _fake_fetch(text, voice_id, voice_settings, on_retry=None):
     return _FAKE_PCM
 
 
@@ -109,9 +109,51 @@ def test_fetch_raises_friendly_error_on_401(monkeypatch):
 
 
 def test_fetch_raises_on_non_200(monkeypatch):
-    monkeypatch.setattr(mod.httpx, "post", lambda *a, **k: _Resp(429, "rate limited"))
-    with pytest.raises(mod.VoiceGenError, match="429"):
+    monkeypatch.setattr(mod.httpx, "post", lambda *a, **k: _Resp(500, "server error"))
+    with pytest.raises(mod.VoiceGenError, match="500"):
         mod._fetch("hey emma", "voiceA", {})
+
+
+def test_fetch_402_raises_out_of_credits(monkeypatch):
+    monkeypatch.setattr(mod.httpx, "post", lambda *a, **k: _Resp(402, "payment required"))
+    with pytest.raises(mod.OutOfCreditsError, match="créditos"):
+        mod._fetch("hey emma", "voiceA", {})
+
+
+def test_fetch_retries_429_then_succeeds(monkeypatch):
+    monkeypatch.setattr(mod.time, "sleep", lambda *_: None)  # no real backoff in tests
+    calls = {"n": 0}
+    waits: list[float] = []
+
+    def _post(*a, **k):
+        calls["n"] += 1
+        return _Resp(200) if calls["n"] >= 3 else _Resp(429, "slow down")
+
+    monkeypatch.setattr(mod.httpx, "post", _post)
+    out = mod._fetch("hey emma", "voiceA", {}, on_retry=waits.append)
+    assert out == _FAKE_PCM
+    assert calls["n"] == 3          # two 429s, then success
+    assert waits == [1.0, 2.0]      # exponential backoff surfaced to caller
+
+
+def test_fetch_429_exhausts_then_raises(monkeypatch):
+    monkeypatch.setattr(mod.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(mod.httpx, "post", lambda *a, **k: _Resp(429, "slow down"))
+    with pytest.raises(mod.VoiceGenError, match="limitando"):
+        mod._fetch("hey emma", "voiceA", {})
+
+
+def test_generate_progress_callback_reports_counts_and_chars(tmp_path, monkeypatch):
+    monkeypatch.setattr(mod, "_fetch", _fake_fetch)
+    events: list[tuple] = []
+    mod.generate(
+        tmp_path, ["hey emma"], ["hola"], ["voiceA"], n_pos=2, n_neg=1,
+        progress_cb=lambda kind, done, total, chars: events.append((kind, done, total, chars)),
+    )
+    # 2 positives then 1 negative; chars accumulate across the whole run.
+    assert [e[0] for e in events] == ["positive", "positive", "negative"]
+    assert events[0][1:3] == (1, 2)        # done=1, total=2 positives
+    assert events[-1][3] == 8 + 8 + 4      # "hey emma"*2 + "hola"
 
 
 def test_fetch_wraps_network_error(monkeypatch):
