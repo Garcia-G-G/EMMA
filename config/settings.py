@@ -62,12 +62,14 @@ class Settings(BaseSettings):
     CLONE_DIR: Path = Path.home() / "Documents" / "repos"
     ELEVENLABS_VOICE_ID_ES: str
     ELEVENLABS_VOICE_ID_EN: str
-    # Path to the user-trained openWakeWord ONNX model (see README "Wake word").
-    WAKE_WORD_PATH: str
+    # Path to the locally-trained openWakeWord ONNX model. Produced by
+    # scripts/train_wake_word.py (Prompt 16.2) → models/hey_emma.onnx.
+    # Relative paths are anchored to the project root by core/wake_word.py.
+    WAKE_WORD_PATH: str = "models/hey_emma.onnx"
     # Internal label the openWakeWord model emits in its prediction dict; must
     # match the keyword label used during training (lowercase, underscores).
-    # The default `hey_emma` matches a model trained with the phrase
-    # "hey emma" in the Colab notebook.
+    # The default `hey_emma` matches the model trained by scripts/train_wake_word.py
+    # on the "hey emma"/"oye emma" phrases.
     WAKE_WORD_NAME: str = "hey_emma"
     # Detection threshold (0.0-1.0). Raise for fewer false positives (stricter),
     # lower for higher recall. 0.5 is balanced for personal use in a quiet room.
