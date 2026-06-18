@@ -39,6 +39,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional speaker-ID (Prompt 35.1). Resemblyzer is BSD, ~30 MB models. Install with
+# `pip install -e .[speaker]`. Absent → speaker ID degrades to "always Garcia"; the
+# daemon never refuses to start without it.
+speaker = [
+    "resemblyzer>=0.1.4",
+]
+
 # Windows-only (Prompt 30). Installed ONLY on Windows (`pip install -e .[windows]`);
 # never pulled on macOS, so they can't break the Mac build. Real Tier-3 impls (30.x)
 # use these; the cross-platform stubs need none of them.

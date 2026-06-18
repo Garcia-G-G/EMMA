@@ -263,6 +263,10 @@ class Settings(BaseSettings):
     # network backend; if it's set the long-term store will use it
     # instead of SQLite (handled in memory/long_term.py).
     MEMORY_DB_PATH: Path = Path.home() / ".emma" / "memory.db"
+    # 35.1: gate destructive tools on "speaker == Garcia". Effective only when
+    # resemblyzer is installed AND a profile is enrolled — so a fresh install never
+    # locks itself out, and a daemon without resemblyzer treats every turn as Garcia.
+    SPEAKER_GATE_DESTRUCTIVE: bool = True
 
     # Reflection: how many facts to extract per turn (cap, model may
     # return fewer). The reflection step runs gpt-4o-mini on the last
