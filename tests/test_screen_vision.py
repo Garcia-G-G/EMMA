@@ -418,3 +418,132 @@ async def test_where_am_i_degrades_when_no_focus(monkeypatch) -> None:
     res = await svt.where_am_i()
     assert res.success  # degrades to the window read rather than failing
     assert res.data["pane"] is None
+
+
+# ---- 27.2: enhanced-UI flag + deep web-content reads ------------------------
+
+
+def _enh_app(accepts):
+    """A fake app element whose set-attribute succeeds only for `accepts` attrs."""
+    sent = []
+
+    def _set(elem, attr, val):
+        sent.append(attr)
+        return 0 if attr in accepts else -1
+
+    return _set, sent
+
+
+def test_ensure_enhanced_ui_enables_webkit_flag(monkeypatch) -> None:
+    sv._enhanced_seen.clear()
+    setter, sent = _enh_app({sv.kAXEnhancedUserInterfaceAttribute})
+    monkeypatch.setattr(sv, "_AX_OK", True)
+    monkeypatch.setattr(sv, "AXUIElementSetAttributeValue", setter, raising=False)
+    assert sv._ensure_enhanced_ui(object(), pid=101) is True
+    assert sent == [sv.kAXEnhancedUserInterfaceAttribute]  # stopped at the first that stuck
+
+
+def test_ensure_enhanced_ui_falls_back_to_chromium_flag(monkeypatch) -> None:
+    sv._enhanced_seen.clear()
+    setter, sent = _enh_app({sv.kAXManualAccessibilityAttribute})
+    monkeypatch.setattr(sv, "_AX_OK", True)
+    monkeypatch.setattr(sv, "AXUIElementSetAttributeValue", setter, raising=False)
+    assert sv._ensure_enhanced_ui(object(), pid=102) is True
+    assert sent == [sv.kAXEnhancedUserInterfaceAttribute, sv.kAXManualAccessibilityAttribute]
+
+
+def test_ensure_enhanced_ui_returns_false_when_both_refused(monkeypatch) -> None:
+    sv._enhanced_seen.clear()
+    setter, _ = _enh_app(set())  # accepts nothing
+    monkeypatch.setattr(sv, "_AX_OK", True)
+    monkeypatch.setattr(sv, "AXUIElementSetAttributeValue", setter, raising=False)
+    assert sv._ensure_enhanced_ui(object(), pid=103) is False
+
+
+def test_ensure_enhanced_ui_never_raises(monkeypatch) -> None:
+    sv._enhanced_seen.clear()
+
+    def _boom(elem, attr, val):
+        raise RuntimeError("AX exploded")
+
+    monkeypatch.setattr(sv, "_AX_OK", True)
+    monkeypatch.setattr(sv, "AXUIElementSetAttributeValue", _boom, raising=False)
+    assert sv._ensure_enhanced_ui(object(), pid=104) is False  # swallowed, not raised
+
+
+def test_ensure_enhanced_ui_skips_when_pid_already_seen(monkeypatch) -> None:
+    sv._enhanced_seen.clear()
+    calls = []
+    monkeypatch.setattr(sv, "_AX_OK", True)
+    monkeypatch.setattr(sv, "AXUIElementSetAttributeValue",
+                        lambda e, a, v: calls.append(a) or 0, raising=False)
+    sv._ensure_enhanced_ui(object(), pid=200)
+    n_first = len(calls)
+    sv._ensure_enhanced_ui(object(), pid=200)  # same PID → must NOT call the setter again
+    assert len(calls) == n_first
+
+
+def _webarea_tree(depth_below_web: int = 5) -> FakeAX:
+    """Window → chrome group → AXWebArea → deep chain ending in page text."""
+    leaf = FakeAX(role="AXStaticText", value="CEPHALOPOD_CONTENT")
+    node = leaf
+    for i in range(depth_below_web):
+        node = FakeAX(role="AXGroup", title=f"w{i}", children=[node])
+    web = FakeAX(role="AXWebArea", children=[node])
+    chrome = FakeAX(role="AXGroup", title="toolbar", children=[web])
+    return FakeAX(role="AXWindow", title="Octopus - Wikipedia", children=[chrome])
+
+
+def test_webarea_refreshes_depth_so_page_text_is_reached() -> None:
+    win = _webarea_tree(depth_below_web=5)
+    parts = sv._collect(win)
+    assert parts["web_content"] is True
+    # The deep page text lands despite chrome consuming the base depth budget.
+    assert any("CEPHALOPOD_CONTENT" in t for t in parts["texts"])
+
+
+def test_read_window_tree_reaches_into_webarea() -> None:
+    win = _webarea_tree(depth_below_web=5)
+    tree = sv.read_window_tree(win)
+    assert "CEPHALOPOD_CONTENT" in str(tree)  # reached the page text within the node cap
+
+
+def test_collect_web_content_false_without_webarea() -> None:
+    win = FakeAX(role="AXWindow", children=[FakeAX(role="AXStaticText", value="plain")])
+    assert sv._collect(win)["web_content"] is False
+
+
+def test_secure_field_inside_webarea_is_redacted() -> None:
+    web = FakeAX(role="AXWebArea", children=[
+        FakeAX(role="AXStaticText", value="public text"),
+        FakeAX(role="AXSecureTextField", title="pw", value="hunter2"),
+    ])
+    win = FakeAX(role="AXWindow", children=[web])
+    parts = sv._collect(win)
+    blob = str(parts)
+    assert "public text" in blob
+    assert "hunter2" not in blob  # secure value never leaks, even inside a web area
+    txt, web_seen = sv._read_text_and_web(win)
+    assert web_seen is True and "hunter2" not in txt
+
+
+def test_global_node_cap_still_bounds_huge_webarea() -> None:
+    # A web area with thousands of children must NOT blow past the node cap.
+    huge = FakeAX(role="AXWebArea",
+                  children=[FakeAX(role="AXStaticText", value=f"n{i}") for i in range(5000)])
+    win = FakeAX(role="AXWindow", children=[huge])
+    parts = sv._collect(win)  # must return, capped — no meltdown
+    assert len(parts["texts"]) <= sv._MAX_NODES
+
+
+def test_focused_pane_flags_web_content(monkeypatch) -> None:
+    web = FakeAX(role="AXWebArea", children=[FakeAX(role="AXStaticText", value="article body")])
+    pane = FakeAX(role="AXGroup", title="content", pos=(0, 0), size=(1000, 800), children=[web])
+    focused = FakeAX(role="AXStaticText", value="article body")
+    focused.attrs[sv.kAXParentAttribute] = pane
+    pane.attrs[sv.kAXParentAttribute] = FakeAX(role="AXWindow", pos=(0, 0), size=(1000, 800))
+    app_elem = FakeAX(role="AXApplication")
+    app_elem.attrs[sv.kAXFocusedUIElementAttribute] = focused
+    _seed_focus(monkeypatch, app_elem)
+    p = sv.focused_pane()
+    assert p is not None and p.web_content is True

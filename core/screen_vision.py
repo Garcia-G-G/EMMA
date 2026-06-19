@@ -47,6 +47,12 @@ kAXSizeAttribute = "AXSize"  # noqa: N816
 kAXSubroleAttribute = "AXSubrole"  # noqa: N816
 kAXTitleAttribute = "AXTitle"  # noqa: N816
 kAXValueAttribute = "AXValue"  # noqa: N816
+# Opt-in signals that make an app expose its embedded web-content AX subtree:
+# Safari/WebKit honour AXEnhancedUserInterface; Chromium (Chrome/Brave/Edge/Arc)
+# + Electron only populate their tree once an AT requests it via
+# AXManualAccessibility. Set on the APPLICATION element, once per process.
+kAXEnhancedUserInterfaceAttribute = "AXEnhancedUserInterface"  # noqa: N816
+kAXManualAccessibilityAttribute = "AXManualAccessibility"  # noqa: N816
 
 try:
     from ApplicationServices import (
@@ -68,10 +74,16 @@ ROLE_TEXTFIELD = "AXTextField"
 ROLE_TEXTAREA = "AXTextArea"
 ROLE_SECURE = "AXSecureTextField"
 ROLE_STATIC = "AXStaticText"
+ROLE_WEBAREA = "AXWebArea"  # the embedded web-content root inside browsers/Electron
 
 _MAX_DEPTH = 4
 _MAX_NODES = 400
 _TEXT_CAP = 4000  # never hand the LLM an unbounded wall of text
+# When a walk reaches an AXWebArea, refresh its subtree's depth allowance by this
+# much so page content isn't dead-ended by chrome already spending the base depth.
+# The global node cap (_MAX_NODES) still bounds total work — this only re-opens
+# DEPTH, never the node budget (some pages are thousands of nodes).
+_WEBAREA_EXTRA_DEPTH = 6
 
 
 @dataclass(frozen=True)
@@ -174,13 +186,52 @@ def _frontmost_app() -> Any | None:
         return None
 
 
+# PIDs whose enhanced-UI flag we've already handled this session → verdict.
+# Module scope: resets when the daemon restarts (no persistence). Generic — keyed
+# by PID, never by app name.
+_enhanced_seen: dict[int, bool] = {}
+
+
+def _ensure_enhanced_ui(app_elem: Any, pid: int) -> bool:
+    """Flip the attribute that makes an app expose its web-content AX subtree.
+
+    Generic, app-agnostic: try AXEnhancedUserInterface (WebKit), then
+    AXManualAccessibility (Chromium/Electron). Set ONCE per process — the flag
+    persists for the app's lifetime. NEVER raises: apps that don't support these
+    attributes simply expose whatever they expose natively. Returns whether a
+    flag stuck (cached per PID so we don't re-set on every read).
+    """
+    if not _AX_OK or app_elem is None:
+        return False
+    if pid in _enhanced_seen:
+        return _enhanced_seen[pid]  # already handled — don't re-set
+    ok = False
+    for attr in (kAXEnhancedUserInterfaceAttribute, kAXManualAccessibilityAttribute):
+        try:
+            if AXUIElementSetAttributeValue(app_elem, attr, True) == 0:
+                ok = True
+                log.debug("enhanced_ui_enabled", pid=pid, attr=attr)
+                break
+        except Exception:
+            continue  # unsupported attribute — try the next, never raise
+    if not ok:
+        log.debug("enhanced_ui_refused", pid=pid)
+    _enhanced_seen[pid] = ok
+    return ok
+
+
 def _app_element(app: Any) -> Any | None:
     if app is None or not _AX_OK:
         return None
     try:
-        return AXUIElementCreateApplication(app.processIdentifier())
+        pid = app.processIdentifier()
+        elem = AXUIElementCreateApplication(pid)
     except Exception:
         return None
+    # Once per process, ask the app to expose its embedded web/Electron tree so
+    # every read path below (chrome AND page content) sees through the wall.
+    _ensure_enhanced_ui(elem, pid)
+    return elem
 
 
 def _focused_window(app_elem: Any) -> Any | None:
@@ -216,7 +267,7 @@ def read_window_tree(
     """DFS the AX tree from ``elem`` into a capped role/title/value dict."""
     budget = [max_nodes]
 
-    def walk(node: Any, depth: int) -> dict[str, Any]:
+    def walk(node: Any, depth: int, depth_cap: int) -> dict[str, Any]:
         out: dict[str, Any] = {"role": _role(node), "title": _title(node)}
         text = _value_str(node)
         if text:
@@ -224,19 +275,23 @@ def read_window_tree(
         desc = _description(node)
         if desc:
             out["description"] = desc[:200]
-        if depth < max_depth:
+        # A web area refreshes its subtree's depth so page content is reachable
+        # even when window chrome already spent the base depth budget.
+        if out["role"] == ROLE_WEBAREA:
+            depth_cap = max(depth_cap, depth + 1 + _WEBAREA_EXTRA_DEPTH)
+        if depth < depth_cap:
             kids: list[dict[str, Any]] = []
             for child in _children(node):
                 if budget[0] <= 0:
                     out["truncated"] = True
                     break
                 budget[0] -= 1
-                kids.append(walk(child, depth + 1))
+                kids.append(walk(child, depth + 1, depth_cap))
             if kids:
                 out["children"] = kids
         return out
 
-    return walk(elem, 0)
+    return walk(elem, 0, max_depth)
 
 
 def find_element(
@@ -259,31 +314,37 @@ def find_element(
             return False
         return desc_pat is None or bool(desc_pat.search(_description(node)))
 
-    def walk(node: Any, depth: int, path: str) -> ElementRef | None:
+    def walk(node: Any, depth: int, path: str, depth_cap: int) -> ElementRef | None:
         if budget[0] <= 0:
             return None
         budget[0] -= 1
         if matches(node):
             return ElementRef(elem=node, role=_role(node), title=_title(node), path=path)
-        if depth < max_depth:
+        if _role(node) == ROLE_WEBAREA:
+            depth_cap = max(depth_cap, depth + 1 + _WEBAREA_EXTRA_DEPTH)
+        if depth < depth_cap:
             for i, child in enumerate(_children(node)):
-                hit = walk(child, depth + 1, f"{path}/{_role(child) or '?'}[{i}]")
+                hit = walk(child, depth + 1, f"{path}/{_role(child) or '?'}[{i}]", depth_cap)
                 if hit is not None:
                     return hit
         return None
 
-    return walk(elem, 0, _role(elem) or "root")
+    return walk(elem, 0, _role(elem) or "root", max_depth)
 
 
-def read_text_of(elem: Any, _cap: int = _TEXT_CAP) -> str:
-    """Concatenate value + description + descendants' text, capped."""
+def _read_text_and_web(elem: Any, cap: int = _TEXT_CAP) -> tuple[str, bool]:
+    """Concatenate value + description + descendants' text (capped), and report
+    whether any AXWebArea was crossed — i.e. this is web/editor page content."""
     parts: list[str] = []
     budget = [_MAX_NODES]
+    saw_web = [False]
 
     def walk(node: Any) -> None:
         if budget[0] <= 0:
             return
         budget[0] -= 1
+        if _role(node) == ROLE_WEBAREA:
+            saw_web[0] = True
         v = _value_str(node)
         if v and v != "<hidden>":
             parts.append(v)
@@ -291,29 +352,43 @@ def read_text_of(elem: Any, _cap: int = _TEXT_CAP) -> str:
         if d:
             parts.append(d)
         for child in _children(node):
-            if sum(len(p) for p in parts) >= _cap:
+            if sum(len(p) for p in parts) >= cap:
                 return
             walk(child)
 
     walk(elem)
-    return " ".join(parts)[:_cap].strip()
+    return " ".join(parts)[:cap].strip(), saw_web[0]
+
+
+def read_text_of(elem: Any, _cap: int = _TEXT_CAP) -> str:
+    """Concatenate value + description + descendants' text, capped."""
+    return _read_text_and_web(elem, _cap)[0]
 
 
 # ---- high-level structured read ---------------------------------------------
 
 
-def _collect(win: Any) -> dict[str, list[str]]:
-    """Walk the window collecting buttons / fields / static text by role."""
+def _collect(win: Any) -> dict[str, Any]:
+    """Walk the window collecting buttons / fields / static text by role.
+
+    Returns the role buckets plus ``web_content`` — True when an AXWebArea was
+    crossed, so callers can tell page content from app chrome. Reaching a web
+    area refreshes the depth budget so its page text isn't dead-ended by chrome.
+    """
     buttons: list[str] = []
     fields: list[str] = []
     texts: list[str] = []
+    web = [False]
     budget = [_MAX_NODES]
 
-    def walk(node: Any, depth: int) -> None:
+    def walk(node: Any, depth: int, depth_cap: int) -> None:
         if budget[0] <= 0:
             return
         budget[0] -= 1
         role = _role(node)
+        if role == ROLE_WEBAREA:
+            web[0] = True
+            depth_cap = max(depth_cap, depth + 1 + _WEBAREA_EXTRA_DEPTH)
         if role == ROLE_BUTTON:
             label = _title(node) or _description(node)
             if label:
@@ -325,14 +400,14 @@ def _collect(win: Any) -> dict[str, list[str]]:
             t = _value_str(node) or _title(node)
             if t:
                 texts.append(t)
-        if depth < _MAX_DEPTH:
+        if depth < depth_cap:
             for child in _children(node):
                 if budget[0] <= 0:
                     break
-                walk(child, depth + 1)
+                walk(child, depth + 1, depth_cap)
 
-    walk(win, 0)
-    return {"buttons": buttons, "fields": fields, "texts": texts}
+    walk(win, 0, _MAX_DEPTH)
+    return {"buttons": buttons, "fields": fields, "texts": texts, "web_content": web[0]}
 
 
 def _format_screen(app_name: str, win: Any) -> str:
@@ -357,6 +432,7 @@ class ScreenRead:
     fields: list[str]
     texts: list[str]
     structured: str  # the flattened App/Window/Buttons/Fields/Text block
+    web_content: bool = False  # True when the read crossed an embedded web area
 
 
 def _current_screen_sync() -> ScreenRead | None:
@@ -372,6 +448,7 @@ def _current_screen_sync() -> ScreenRead | None:
         fields=parts["fields"],
         texts=parts["texts"],
         structured=_format_screen(app, win),
+        web_content=bool(parts["web_content"]),
     )
 
 
@@ -424,7 +501,7 @@ def _frontmost_window_element() -> tuple[str, Any] | None:
 
 def button_labels(win: Any) -> list[str]:
     """Every button label in the window (for fuzzy matching in the tools)."""
-    return _collect(win)["buttons"]
+    return list(_collect(win)["buttons"])
 
 
 # ---- pane / focus introspection (27.1) --------------------------------------
@@ -533,6 +610,7 @@ class PaneInfo:
     focused_role_description: str
     snippet: str  # pane text, secure-skipped, capped
     ancestors: list[str]  # "role: label" nearest→outermost, raw context for the LLM
+    web_content: bool = False  # True when the pane's text came from an embedded web area
 
 
 def _resolve_focused_pane() -> tuple[str, Any, Any, Any, list[Any]] | None:
@@ -559,6 +637,7 @@ def focused_pane() -> PaneInfo | None:
     app_name, window, focused, pane, ancestors = res
     win_b = _bounds(window)
     pane_b = _bounds(pane)
+    snippet, web = _read_text_and_web(pane, 600)
     return PaneInfo(
         app=app_name,
         role=_role(pane),
@@ -570,8 +649,9 @@ def focused_pane() -> PaneInfo | None:
         bounds=pane_b,
         focused_role=_role(focused),
         focused_role_description=_role_description(focused),
-        snippet=read_text_of(pane, _cap=600),
+        snippet=snippet,
         ancestors=[f"{_role(a)}: {_any_label(a)}".strip(" :") for a in ancestors],
+        web_content=web,
     )
 
 
