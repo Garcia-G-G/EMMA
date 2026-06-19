@@ -60,7 +60,7 @@ async def describe_screen() -> ToolResult:
     r = await sv.current_screen()
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    return ToolResult(True, {"screen": r.structured}, _short_summary(r), False)
+    return ToolResult(True, {"screen": r.structured, "web_content": r.web_content}, _short_summary(r), False)
 
 
 @tool()
@@ -70,7 +70,7 @@ async def read_window_text() -> ToolResult:
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
     text = " ".join(r.texts).strip() or "(no hay texto visible para leer)"
-    return ToolResult(True, {"screen": r.structured}, text[:600], False)
+    return ToolResult(True, {"screen": r.structured, "web_content": r.web_content}, text[:600], False)
 
 
 @tool()
@@ -111,26 +111,31 @@ async def summarize_screen(question: str = "") -> ToolResult:
     r = await sv.current_screen()
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    answer = await _summarize(r.structured, (question or "").strip())
-    return ToolResult(True, {"screen": r.structured}, answer, False)
+    answer = await _summarize(r.structured, (question or "").strip(), web_content=r.web_content)
+    return ToolResult(True, {"screen": r.structured, "web_content": r.web_content}, answer, False)
 
 
-async def _summarize(structured: str, question: str) -> str:
+async def _summarize(structured: str, question: str, web_content: bool = False) -> str:
     q = question or "Resume lo que hay en la pantalla."
+    # When the read crossed an embedded web area, the text IS page/article/editor
+    # content — tell the model to summarize that, not the surrounding chrome.
+    role = (
+        "Eres Emma. El texto de abajo es el CONTENIDO de la página o el archivo que "
+        "Garcia está viendo (no las pestañas ni los menús alrededor). En español y en "
+        "1-3 frases, resume ese contenido enfocándote en lo que responde su pregunta. "
+        "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
+        if web_content else
+        "Eres Emma. En español y en 1-2 frases, resume lo que hay en la "
+        "pantalla de Garcia, enfocándote en lo que responde su pregunta. "
+        "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
+    )
     try:
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         completion = await asyncio.wait_for(
             client.chat.completions.create(
                 model=settings.MEMORY_REFLECTION_MODEL,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Eres Emma. En español y en 1-2 frases, resume lo que hay en la "
-                            "pantalla de Garcia, enfocándote en lo que responde su pregunta. "
-                            "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
-                        ),
-                    },
+                    {"role": "system", "content": role},
                     {"role": "user", "content": f"Pregunta: {q}\n\nPantalla:\n{structured}"},
                 ],
                 temperature=0.3,
@@ -233,6 +238,7 @@ def _pane_data(p: sv.PaneInfo) -> dict[str, Any]:
         "title": p.title, "position": p.position, "focused_role": p.focused_role,
         "focused_role_description": p.focused_role_description,
         "ancestors": p.ancestors, "snippet": p.snippet[:600],
+        "web_content": p.web_content,
     }
 
 
@@ -322,5 +328,5 @@ async def summarize_pane(question: str = "") -> ToolResult:
     pane = await asyncio.to_thread(sv.focused_pane)
     if pane is None or not pane.snippet:
         return ToolResult(False, None, "No logro identificar el panel para resumirlo.", False)
-    answer = await _summarize(_pane_block(pane), (question or "").strip())
+    answer = await _summarize(_pane_block(pane), (question or "").strip(), web_content=pane.web_content)
     return ToolResult(True, {"pane": _pane_data(pane)}, answer, False)
