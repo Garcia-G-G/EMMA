@@ -73,14 +73,15 @@ def test_capture_deletes_temp_file(monkeypatch, tmp_path) -> None:
     # Simulate screencapture writing a file, then assert _capture removes it.
     made = tmp_path / "shot.png"
 
-    def fake_mktemp(suffix=""):
+    def fake_mkstemp(suffix=""):
         made.write_bytes(b"PNGBYTES")
-        return str(made)
+        return 0, str(made)
 
     class _R:
         returncode = 0
 
-    monkeypatch.setattr(vis.tempfile, "mktemp", fake_mktemp)
+    monkeypatch.setattr(vis.tempfile, "mkstemp", fake_mkstemp)
+    monkeypatch.setattr(vis.os, "close", lambda fd: None)
     monkeypatch.setattr(vis.subprocess, "run", lambda *a, **k: _R())
     data = vis._capture(None)
     assert data == b"PNGBYTES"

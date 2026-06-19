@@ -122,3 +122,43 @@ Be honest about the boundary:
   always caught deterministically by `redact()`.
 - Log redaction requires `core.redaction.redaction_processor` to be wired into
   the structlog config (in `emma/__main__.py`).
+
+## Secret rotation (24.6-A4)
+All secrets live in the macOS Keychain (`com.garcia.emma` service), keyed by
+label (e.g. `OPENAI_API_KEY`, `STRIPE_WEBHOOK_SECRET`, `X_BEARER_TOKEN`). To
+rotate one:
+1. Revoke the old value at the provider and issue a new one.
+2. Store the new value: `python -c "from core.secrets import store; store('<LABEL>', '<new>')"`
+   — never put it in `.env` (it would only be re-migrated, and lingers in shell history).
+3. Restart Emma (`launchctl kickstart -k …`). Settings re-read from Keychain.
+
+Cadence + blast radius:
+- **OPENAI_API_KEY** — manual; compromise = API spend + transcript exposure. Rotate
+  immediately on suspicion; OpenAI usage dashboard shows abuse.
+- **STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET** — manual via Stripe dashboard;
+  compromise = forged billing events. Webhook signature verification limits this.
+- **X / ElevenLabs / Brave / Resend / GitHub tokens** — manual at each provider;
+  compromise is scoped to that one service (least-privilege tokens).
+- **SESSION_SECRET / JWT_SECRET (backend)** — rotating invalidates all live
+  sessions (users re-login); do it on any backend-host compromise.
+
+## Incident response (key compromised)
+1. Rotate the affected secret (above) FIRST — stops the bleeding.
+2. Check the provider's usage/audit log for abuse during the exposure window.
+3. If a key was ever committed to git: it is **permanently** compromised even
+   after removal — rotate, then confirm `gitleaks detect` and the pre-flight
+   audit (section P) are clean.
+4. If the Mac itself was accessed: rotate everything, verify FileVault is on,
+   and check `~/Library/Logs/Emma/` for anomalous tool calls.
+
+## Reporting a vulnerability
+Email **security@theemmafamily.com** (or open a private security advisory on the
+repo). Please don't file public issues for exploitable bugs.
+
+## 24.6 hardening sweep (summary)
+Egress redaction (screen/OCR/web/transcripts → OpenAI), prompt-injection
+resistance (external content is inert data; runtime confirmation gate doesn't
+trust LLM intent), shell hard-blocklist extended (SIP/kext/AppleScript ladder),
+`~/.emma` perms enforced at startup (0700/0600), backend session cookie `Secure`
+on HTTPS, Stripe webhook signature verified, SSRF guard on web fetches,
+dependency CVEs cleared (pip-audit), bandit/gitleaks in `requirements-sec.txt`.

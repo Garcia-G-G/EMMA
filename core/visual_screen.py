@@ -70,7 +70,9 @@ def _capture(window_id: int | None) -> bytes | None:
     None on any failure (e.g. Screen Recording permission not granted) — callers
     degrade honestly rather than crash.
     """
-    path = tempfile.mktemp(suffix=".png")
+    # mkstemp (not mktemp): atomic create owned 0600 by us, no TOCTOU race.
+    fd, path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
     args = [_SCREENCAPTURE, "-x", "-t", "png"]
     if window_id is not None:
         args += ["-o", "-l", str(window_id)]

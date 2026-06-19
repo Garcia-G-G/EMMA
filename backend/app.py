@@ -21,7 +21,12 @@ from backend.auth import current_user, require_user
 from backend.config import PLAN_CAPS, settings
 
 app = FastAPI(title="Emma")
-app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET, same_site="lax", https_only=False)
+# 24.6-D3: Secure cookie whenever we're served over HTTPS (prod). Local http
+# dev (PUBLIC_URL=http://localhost) keeps it off so the session still works.
+_HTTPS_ONLY = settings.PUBLIC_URL.lower().startswith("https")
+app.add_middleware(
+    SessionMiddleware, secret_key=settings.SESSION_SECRET, same_site="lax", https_only=_HTTPS_ONLY
+)
 app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
 app.include_router(auth.router)

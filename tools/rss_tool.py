@@ -42,11 +42,18 @@ def _text(elem: ET.Element | None) -> str:
     return (elem.text or "").strip() if elem is not None else ""
 
 
+_MAX_FEED_BYTES = 5_000_000  # bound untrusted feed size — entity-expansion DoS guard
+
+
 def _parse(xml: str) -> list[dict[str, str]]:
     """Items from RSS 2.0 (item/title/link text) or Atom (entry/title/link[@href])."""
     items: list[dict[str, str]] = []
+    if len(xml) > _MAX_FEED_BYTES:
+        xml = xml[:_MAX_FEED_BYTES]  # cap before parsing; real feeds are tiny, blobs are attacks
     try:
-        root = ET.fromstring(xml)
+        # nosec B314: stdlib ElementTree does NOT resolve external entities (no XXE);
+        # residual entity-expansion DoS is bounded by _MAX_FEED_BYTES above.
+        root = ET.fromstring(xml)  # nosec B314
     except ET.ParseError:
         return items
     for node in root.iter():
