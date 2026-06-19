@@ -36,6 +36,7 @@ def test_listen_cancellation_is_prompt_and_reraises():
     fake_model = MagicMock()
 
     with (
+        patch.object(ww.settings, "WAKE_WORD_ENGINE", "openwakeword"),  # exercise the owW path
         patch.object(ww, "_get_model", new=AsyncMock(return_value=fake_model)),
         patch.object(ww.sd, "RawInputStream", return_value=fake_stream),
         patch.object(ww, "play_wake_chime"),

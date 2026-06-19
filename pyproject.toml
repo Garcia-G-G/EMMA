@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Garcia" }]
 dependencies = [
     "openwakeword>=0.6.0",
+    "vosk>=0.3.44",  # always-on offline wake transcription (WAKE_WORD_ENGINE=vosk)
     # onnxruntime is openWakeWord's actual (and only) inference backend on
     # macOS — wake_word.py forces inference_framework="onnx". Pin it directly
     # instead of relying on it arriving transitively. NOTE: tensorflow and

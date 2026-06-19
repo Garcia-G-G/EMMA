@@ -365,6 +365,11 @@ async def listen_for_wake_word() -> None:
     engine = (settings.WAKE_WORD_ENGINE or "openwakeword").strip().lower()
     if engine == "pvporcupine":
         await _listen_porcupine()
+    elif engine == "vosk":
+        # Always-on local transcription that fires on "hey emma" (Vosk, offline).
+        from core import speech_wake
+
+        await speech_wake.listen()
     else:
         if engine != "openwakeword":
             log.warning("wake_engine_unknown", engine=engine, falling_back="openwakeword")

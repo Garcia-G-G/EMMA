@@ -75,9 +75,13 @@ class Settings(BaseSettings):
     # lower for higher recall. 0.5 is balanced for personal use in a quiet room.
     # For pvporcupine this is passed as the per-keyword `sensitivity`.
     WAKE_WORD_THRESHOLD: float = 0.5
-    # Wake-word engine: "openwakeword" (default, open-source, built-in fallback
-    # models) or "pvporcupine" (Picovoice; needs a .ppn + PICOVOICE_ACCESS_KEY).
+    # Wake-word engine: "openwakeword" (default, single-phrase ONNX model),
+    # "pvporcupine" (Picovoice; needs a .ppn + PICOVOICE_ACCESS_KEY), or "vosk"
+    # (always-on offline transcription that fires on "hey emma" — best for accents).
     WAKE_WORD_ENGINE: str = "openwakeword"
+    # Vosk model directory, only read when WAKE_WORD_ENGINE="vosk". A small offline
+    # Spanish model lives here; download from https://alphacephei.com/vosk/models.
+    VOSK_MODEL_PATH: str = str(Path.home() / ".emma" / "vosk" / "vosk-model-small-es-0.42")
     # Picovoice AccessKey, only read when WAKE_WORD_ENGINE="pvporcupine". Treated
     # as a credential (ends in _KEY) — migrated to Keychain by bootstrap_from_env.
     PICOVOICE_ACCESS_KEY: str | None = None
