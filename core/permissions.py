@@ -10,12 +10,43 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import subprocess
+from pathlib import Path
 from typing import Any, Literal
 
 import structlog
 
 log = structlog.get_logger("emma.permissions")
+
+
+def harden_local_files() -> dict[str, int]:
+    """Lock down ``~/.emma`` perms at startup (24.6-E5). Idempotent, best-effort.
+
+    Personal + secret-adjacent data lives here; tighten the dir to 0700 and every
+    file under it to 0600 so nothing is group/other-readable even if FileVault is
+    off or the file was created with a looser umask. Returns {dir_fixed, files_fixed}.
+    """
+    home = Path.home() / ".emma"
+    fixed = {"dirs": 0, "files": 0}
+    if not home.exists():
+        return fixed
+    with contextlib.suppress(OSError):
+        if (home.stat().st_mode & 0o777) != 0o700:
+            os.chmod(home, 0o700)
+            fixed["dirs"] += 1
+    for p in home.rglob("*"):
+        with contextlib.suppress(OSError):
+            mode = p.stat().st_mode & 0o777
+            if p.is_dir() and mode != 0o700:
+                os.chmod(p, 0o700)
+                fixed["dirs"] += 1
+            elif p.is_file() and mode != 0o600:
+                os.chmod(p, 0o600)
+                fixed["files"] += 1
+    if fixed["dirs"] or fixed["files"]:
+        log.info("local_files_hardened", **fixed)
+    return fixed
 
 Pane = Literal[
     "Microphone", "Accessibility", "Automation", "AllFiles", "Calendars", "ScreenCapture"

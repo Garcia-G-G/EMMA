@@ -1,0 +1,11 @@
+# Security audit tooling (Prompt 24.6) — DEV/CI ONLY, never a runtime dep.
+# Install into a throwaway env or CI step; do NOT add to pyproject.
+#
+#     uv pip install -r requirements-sec.txt
+#
+# Then run the sweep:
+#     pip-audit --strict                      # dependency CVEs (F1)
+#     bandit -r core/ tools/ backend/ memory/ config/ -ll   # static analysis (F3)
+#     gitleaks detect --no-banner --redact    # history secret scan (F4; Go binary, brew install gitleaks)
+pip-audit>=2.7
+bandit>=1.7

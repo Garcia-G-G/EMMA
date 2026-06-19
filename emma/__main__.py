@@ -215,6 +215,11 @@ def main() -> int:
     if args.simulate_crash:
         orchestrator.enable_simulate_crash()
 
+    # 24.6-E5: tighten ~/.emma file perms (0700 dir / 0600 files) before anything
+    # personal is read or written. Best-effort, never blocks startup.
+    with contextlib.suppress(Exception):
+        permissions.harden_local_files()
+
     if not permissions.preflight():
         log.error("permissions_preflight_failed")
         # Don't exit hard - the user is being asked to grant. Let launchd retry

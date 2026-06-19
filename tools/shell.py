@@ -46,6 +46,12 @@ _BLOCKED_RULES = [
     (r"!!", "expansión de historial"),
     (r"!\$", "expansión de historial"),
     (r"!\d", "expansión de historial"),
+    # 24.6-C2: system-integrity / privilege-escalation — hard-blocked even with
+    # confirmation (prevents an accidental sudo ladder; most need root anyway).
+    (r"\bcsrutil\b", "modificar la protección de integridad del sistema (SIP)"),
+    (r"\bkext(un)?load\b", "cargar o descargar una extensión de kernel"),
+    (r"\bosascript\b.*do\s+shell\s+script", "escalar privilegios vía AppleScript"),
+    (r"\bnvram\b\s+\S+=", "escribir en la NVRAM del sistema"),
 ]
 _BLOCKED_RE = [(re.compile(p, re.IGNORECASE), reason) for p, reason in _BLOCKED_RULES]
 
@@ -61,8 +67,9 @@ _DESTRUCTIVE_PATTERNS = [
     r"\bkill\b", r"\bkillall\b", r"\bpkill\b",
     r"\bshutdown\b", r"\breboot\b", r"\bhalt\b",
     r"\bdiskutil\b", r"\bfdisk\b", r"\bnvram\b",
+    r"\bgpt\b", r"\bpdisk\b", r"\bpmset\b", r"\btmutil\b",  # 24.6-C2: disk/power/backup
     r"\bsudo\b", r"\bsu\b",
-    r"\bdefaults\s+delete\b",
+    r"\bdefaults\s+delete\b", r"\bdefaults\s+write\s+com\.apple",  # 24.6-C2: system prefs
     r"\bgit\s+reset\s+--hard\b", r"\bgit\s+clean\b", r"--force\b", r"\bgit\s+push\b",
     r"\b(brew|pip|pip3|npm|uv)\s+(uninstall|remove|rm)\b",
     r"\bfind\b.*-delete\b", r"\bfind\b.*-exec\b",
@@ -122,7 +129,11 @@ def run_command(command: str, confirmed: bool = False) -> ToolResult:
         )
 
     try:
-        proc = subprocess.run(
+        # nosec B602: shell=True is intentional — this IS the shell tool. It is
+        # gated by (1) the hard blocklist above and (2) two-phase voice
+        # confirmation on every destructive command; the confirmation is the
+        # security boundary, the blocklist is defence-in-depth.
+        proc = subprocess.run(  # nosec B602
             command,
             shell=True,
             capture_output=True,
