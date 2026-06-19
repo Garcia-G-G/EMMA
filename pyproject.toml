@@ -37,6 +37,7 @@ dependencies = [
     "pvporcupine>=4.0.2",
     "croniter>=6.2.2",
     "pyobjc-framework-applicationservices>=12.2",
+    "pyobjc-framework-vision>=12.2",  # on-device screenshot OCR (look_at_screen)
 ]
 
 [project.optional-dependencies]
