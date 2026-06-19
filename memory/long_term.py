@@ -30,7 +30,7 @@ import sqlite_vec
 import structlog
 
 from config.settings import settings
-from core import events_bus
+from core import events_bus, redaction
 from memory import embeddings
 
 log = structlog.get_logger("emma.memory.long_term")
@@ -459,7 +459,8 @@ async def _classify_contradiction(old: str, new: str) -> bool:
             _get_client().chat.completions.create(
                 model=settings.MEMORY_REFLECTION_MODEL,
                 messages=[
-                    {"role": "user", "content": _CONTRADICTION_PROMPT.format(old=old, new=new)}
+                    {"role": "user", "content": redaction.redact(
+                        _CONTRADICTION_PROMPT.format(old=old, new=new))}  # egress guard
                 ],
                 response_format={"type": "json_object"},
                 temperature=0,

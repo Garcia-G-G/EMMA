@@ -17,6 +17,7 @@ from openai import AsyncOpenAI
 
 from config.settings import settings
 from core import screen_vision as sv
+from core.redaction import redact
 from tools.base import ToolResult, tool
 from tools.disambiguation import suggest_similar
 
@@ -129,6 +130,8 @@ async def _summarize(structured: str, question: str, web_content: bool = False) 
         "pantalla de Garcia, enfocándote en lo que responde su pregunta. "
         "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
     )
+    q = redact(q)  # egress guard: strip secrets/PII (in the screen text AND the spoken
+    structured = redact(structured)  # question) before any of it reaches OpenAI
     try:
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         completion = await asyncio.wait_for(

@@ -18,6 +18,7 @@ from openai import AsyncOpenAI
 
 from config.settings import settings
 from core import research_budget
+from core.redaction import redact
 from tools.base import ToolResult, tool
 from tools.web import search_results
 
@@ -82,9 +83,9 @@ async def _fetch_text(url: str) -> str:
 
 async def _synthesize(query: str, triplets: list[tuple[int, dict[str, str], str]]) -> str:
     """gpt-4o-mini: a 2-3 sentence Spanish answer that cites sources by [n]."""
-    blocks = "\n\n".join(
+    blocks = redact("\n\n".join(  # egress guard: strip secrets/PII before sources leave
         f"[{n}] {c.get('title', '')} ({c.get('url', '')})\n{text}" for n, c, text in triplets
-    )
+    ))
     completion = await _get_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[

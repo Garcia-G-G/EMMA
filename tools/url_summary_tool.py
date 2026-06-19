@@ -9,6 +9,7 @@ import structlog
 from openai import AsyncOpenAI
 
 from config.settings import settings
+from core.redaction import redact
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.url_summary")
@@ -24,7 +25,7 @@ async def _llm_summary(text: str) -> str:
                     "Resume en español, en máximo 2 frases, de qué trata esta página. "
                     "Sé concreto; usa solo el contenido dado."
                 )},
-                {"role": "user", "content": text[:8000]},
+                {"role": "user", "content": redact(text[:8000])},  # egress guard
             ],
             temperature=0.3,
         ),

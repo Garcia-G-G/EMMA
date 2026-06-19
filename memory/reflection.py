@@ -81,6 +81,7 @@ async def reflect_once(window: list[short_term.Turn]) -> list[dict[str, Any]]:
     body = _format_window(window)
     if not body.strip():
         return []
+    body = redaction.redact(body)  # egress guard: strip secrets/PII before the transcript leaves
     try:
         completion = await asyncio.wait_for(
             _get_client().chat.completions.create(

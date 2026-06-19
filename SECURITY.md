@@ -100,9 +100,17 @@ Be honest about the boundary:
   directly), and the priming block of Personal facts injected into the system
   prompt. If you explicitly invoke `recall_secret`, that one value is spoken and
   therefore reaches the Realtime model — it is gated to "use only when alone."
+- **Egress redaction (the data guard):** any text Emma sends to OpenAI for
+  *summarization/reflection* — screen reads, screenshot OCR (`look_at_screen`),
+  web pages, deep-research sources, and conversation transcripts — passes through
+  `redact()` FIRST, so a credit card / API key / CURP / RFC / SSN / IBAN visible
+  on screen or spoken aloud is stripped to `[REDACTED:…]` before it crosses the
+  network. Redaction guards egress, not just logs.
 - **Stays local:** all Secret-tier values at rest (Keychain), the full
   `memory.db`, and anything `redact()` catches in logs. The priming block never
-  contains Secret-tier values (`vault_ref IS NULL` filter).
+  contains Secret-tier values (`vault_ref IS NULL` filter). Memory embeddings
+  send Personal-tier fact text (Secret-tier excluded by design) — a conscious
+  trade-off so semantic recall keeps working.
 
 ## Known limitations
 - The `security add-generic-password -w <value>` call briefly exposes the value
