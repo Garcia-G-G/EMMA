@@ -17,7 +17,9 @@ import structlog
 
 log = structlog.get_logger("emma.permissions")
 
-Pane = Literal["Microphone", "Accessibility", "Automation", "AllFiles", "Calendars"]
+Pane = Literal[
+    "Microphone", "Accessibility", "Automation", "AllFiles", "Calendars", "ScreenCapture"
+]
 
 
 def _say(text: str, *, voice: str = "Mónica") -> None:
@@ -85,6 +87,21 @@ def check_microphone() -> bool:
         log.warning("mic_probe_failed", error=str(result.get("error")))
         return False
     return True
+
+
+def check_screen_recording() -> bool:
+    """True if Screen Recording (needed for visual screen OCR) is granted.
+
+    Uses CGPreflightScreenCaptureAccess — a non-prompting check. Degrades to
+    False if Quartz is unavailable; visual screen reading simply won't work then.
+    """
+    try:
+        import Quartz
+
+        return bool(Quartz.CGPreflightScreenCaptureAccess())
+    except Exception as exc:
+        log.warning("screen_recording_probe_failed", error=str(exc))
+        return False
 
 
 def check_accessibility() -> bool:
@@ -215,6 +232,11 @@ _MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
         "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas.",
     ),
     ("AllFiles", "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas."),
+    (
+        "ScreenCapture",
+        "Necesito permiso de Grabación de pantalla para leer la pantalla con visión "
+        "(captura + OCR local) cuando me lo pidas.",
+    ),
     (
         "Calendars",
         "Necesito acceso a Calendarios para leer tu agenda. Actívalo para Emma en "
