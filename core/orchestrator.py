@@ -35,6 +35,22 @@ _last_turn_id: str = ""
 _last_session_end_mono: float = 0.0
 _LOOPBACK_WATCHDOG_S = 30.0
 
+# Voice "duérmete N minutos" pauses wake listening until this monotonic deadline.
+# 0 = listening normally. Set by the snooze_listening tool; honored in _one_session.
+_snooze_until: float = 0.0
+
+
+def snooze_listening(minutes: int) -> float:
+    """Pause wake detection for ``minutes`` (then auto-resume). Returns the deadline."""
+    global _snooze_until
+    _snooze_until = time.monotonic() + max(1, int(minutes)) * 60
+    log.info("listening_snoozed", minutes=minutes)
+    return _snooze_until
+
+
+def snooze_remaining_s() -> float:
+    return max(0.0, _snooze_until - time.monotonic())
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -134,6 +150,10 @@ async def _one_session() -> None:
             if gap > _LOOPBACK_WATCHDOG_S:
                 log.error("daemon_stuck", reason="slow_loopback_to_wake", gap_s=round(gap, 1))
         events_bus.publish("state", state="waiting_for_wake")
+        # Voice "duérmete N min": pause wake detection until the snooze expires.
+        while snooze_remaining_s() > 0:
+            events_bus.publish("state", state="snoozing")
+            await asyncio.sleep(min(5.0, snooze_remaining_s()))
         t_start = time.monotonic()
         await listen_for_wake_word()
         t_wake = time.monotonic()
