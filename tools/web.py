@@ -15,6 +15,7 @@ from openai import AsyncOpenAI
 
 from actions import macos
 from config.settings import settings
+from core.redaction import redact
 from tools.base import ToolResult, tool
 
 
@@ -154,7 +155,7 @@ async def search_web(query: str) -> ToolResult:
     if not results:
         return ToolResult(False, None, f"No encontré nada para '{query}'.", False)
 
-    snippets = "\n".join(f"- {r['title']}: {r['snippet']}" for r in results)
+    snippets = redact("\n".join(f"- {r['title']}: {r['snippet']}" for r in results))  # egress guard
     try:
         completion = await _get_summary_client().chat.completions.create(
             model="gpt-4o-mini",
@@ -215,7 +216,7 @@ async def summarize_page(url: str) -> ToolResult:
     body = body.strip()
     if not body:
         return ToolResult(False, None, "La página no tenía texto que pudiera extraer.", False)
-    excerpt = body[:6000]
+    excerpt = redact(body[:6000])  # egress guard: strip secrets/PII before the page leaves
     try:
         completion = await _get_summary_client().chat.completions.create(
             model="gpt-4o-mini",

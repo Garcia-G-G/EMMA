@@ -16,6 +16,7 @@ import structlog
 from config.settings import settings
 from core.proactive.triggers import polled, scheduled
 from core.proactive.types import Priority, ProactiveEvent
+from core.redaction import redact
 
 log = structlog.get_logger("emma.proactive.proactivities")
 
@@ -51,7 +52,7 @@ async def _synthesize_es(prompt: str, max_tokens: int = 200) -> str:
         client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         rsp = await client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": redact(prompt)}],  # egress guard
             max_tokens=max_tokens,
             temperature=0.4,
         )
