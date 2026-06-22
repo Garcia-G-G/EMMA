@@ -95,6 +95,25 @@ def tool_completed_since_last_user_turn() -> bool:
     return False
 
 
+def tools_since_last_user_turn() -> int:
+    """How many tools have completed/asked since the user last spoke (24.7-G4).
+
+    The runaway-loop guard: a single user turn must not trigger an unbounded
+    chain of tool calls (a prompt-injection amplification vector). Counts both
+    completed actions and pending confirmation requests since the most recent
+    user speech.
+    """
+    n = 0
+    with _lock:
+        for ev in reversed(_events):
+            if ev.role == "user" and ev.kind in ("speech", "speech_started"):
+                break
+            if ev.role == "tool" and (ev.kind == "completed"
+                                      or ev.kind.startswith("requires_confirmation")):
+                n += 1
+    return n
+
+
 def last_user_speech_text() -> str:
     """Content of the most recent user speech event ("" if none)."""
     with _lock:

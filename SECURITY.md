@@ -185,3 +185,37 @@ trust LLM intent), shell hard-blocklist extended (SIP/kext/AppleScript ladder),
 `~/.emma` perms enforced at startup (0700/0600), backend session cookie `Secure`
 on HTTPS, Stripe webhook signature verified, SSRF guard on web fetches,
 dependency CVEs cleared (pip-audit), bandit/gitleaks in `requirements-sec.txt`.
+
+## Public surface (24.7 — the live demo)
+Since LANDING-25.0/25.0.1, Emma is internet-facing at `api.theemmafamily.com`
+(Fly). The demo is a SANDBOX, isolated from the daemon:
+- **Zero daemon tools.** The demo bridge runs exactly 4 server-side tools
+  (`web_search`, `current_time`, `translate`, `explain_install`) — the backend
+  never imports the daemon's registry, so nothing the visitor says can touch
+  Garcia's Mac. Every `function_call` is re-validated server-side; a
+  non-whitelisted name is rejected, never executed.
+- **Server-injected config.** The bridge sends the demo persona + voice + tools
+  and DROPS any client `session.update` — a tampered client can't widen scope.
+- **Wallet brakes.** Per-session cost cap ($0.40) + a daily ceiling
+  (`DEMO_DAILY_USD_CEILING`, default $50) that 503s the demo once the rolling
+  24h spend is reached — the brake against VPN-rotation abuse that sidesteps the
+  per-IP/24h limit. An optional `OPS_ALERT_WEBHOOK` fires when the ceiling trips.
+- **WS limits.** 256KB max inbound frame (anti memory-bomb), 50MB total session
+  bandwidth (anti slow-drain), hard close at duration+5s.
+- **Privacy.** IPs are stored/logged only as `sha256(ip + DEMO_IP_SALT)`; the
+  attempt log keeps just the first 8 hex (non-deanonymizing). No audio bytes,
+  no transcript, and no conversation content are ever persisted server-side.
+- **`/demo/config`** exposes only public values (Turnstile SITE key + durations);
+  `/demo/admin/daily-report` is auth-gated (`require_user`) and returns aggregates
+  only — no IPs.
+
+## Voice data hygiene (24.7-C1)
+Garcia's wake-word training set is **biometric PII** (his actual voice):
+- `scripts/wake_data/positive_real/*.wav` + `validation/*.wav` — local only,
+  **gitignored** (never committed, verified absent from history), dir is `0700`.
+- `~/.emma/wake_models/*.onnx` — derived from his voice (Personal tier), `0700`.
+  These are his PERSONAL model and must NOT ship in any future installer payload;
+  the `.pkg` builder (29.1) leaves an empty model dir for users to train their own.
+- **Wipe:** `python scripts/wipe_wake_data.py` overwrites every `*.wav` with
+  random bytes, then deletes (best-effort secure erase; FileVault is the real
+  at-rest guarantee).

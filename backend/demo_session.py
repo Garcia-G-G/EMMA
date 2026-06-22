@@ -37,12 +37,31 @@ from fastapi import APIRouter, Header, HTTPException, Request, WebSocket
 from pydantic import BaseModel
 
 from backend import db
+from backend.auth import require_user
 from backend.config import settings
 from backend.realtime_proxy import cost_usd
 from backend.session import decode_token, issue_token, verify_captcha
 
 log = structlog.get_logger("emma.demo")
 router = APIRouter()
+
+
+def _maybe_alert_ops(event: str, **fields: Any) -> None:
+    """Best-effort ops alert (24.7-E3). POSTs to OPS_ALERT_WEBHOOK if configured;
+    no-op (just a log line) if not. Never raises, never includes a secret."""
+    log.warning(event, **fields)
+    url = settings.OPS_ALERT_WEBHOOK
+    if not url:
+        return
+    with contextlib.suppress(Exception):  # alerting must never break the request path
+        httpx.post(url, json={"text": f"Emma demo: {event} {fields}"}, timeout=4.0)
+
+
+def _attempt_log(iph: str, endpoint: str, status: int) -> None:
+    """24.7-E1: minimal, low-resolution abuse trail. Logs only the FIRST 8 hex of
+    the hashed IP (not enough to de-anonymize), the endpoint, and the status."""
+    log.info("demo_attempt", iph8=iph[:8], endpoint=endpoint, status=status)
+
 
 _PROMPT_PATH = __import__("pathlib").Path(__file__).parent / "demo_system_prompt.md"
 
@@ -204,11 +223,19 @@ async def create_demo_session(
     if db.month_cost_usd() >= settings.MONTHLY_BUDGET_USD:
         raise HTTPException(503, "Emma está descansando un momento. Intenta más tarde.")
 
+    # 24.7-B2: daily wallet ceiling — the brake against VPN-rotation abuse that
+    # sidesteps the per-IP limit. Re-opens once the rolling 24h spend falls back.
+    if db.day_cost_usd() >= settings.DEMO_DAILY_USD_CEILING:
+        _maybe_alert_ops("demo_daily_ceiling_hit", cost=round(db.day_cost_usd(), 2))
+        raise HTTPException(503, "El demo está descansando hoy, vuelve mañana.")
+
     if not bypass:
         if not await verify_captcha(body.turnstile_token, ip):
+            _attempt_log(iph, "/demo/sessions", 403)
             raise HTTPException(403, "Verificación anti-bot fallida. Recarga e intenta de nuevo.")
         # 1 per IP per 24h — keyed on the HASH, never the raw IP.
         if db.demo_count_24h(iph) >= 1:
+            _attempt_log(iph, "/demo/sessions", 429)
             raise HTTPException(
                 429,
                 detail={"error": "rate_limited", "retry_after_s": 86400,
@@ -217,6 +244,7 @@ async def create_demo_session(
             )
         db.record_demo_hit(iph)
 
+    _attempt_log(iph, "/demo/sessions", 200)
     lang = "en" if body.lang == "en" else "es"
     secs = settings.DEMO_TALK_SECONDS
     sid = db.create_session(None)
@@ -248,6 +276,20 @@ async def demo_status(session_id: str) -> Any:
 async def demo_close(session_id: str) -> Any:
     # Voluntary early exit — does NOT consume the 1/24h (they cut short themselves).
     return {"closed": True}
+
+
+@router.get("/demo/admin/daily-report")
+async def demo_daily_report(request: Request) -> Any:
+    """24.7-E2: ops snapshot — sessions + cost in the last 24h vs the ceiling.
+    AUTH-GATED (require_user). Returns NO IPs/PII, just aggregates."""
+    await require_user(request)  # 401 if not logged in — never public
+    stats = db.day_session_stats()
+    return {
+        "sessions_24h": stats["sessions"],
+        "cost_usd_24h": round(stats["cost_usd"], 2),
+        "daily_ceiling_usd": settings.DEMO_DAILY_USD_CEILING,
+        "ceiling_pct": round(100 * stats["cost_usd"] / max(0.01, settings.DEMO_DAILY_USD_CEILING), 1),
+    }
 
 
 # ---- A2: the audio bridge ---------------------------------------------------
@@ -283,6 +325,7 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
     cost_cap = settings.DEMO_COST_CAP_CENTS / 100.0
     started = time.time()
     usage = {"in": 0, "out": 0}
+    bytes_in = [0]  # 24.7-B3: cumulative inbound — cut on the anti-drain ceiling
 
     oai_url = f"{settings.OPENAI_REALTIME_URL}?model={settings.OPENAI_REALTIME_MODEL}"
     headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "OpenAI-Beta": "realtime=v1"}
@@ -298,6 +341,10 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
                     raw = await ws.receive_text()
                     if len(raw) > settings.DEMO_MAX_FRAME_BYTES:
                         continue  # anti memory-bomb: drop oversized frames
+                    bytes_in[0] += len(raw)
+                    if bytes_in[0] > settings.DEMO_MAX_SESSION_BYTES:
+                        await ws.send_text(json.dumps({"type": "emma.session_expired"}))
+                        return  # 24.7-B3: anti slow-drain — total bandwidth ceiling
                     try:
                         ev = json.loads(raw)
                     except Exception:
@@ -339,8 +386,13 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
                 with contextlib.suppress(Exception):
                     await ws.send_text(json.dumps({"type": "emma.session_expired"}))
 
+            async def hard_close() -> None:
+                # 24.7-B3: belt-and-suspenders — force the socket shut at
+                # max_seconds+5 even if the timer/cost paths skew or hang.
+                await asyncio.sleep(max_seconds + 5)
+
             tasks = {asyncio.create_task(t())
-                     for t in (client_to_openai, openai_to_client, timers)}
+                     for t in (client_to_openai, openai_to_client, timers, hard_close)}
             _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for t in pending:
                 t.cancel()

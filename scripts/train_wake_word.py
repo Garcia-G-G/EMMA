@@ -3,15 +3,15 @@
 
 Pipeline (all local):
   1. Compute openWakeWord embeddings for every positive + negative clip
-     (the shared melspectrogram→embedding feature model, openwakeword.utils).
-  2. Slide a 16-frame window over each clip → labelled examples (1 = wake, 0 = not).
+     (the shared melspectrogram->embedding feature model, openwakeword.utils).
+  2. Slide a 16-frame window over each clip -> labelled examples (1 = wake, 0 = not).
   3. Train a small classifier whose ONNX I/O matches openWakeWord's runtime loader
-     (input [N,16,96] float32 → output [N,1] score), so core/wake_word.py loads it.
-  4. Export → models/hey_emma.onnx.
+     (input [N,16,96] float32 -> output [N,1] score), so core/wake_word.py loads it.
+  4. Export -> models/hey_emma.onnx.
   5. --validate: score the real recordings (record_wake_validation.py) + a held-out
      negative slice across thresholds, and recommend WAKE_WORD_THRESHOLD.
 
-Run (training venv — see requirements-train.txt). NOT run automatically:
+Run (training venv - see requirements-train.txt). NOT run automatically:
     python scripts/wake_word_data.py --out scripts/wake_data --noise-dir <bg audio>
     python scripts/record_wake_validation.py
     python scripts/train_wake_word.py --data scripts/wake_data --out models/hey_emma.onnx --validate
@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 _WINDOW = 16        # embedding frames per inference window (openWakeWord default)
 _EMB = 96           # embedding dims per frame
@@ -52,7 +53,7 @@ def _embed_dir(folder: Path, af) -> list:
         # Resample to 16 kHz if needed (ElevenLabs returns 22050 or 44100 Hz)
         if sr != _TARGET_SR:
             data = resample_poly(data.astype(np.float32), _TARGET_SR, sr).astype(np.int16)
-        if data.size < 8000:  # < 0.5 s after resample → too short, skip
+        if data.size < 8000:  # < 0.5 s after resample -> too short, skip
             continue
         # Normalize length
         if data.size < _TARGET_LEN:
@@ -65,16 +66,54 @@ def _embed_dir(folder: Path, af) -> list:
     return out
 
 
-def _windows(embeddings: list, label: int):
-    """Slide a 16-frame window over each clip embedding → (X, y) examples."""
+# Minimum frame-to-frame variation for a window to count as a training example.
+# Short clips get zero-padded to reach 16 frames; sliding windows that land mostly
+# on that padding are nearly-constant (silence embeddings repeat). Labeling those
+# windows positive taught the model "silence -> wake" (it scored pure silence ~1.0).
+# Dropping low-variation windows removes the leakage. Measured: pure silence ~ 0.0,
+# padding-dominated positive windows ~ 0.1-0.5, real-speech windows ~ 1.5-5.
+_MIN_WINDOW_VAR = 1.0
+
+
+def _windows(embeddings: list, label: int, drop_padding: bool = False):
+    """Slide a 16-frame window over each clip embedding -> (X, y) examples.
+
+    With ``drop_padding`` (use for POSITIVES), windows dominated by silence/zero
+    padding are skipped so they can't teach "silence ⇒ wake". Negatives keep
+    those windows on purpose - silence MUST appear as a negative so the model
+    learns silence ⇒ not-wake.
+    """
     import numpy as np
 
     xs = []
     for emb in embeddings:
         for i in range(0, emb.shape[0] - _WINDOW + 1, 2):
-            xs.append(emb[i : i + _WINDOW])
+            w = emb[i : i + _WINDOW]
+            if drop_padding and float(np.abs(np.diff(w, axis=0)).mean()) < _MIN_WINDOW_VAR:
+                continue  # mostly padding - don't label this as the wake word
+            xs.append(w)
     y = np.full(len(xs), label, dtype="float32")
     return (np.asarray(xs, dtype="float32"), y) if xs else (np.zeros((0, _WINDOW, _EMB), "float32"), y)
+
+
+def _silence_negative_windows(af) -> Any:
+    """Explicit silence + low-noise NEGATIVE windows.
+
+    A model trained only on speech windows scores silence arbitrarily (we saw
+    ~1.0). Feeding pure silence and a range of room-tone noise amplitudes as
+    negatives anchors silence/quiet ⇒ not-wake.
+    """
+    import numpy as np
+
+    out = []
+    rng = np.random.default_rng(0)
+    clips = [np.zeros(_TARGET_LEN, dtype=np.int16)]
+    clips += [(rng.standard_normal(_TARGET_LEN) * amp).astype(np.int16) for amp in (20, 60, 150, 400)]
+    for x in clips:
+        emb = af.embed_clips(x[np.newaxis, :], batch_size=1)[0]
+        for i in range(0, emb.shape[0] - _WINDOW + 1, 2):
+            out.append(emb[i : i + _WINDOW])
+    return np.asarray(out, dtype="float32")
 
 
 def _build_model():
@@ -97,7 +136,7 @@ class TrainingError(RuntimeError):
 
 
 def _clip_max_scores(model, torch, clips: list) -> list:
-    """Per-clip max wake-window score — how a clip would score at inference."""
+    """Per-clip max wake-window score - how a clip would score at inference."""
     out = []
     for emb in clips:
         win, _ = _windows([emb], 1)
@@ -130,21 +169,34 @@ def train(data: Path, out: Path, epochs: int = 40, validate: bool = True,
     af = AudioFeatures()
     _emit("embedding", 0, 1, "Calculando embeddings…")
     pos = _embed_dir(data / "positive", af)
+    # Real recordings of the user saying the wake word matter most for recognizing
+    # THEIR voice (synthetic TTS alone generalizes poorly across accents) - include
+    # them as positives whenever the optional positive_real/ directory exists.
+    real_dir = data / "positive_real"
+    if real_dir.is_dir():
+        real = _embed_dir(real_dir, af)
+        pos = pos + real
+        _emit("embedding", 0, 1, f"{len(real)} positivos de tu voz incluidos")
     neg = _embed_dir(data / "negative", af)
     if not pos or not neg:
         raise TrainingError("Faltan datos de entrenamiento (positivos o negativos).")
-    win_pos, y_pos = _windows(pos, 1)
-    win_neg, y_neg = _windows(neg, 0)
-    feats = np.concatenate([win_pos, win_neg])
-    labels = np.concatenate([y_pos, y_neg])
-    _emit("embedding", 1, 1, f"{len(win_pos)} ventanas wake, {len(win_neg)} negativas")
+    # Positives drop padding-dominated windows (no "silence ⇒ wake" leak);
+    # negatives keep theirs AND we add explicit silence/noise so the model
+    # firmly learns silence ⇒ not-wake.
+    win_pos, y_pos = _windows(pos, 1, drop_padding=True)
+    win_neg, y_neg = _windows(neg, 0, drop_padding=False)
+    quiet = _silence_negative_windows(af)
+    feats = np.concatenate([win_pos, win_neg, quiet])
+    labels = np.concatenate([y_pos, y_neg, np.zeros(len(quiet), dtype="float32")])
+    win_neg_total = len(win_neg) + len(quiet)
+    _emit("embedding", 1, 1, f"{len(win_pos)} ventanas wake, {win_neg_total} negativas")
 
     model = _build_model()
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = torch.nn.BCELoss()
     feats_t = torch.from_numpy(feats)
     labels_t = torch.from_numpy(labels).unsqueeze(1)
-    w = torch.where(labels_t > 0, len(win_neg) / max(1, len(win_pos)), 1.0)
+    w = torch.where(labels_t > 0, win_neg_total / max(1, len(win_pos)), 1.0)
     for ep in range(epochs):
         model.train()
         opt.zero_grad()
@@ -158,10 +210,14 @@ def train(data: Path, out: Path, epochs: int = 40, validate: bool = True,
 
     out.parent.mkdir(parents=True, exist_ok=True)
     model.eval()
+    # Force the legacy exporter (dynamo=False) so the model + weights ship
+    # as a single .onnx file. The new dynamo path splits weights into a
+    # separate .onnx.data sidecar, which the runtime loader doesn't expect.
     torch.onnx.export(
         model, torch.zeros(1, _WINDOW, _EMB),
         str(out), input_names=["x"], output_names=["score"],
         dynamic_axes={"x": {0: "batch"}, "score": {0: "batch"}}, opset_version=13,
+        dynamo=False,
     )
 
     stats: dict = {
@@ -213,7 +269,7 @@ def main() -> int:
     except TrainingError as exc:
         print(f"✗ {exc}")
         return 1
-    print(f"✓ Modelo exportado → {stats['model_path']}")
+    print(f"✓ Modelo exportado -> {stats['model_path']}")
     val = stats.get("validation")
     if val:
         print(f"\n=== Validación: {val['positives_total']} clips reales vs "
@@ -221,7 +277,7 @@ def main() -> int:
         for row in val["thresholds"]:
             print(f"  thr {row['threshold']}:  detecta {row['detected']}/{val['positives_total']} "
                   f"| falsos despertares {row['false_wakes']}/{val['negatives_total']}")
-        print(f"  → Umbral recomendado: WAKE_WORD_THRESHOLD={stats['recommended_threshold']}")
+        print(f"  -> Umbral recomendado: WAKE_WORD_THRESHOLD={stats['recommended_threshold']}")
     elif args.validate:
         print("⚠ Sin grabaciones de validación (corre record_wake_validation.py).")
     return 0

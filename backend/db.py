@@ -196,3 +196,33 @@ def month_cost_usd(now: float | None = None) -> float:
         return float(v or 0.0)
     finally:
         conn.close()
+
+
+def day_cost_usd(now: float | None = None) -> float:
+    """Total session cost in the last 24h — the demo's daily-ceiling brake (24.7-B2).
+
+    The per-IP/24h limit caps individual abusers; this caps the WALLET regardless
+    of how many IPs (VPN rotation) attack the demo in one day."""
+    now = now or time.time()
+    conn = connect()
+    try:
+        v = conn.execute(
+            "SELECT COALESCE(SUM(cost_usd),0) FROM sessions WHERE started_at > ?", (now - 86400,)
+        ).fetchone()[0]
+        return float(v or 0.0)
+    finally:
+        conn.close()
+
+
+def day_session_stats(now: float | None = None) -> dict[str, float]:
+    """(sessions, cost_usd) in the last 24h — for the daily ops report (24.7-E2)."""
+    now = now or time.time()
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(cost_usd),0) FROM sessions WHERE started_at > ?",
+            (now - 86400,),
+        ).fetchone()
+        return {"sessions": int(row[0] or 0), "cost_usd": float(row[1] or 0.0)}
+    finally:
+        conn.close()
