@@ -35,7 +35,12 @@ class Settings:
     DEMO_TALK_SECONDS = int(os.environ.get("DEMO_TALK_SECONDS", "60"))    # hard session length
     DEMO_WARNING_SECONDS = int(os.environ.get("DEMO_WARNING_SECONDS", "45"))  # nudge-to-wrap mark
     DEMO_COST_CAP_CENTS = int(os.environ.get("DEMO_COST_CAP_CENTS", "40"))  # hard $/session ceiling
-    DEMO_MAX_FRAME_BYTES = int(os.environ.get("DEMO_MAX_FRAME_BYTES", "200000"))  # anti memory-bomb
+    DEMO_MAX_FRAME_BYTES = int(os.environ.get("DEMO_MAX_FRAME_BYTES", "256000"))  # anti memory-bomb (256KB)
+    DEMO_MAX_SESSION_BYTES = int(os.environ.get("DEMO_MAX_SESSION_BYTES", "52428800"))  # 50MB anti-drain
+    # 24.7-B2: daily WALLET ceiling across ALL demo sessions (brake vs VPN-rotation
+    # abuse that sidesteps the per-IP limit). Demo opens 503 past this until midnight.
+    DEMO_DAILY_USD_CEILING = float(os.environ.get("DEMO_DAILY_USD_CEILING", "50"))
+    OPS_ALERT_WEBHOOK = os.environ.get("OPS_ALERT_WEBHOOK", "")  # optional Slack/Discord; no-op if unset
     # Hashed-IP salt + Garcia's test bypass token. BOTH are secrets — set via env on
     # the Fly host (migrated to the host's secret store), NEVER committed.
     DEMO_IP_SALT = os.environ.get("DEMO_IP_SALT", "")

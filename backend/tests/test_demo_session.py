@@ -208,3 +208,32 @@ def test_demo_config_has_no_secret_keys(client, monkeypatch):
     for forbidden in ("turnstile_secret", "ip_salt", "bypass_token", "salt", "secret"):
         assert not any(forbidden in k.lower() for k in keys)
     assert "super-secret-salt" not in str(d) and "super-secret-token" not in str(d)
+
+
+# ---- 24.7: daily ceiling 503 + config exact key set + WS bandwidth -----------
+
+
+def test_daily_cost_ceiling_returns_503(client, monkeypatch):
+    # Force the rolling-24h spend over the ceiling → demo 503s for the day.
+    monkeypatch.setattr(settings, "DEMO_DAILY_USD_CEILING", 5.0)
+    monkeypatch.setattr(demo_session.db, "day_cost_usd", lambda: 9.99)
+    monkeypatch.setattr(settings, "CLOUDFLARE_TURNSTILE_SECRET", "")
+    r = client.post("/demo/sessions", json={"lang": "es"})
+    assert r.status_code == 503
+    assert "descansando hoy" in r.json()["detail"]
+
+
+def test_demo_config_exact_key_set(client):
+    # B5: ONLY these keys may ever appear — no salt/secret/bypass leak.
+    d = client.get("/demo/config").json()
+    assert set(d) == {"turnstile_site_key", "duration_seconds", "warning_at_seconds"}
+
+
+def test_daily_report_aggregates_no_pii(client, monkeypatch):
+    # E2: auth-gated; returns counts/cost only, never IPs.
+    from backend import auth
+    user = db.upsert_user("g@example.com", "Garcia", "google", "p1")
+    client.cookies.set("emma_session", auth._serializer.dumps({"uid": user["id"]}))
+    d = client.get("/demo/admin/daily-report").json()
+    assert set(d) >= {"sessions_24h", "cost_usd_24h", "daily_ceiling_usd"}
+    assert "ip" not in json.dumps(d).lower()

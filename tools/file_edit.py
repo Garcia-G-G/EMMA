@@ -70,14 +70,26 @@ def _home() -> Path:
     return Path.home()
 
 
+# 24.7-G6: even within $HOME, never write these — credential/secret-bearing
+# paths a prompt-injection could target (the writes are already confirmation-gated,
+# this is defence-in-depth so an injected confirmed=True can't reach them either).
+_DENIED_WITHIN_HOME = (".ssh", ".gnupg", ".aws", ".config/gh", ".emma", ".env",
+                       ".netrc", ".npmrc", "Library/Keychains")
+
+
 def _resolve_in_home(raw: str) -> Path | None:
-    """Expand ``~`` and resolve; None unless the result lives under $HOME."""
+    """Expand ``~`` and resolve; None unless under $HOME AND not a denied path."""
     try:
         p = Path(raw).expanduser().resolve()
     except OSError:
         return None
     home = _home().resolve()
-    return p if (p == home or p.is_relative_to(home)) else None
+    if not (p == home or p.is_relative_to(home)):
+        return None
+    rel = str(p.relative_to(home))
+    if any(rel == d or rel.startswith(d + "/") for d in _DENIED_WITHIN_HOME):
+        return None  # secret-bearing dir/file — refuse even inside home
+    return p
 
 
 def _atomic_write(path: Path, content: str) -> None:

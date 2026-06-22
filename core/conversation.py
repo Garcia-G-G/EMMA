@@ -336,6 +336,7 @@ _ZOMBIE_ESCALATE_N = 3
 _ZOMBIE_ESCALATE_WINDOW_S = 60.0
 _ZOMBIE_COOLDOWN_S = 30.0
 _ZOMBIE_MAX_RECORDS = 100  # B48.2: hard cap so a flapping daemon can't grow this forever
+_MAX_TOOLS_PER_TURN = 10  # 24.7-G4: a single user turn can't trigger more tools than this
 _zombie_recoveries: list[float] = []  # module-level: spans sessions, not the daemon
 # B48.1: _record_zombie_recovery fires from pipecat frame-processor contexts while
 # _zombie_cooldown_s reads from the orchestrator. Guard the append + in-place trim
@@ -1110,6 +1111,20 @@ def _make_function_handler(
             # the redaction processor still scrubs PII patterns from this line.
             with contextlib.suppress(Exception):  # never let the hook break a call
                 log.info("tool_args_test", name=name, args=json.dumps(args, default=str)[:500])
+
+        # ---- Tool-per-turn cap (24.7-G4). One user turn must not amplify into an
+        # unbounded tool chain (prompt-injection / runaway-loop guard). Past the
+        # cap, refuse and ask Garcia to go step by step — he can always continue.
+        if session_memory.tools_since_last_user_turn() >= _MAX_TOOLS_PER_TURN:
+            log.warning("tool_per_turn_cap", name=name, cap=_MAX_TOOLS_PER_TURN)
+            events_bus.publish("tool_per_turn_cap", name=name)
+            await params.result_callback({
+                "success": False,
+                "user_message": "Voy paso a paso — dime cuál hago primero.",
+                "data": None,
+                "requires_confirmation": False,
+            })
+            return
 
         # ---- Self-talk protection (21-B24, CRITICAL). A confirmed=True call
         # is only honored if Garcia actually SPOKE after the tool asked its
