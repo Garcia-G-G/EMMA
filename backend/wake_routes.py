@@ -41,6 +41,12 @@ DEFAULT_NEGATIVES = [
     "Emma", "Anna", "hey there", "hola", "ya terminé", "abre el navegador",
 ]
 
+# 24.6 audit: clamp to sane ceilings. epochs is NOT in the cost formula, so without
+# a cap a single job (epochs=100_000_000, passing the $ guard) pins a CPU core
+# indefinitely. The others bound synthesis volume + voice fan-out.
+_FIELD_CEILINGS = {"voices_es": 20, "voices_en": 20, "n_per_voice": 500,
+                   "n_neg_per_voice": 100, "epochs": 200}
+
 
 # ---- request model + validation ---------------------------------------------
 
@@ -73,8 +79,8 @@ class WakeJobRequest(BaseModel):
 
     @field_validator("voices_es", "voices_en", "n_per_voice", "n_neg_per_voice", "epochs")
     @classmethod
-    def _non_negative(cls, v: int) -> int:
-        return max(0, v)
+    def _bounded(cls, v: int, info: Any) -> int:
+        return max(0, min(int(v), _FIELD_CEILINGS.get(info.field_name, v)))
 
 
 def _load_banned() -> list[str]:
@@ -139,8 +145,18 @@ def _job_view(rec: Any) -> dict[str, Any]:
 # ---- A1: create job ---------------------------------------------------------
 
 
+_MAX_CONCURRENT_WAKE_JOBS = 2  # 24.6 audit: cap concurrent training (CPU/disk/$ DoS)
+
+
 @router.post("/wake/jobs")
 async def create_job(req: WakeJobRequest, _user: Any = _ACCESS) -> Any:
+    # 24.6 audit (HIGH): bound concurrent training jobs. Each spawns torch + paid
+    # ElevenLabs synthesis; unbounded POSTs saturate the Mac and run up spend.
+    active = sum(1 for r in registry().list(status="running")
+                 if r.kind == _KIND and (r.meta or {}).get("phase") not in
+                 ("done", "failed", "cancelled"))
+    if active >= _MAX_CONCURRENT_WAKE_JOBS:
+        raise HTTPException(429, "Hay demasiados entrenamientos en curso. Espera a que terminen.")
     if req.max_cost_usd > settings.WAKE_MAX_COST_USD:
         raise HTTPException(400, f"El límite de costo no puede pasar de ${settings.WAKE_MAX_COST_USD:.0f}.")
     voices = wake_runner.resolve_voices(req.voices_es, req.voices_en)

@@ -64,8 +64,8 @@ def test_create_rejects_empty_phrases(client, monkeypatch):
 
 def test_create_rejects_cost_over_user_cap(client, monkeypatch):
     _auth_off(monkeypatch)
-    # tiny cap vs many samples → estimated cost exceeds the cap → 400
-    r = client.post("/wake/jobs", json={"phrases": ["hey emma"], "n_per_voice": 99999, "max_cost_usd": 0.01})
+    # tiny cap vs the (now ceiling-clamped) max samples → estimated cost over cap → 400
+    r = client.post("/wake/jobs", json={"phrases": ["hey emma"], "n_per_voice": 500, "max_cost_usd": 0.0001})
     assert r.status_code == 400
     assert "supera" in r.json()["detail"]
 
@@ -181,3 +181,28 @@ def test_config_reports_auth_state(client, monkeypatch):
 def test_page_serves_html(client):
     r = client.get("/wake")
     assert r.status_code == 200 and "Wake Word Studio" in r.text
+
+
+def test_epochs_and_samples_are_clamped(client, monkeypatch):
+    # 24.6 audit: ceilings prevent resource-exhaustion (epochs escapes the cost guard).
+    _auth_off(monkeypatch)
+    from backend.wake_routes import WakeJobRequest
+    req = WakeJobRequest(phrases=["hey emma"], epochs=10_000_000, n_per_voice=10_000_000,
+                         voices_es=999, voices_en=999)
+    assert req.epochs == 200
+    assert req.n_per_voice == 500
+    assert req.voices_es == 20 and req.voices_en == 20
+
+
+def test_concurrent_job_cap_returns_429(client, monkeypatch):
+    # 24.6 audit: too many running wake_train jobs → 429, no new job.
+    _auth_off(monkeypatch)
+    from backend.wake_routes import _KIND, _MAX_CONCURRENT_WAKE_JOBS
+    from core.background import registry
+
+    class _Rec:
+        def __init__(self): self.kind = _KIND; self.status = "running"; self.meta = {"phase": "training"}
+    monkeypatch.setattr(registry(), "list",
+                        lambda **k: [_Rec() for _ in range(_MAX_CONCURRENT_WAKE_JOBS)])
+    r = client.post("/wake/jobs", json={"phrases": ["hey emma"]})
+    assert r.status_code == 429

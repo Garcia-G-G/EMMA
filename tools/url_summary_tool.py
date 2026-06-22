@@ -25,7 +25,7 @@ async def _llm_summary(text: str) -> str:
                     "Resume en español, en máximo 2 frases, de qué trata esta página. "
                     "Sé concreto; usa solo el contenido dado."
                 )},
-                {"role": "user", "content": redact(text[:8000])},  # egress guard
+                {"role": "user", "content": redact(text)[:8000]},  # egress: redact BEFORE truncate
             ],
             temperature=0.3,
         ),

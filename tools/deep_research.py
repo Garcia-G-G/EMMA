@@ -98,7 +98,7 @@ async def _synthesize(query: str, triplets: list[tuple[int, dict[str, str], str]
                     "Si las fuentes no responden, dilo con honestidad."
                 ),
             },
-            {"role": "user", "content": f"Consulta: {query}\n\nFuentes:\n{blocks}"},
+            {"role": "user", "content": f"Consulta: {redact(query)}\n\nFuentes:\n{blocks}"},
         ],
         timeout=settings.API_TIMEOUT_S,
         temperature=0.3,

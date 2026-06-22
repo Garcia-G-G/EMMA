@@ -80,6 +80,7 @@ from core import (
     capability_gaps,
     dictionary,
     events_bus,
+    redaction,
     runtime,
     runtime_state,
     session_memory,
@@ -1117,23 +1118,35 @@ def _make_function_handler(
         entry = get_tool(name)
         if args.get("confirmed"):
             t_req = session_memory.last_tool_request_confirmation_ts(name)
-            if t_req is None and entry is not None and entry.destructive \
-                    and session_memory.last_user_turn_ts() is None:
-                # 24.6-B2: cold confirmed=True on a DESTRUCTIVE tool with NO user
-                # turn at all — there is zero Garcia voice authorizing this (pure
-                # self-authorization / injection before he ever spoke). Refuse.
-                # The legit "borra X, sí" preemptive flow always has a user turn.
-                log.warning("confirmation_violation", tool=name, reason="cold_confirm_no_voice",
+            if t_req is None and entry is not None and entry.destructive and (
+                session_memory.last_user_turn_ts() is None
+                or session_memory.tool_completed_since_last_user_turn()
+            ):
+                # 24.6-B2 (CRITICAL, audit finding 2): a cold confirmed=True on a
+                # DESTRUCTIVE tool is refused when there is no Garcia voice at all
+                # OR a tool has run since he last spoke. The latter is the
+                # prompt-injection signature — "lee esta página" (benign turn) →
+                # read tool returns attacker content → LLM fires delete(confirmed)
+                # in the same turn. No tool runs between "borra X" and "sí", so the
+                # legit preemptive flow still passes. A genuine destructive intent
+                # after reading content must go through the two-phase ask, which
+                # forces a FRESH spoken "sí".
+                reason = ("cold_confirm_no_voice"
+                          if session_memory.last_user_turn_ts() is None
+                          else "cold_confirm_after_tool")
+                log.warning("confirmation_violation", tool=name, reason=reason,
                             args_keys=list(args.keys()))
                 events_bus.publish("confirmation_violation", name=name)
                 await params.result_callback(
                     {
                         "success": False,
-                        "user_message": "No procedo sin oírte pedirlo primero.",
+                        "user_message": "Para esto necesito que me lo confirmes tú con tu voz. "
+                        "¿Quieres que lo haga?",
                         "data": None,
-                        "requires_confirmation": False,
+                        "requires_confirmation": True,
                     }
                 )
+                session_memory.push_event("tool", f"requires_confirmation:{name}")
                 return
             if t_req is not None:
                 # A question WAS asked: the confirmed=True is only honored if
@@ -1270,10 +1283,16 @@ def _make_function_handler(
                 name, args, user_text=session_memory.last_user_speech_text()
             )
             await _maybe_record_episodic(name, args, result)
+        # 24.6 egress guard (CRITICAL, audit finding 1): tool results are the
+        # PRIMARY channel to the Realtime model — `data` + `user_message` are sent
+        # to OpenAI verbatim. Redact at this single seam so a secret/PII visible on
+        # screen (OCR/AX text), in a web result, or anywhere a tool surfaces it can
+        # never egress unredacted, regardless of which tool produced it. (Logs were
+        # already guarded; this closes the higher-bandwidth tool-result path.)
         payload: dict[str, Any] = {
             "success": result.success,
-            "user_message": result.user_message,
-            "data": result.data,
+            "user_message": redaction.redact(result.user_message or ""),
+            "data": redaction.redact_value(result.data),
             "requires_confirmation": result.requires_confirmation,
         }
         await params.result_callback(payload)

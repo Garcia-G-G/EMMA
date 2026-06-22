@@ -28,13 +28,20 @@ log = structlog.get_logger("emma.tools.lifecycle")
 _LAUNCHD_LABEL = "com.garcia.emma"
 
 
-@tool()
-async def shutdown_emma() -> ToolResult:
+@tool(destructive=True)
+async def shutdown_emma(confirmed: bool = False) -> ToolResult:
     """Apaga a Emma por completo (deja de escuchar hasta que la reinicies a mano).
 
     Para "apágate", "shut down", "ya duérmete del todo", "deja de escuchar".
-    Sale limpio (exit 0) para que launchd NO la reinicie sola.
+    Sale limpio (exit 0) para que launchd NO la reinicie sola. Confirma antes:
+    apagarse es disruptivo y NUNCA debe dispararse por contenido que Emma lee.
     """
+    if not confirmed:
+        return ToolResult(
+            success=False, data={"action": "shutdown"},
+            user_message="¿Quieres que me apague del todo? Tendrás que reiniciarme a mano.",
+            requires_confirmation=True,
+        )
     log.info("voice_shutdown_requested")
     dev_state.shutdown_requested.set()
     return ToolResult(
@@ -45,13 +52,20 @@ async def shutdown_emma() -> ToolResult:
     )
 
 
-@tool()
-async def restart_emma() -> ToolResult:
+@tool(destructive=True)
+async def restart_emma(confirmed: bool = False) -> ToolResult:
     """Reinicia a Emma (vuelve fresca en unos segundos).
 
     Para "reiníciate", "restart", "vuelve a arrancar". Útil tras un cambio o si
     la notas rara. Lanza el reinicio en un proceso aparte que sobrevive su muerte.
+    Confirma antes: nunca debe dispararse por contenido que Emma lee.
     """
+    if not confirmed:
+        return ToolResult(
+            success=False, data={"action": "restart"},
+            user_message="¿Te reinicio ahora?",
+            requires_confirmation=True,
+        )
     log.info("voice_restart_requested")
     # Detached so it outlives the kickstart -k that kills this very process.
     cmd = f"sleep 1; launchctl kickstart -k gui/{os.getuid()}/{_LAUNCHD_LABEL}"
@@ -68,14 +82,21 @@ async def restart_emma() -> ToolResult:
     )
 
 
-@tool()
-async def snooze_listening(minutes: int = 15) -> ToolResult:
+@tool(destructive=True)
+async def snooze_listening(minutes: int = 15, confirmed: bool = False) -> ToolResult:
     """Duérmete: deja de escuchar el wake word por unos minutos y luego reactívate sola.
 
     Para "duérmete", "tómate un descanso", "no escuches por 20 minutos". Durante
-    ese rato NO responde a "Hey Emma"; al terminar vuelve a escuchar sola.
+    ese rato NO responde a "Hey Emma"; al terminar vuelve a escuchar sola. Confirma
+    antes: hacerla sorda es disruptivo y no debe dispararse por lo que lee.
     """
     minutes = max(1, int(minutes))
+    if not confirmed:
+        return ToolResult(
+            success=False, data={"action": "snooze_listening", "minutes": minutes},
+            user_message=f"¿Me duermo {minutes} min y dejo de escucharte hasta entonces?",
+            requires_confirmation=True,
+        )
     orchestrator.snooze_listening(minutes)
     unit = "minuto" if minutes == 1 else "minutos"
     return ToolResult(
