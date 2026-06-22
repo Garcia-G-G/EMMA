@@ -10,28 +10,49 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import structlog
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from backend import auth, db, demo_session, realtime_proxy, stripe_routes, wake_routes
+from backend import auth, db, demo_session, realtime_proxy, stripe_routes
+
+# wake_routes disabled in Fly deploy — depends on daemon's core.background / config.settings.
+# Re-enable after vendoring those modules into backend/ (follow-up prompt 16.3.1).
 from backend import session as session_mod
 from backend.auth import current_user, require_user
 from backend.config import PLAN_CAPS, settings
 
 app = FastAPI(title="Emma")
+# 25.0.1-B2: the landing only ever lives on the apex + www; the backend at
+# api.theemmafamily.com must reject cross-origin calls from anywhere else.
+# A closed allowlist — never ["*"]. Local dev origins are added when not HTTPS.
+_CORS_ORIGINS = ["https://theemmafamily.com", "https://www.theemmafamily.com"]
+if not settings.PUBLIC_URL.lower().startswith("https"):
+    _CORS_ORIGINS += ["http://localhost:8000", "http://127.0.0.1:8000"]
+app.add_middleware(
+    CORSMiddleware, allow_origins=_CORS_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"], allow_credentials=True,
+)
 # 24.6-D3: Secure cookie whenever we're served over HTTPS (prod). Local http
 # dev (PUBLIC_URL=http://localhost) keeps it off so the session still works.
 _HTTPS_ONLY = settings.PUBLIC_URL.lower().startswith("https")
 app.add_middleware(
     SessionMiddleware, secret_key=settings.SESSION_SECRET, same_site="lax", https_only=_HTTPS_ONLY
 )
+
+# 25.0.1-B1: Turnstile is optional. verify_captcha() already allows-all when no
+# secret is configured; log that posture once at startup so it's never a surprise.
+if not settings.CLOUDFLARE_TURNSTILE_SECRET:
+    structlog.get_logger("emma.backend").info(
+        "turnstile_not_configured", note="demo gated on IP rate-limit + cost cap only")
 app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
 app.include_router(auth.router)
 app.include_router(stripe_routes.router)
-app.include_router(wake_routes.router)
+# app.include_router(wake_routes.router)  # disabled in Fly deploy
 app.include_router(demo_session.router)
 
 _STATIC = Path(__file__).parent / "static"
