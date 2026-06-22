@@ -30,6 +30,22 @@ class Settings:
     SESSION_TOKEN_TTL_S = 300  # signed session_token validity (5 min) — A3
     DEMO_SESSION_SECONDS = int(os.environ.get("DEMO_SESSION_SECONDS", "120"))
 
+    # ---- live talk-to-Emma demo (LANDING-25.0) ----
+    DEMO_REALTIME_VOICE = os.environ.get("DEMO_REALTIME_VOICE", "coral")  # match the daemon
+    DEMO_TALK_SECONDS = int(os.environ.get("DEMO_TALK_SECONDS", "60"))    # hard session length
+    DEMO_WARNING_SECONDS = int(os.environ.get("DEMO_WARNING_SECONDS", "45"))  # nudge-to-wrap mark
+    DEMO_COST_CAP_CENTS = int(os.environ.get("DEMO_COST_CAP_CENTS", "40"))  # hard $/session ceiling
+    DEMO_MAX_FRAME_BYTES = int(os.environ.get("DEMO_MAX_FRAME_BYTES", "200000"))  # anti memory-bomb
+    # Hashed-IP salt + Garcia's test bypass token. BOTH are secrets — set via env on
+    # the Fly host (migrated to the host's secret store), NEVER committed.
+    DEMO_IP_SALT = os.environ.get("DEMO_IP_SALT", "")
+    DEMO_BYPASS_TOKEN = os.environ.get("DEMO_BYPASS_TOKEN", "")
+    # Public Turnstile site key the landing embeds (NOT a secret; the SECRET is
+    # CLOUDFLARE_TURNSTILE_SECRET, server-side only).
+    TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
+    # Optional web-search backend for the demo's one read-only tool.
+    BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
+
     # ---- cost guard (A4) ----
     MONTHLY_BUDGET_USD = float(os.environ.get("MONTHLY_BUDGET_USD", "50"))
     # gpt-realtime audio pricing (approx, USD per 1M tokens) for cost accounting.

@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from backend import auth, db, realtime_proxy, stripe_routes, wake_routes
+from backend import auth, db, demo_session, realtime_proxy, stripe_routes, wake_routes
 from backend import session as session_mod
 from backend.auth import current_user, require_user
 from backend.config import PLAN_CAPS, settings
@@ -32,6 +32,7 @@ app.include_router(realtime_proxy.router)
 app.include_router(auth.router)
 app.include_router(stripe_routes.router)
 app.include_router(wake_routes.router)
+app.include_router(demo_session.router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
@@ -42,6 +43,17 @@ db.init_db()
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/demo/config")
+async def demo_config() -> dict[str, Any]:
+    """Public config the landing's demo needs — the Turnstile SITE key (public) and
+    session length. No secrets (the Turnstile SECRET + salt stay server-side)."""
+    return {
+        "turnstile_site_key": settings.TURNSTILE_SITE_KEY,
+        "duration_seconds": settings.DEMO_TALK_SECONDS,
+        "warning_at_seconds": settings.DEMO_WARNING_SECONDS,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
