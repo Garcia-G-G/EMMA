@@ -13,6 +13,12 @@ from backend.app import app
 from backend.config import settings
 from core.background import registry
 
+# The wake_routes router is intentionally NOT mounted in the Fly deploy (it depends
+# on the daemon's core.background/config; re-enabled after 16.3.1 vendoring). When
+# it's unmounted, these route tests can't run — skip the module rather than fail it.
+_WAKE_MOUNTED = any(getattr(r, "path", "").startswith("/wake") for r in app.routes)
+pytestmark = pytest.mark.skipif(not _WAKE_MOUNTED, reason="wake_routes disabled in this deploy")
+
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):

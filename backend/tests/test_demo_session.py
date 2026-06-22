@@ -160,3 +160,51 @@ def test_ws_rejects_invalid_token(client):
     with contextlib.suppress(WebSocketDisconnect), \
             client.websocket_connect("/demo/ws/demo_x?token=garbage"):
         pass  # server closes (4401) before accept → disconnect raised
+
+
+# ---- 25.0.1: Turnstile optional + CORS apex + config has no secrets ----------
+
+
+def test_turnstile_optional_when_no_secret(client, monkeypatch):
+    # No secret configured → demo works WITHOUT a token (ambient flow sends none).
+    monkeypatch.setattr(settings, "CLOUDFLARE_TURNSTILE_SECRET", "")
+    r = client.post("/demo/sessions", json={"lang": "es"})  # no turnstile_token at all
+    assert r.status_code == 200
+
+
+def test_turnstile_required_rejects_empty_token(client, monkeypatch):
+    # Secret IS set but token missing → reject (no trivial bypass).
+    monkeypatch.setattr(settings, "CLOUDFLARE_TURNSTILE_SECRET", "a-secret")
+    r = client.post("/demo/sessions", json={"lang": "es", "turnstile_token": ""})
+    assert r.status_code == 403
+
+
+def test_turnstile_required_accepts_valid_token(client, monkeypatch):
+    monkeypatch.setattr(settings, "CLOUDFLARE_TURNSTILE_SECRET", "a-secret")
+    _ok_turnstile(monkeypatch, ok=True)  # mock Cloudflare verify → success
+    r = client.post("/demo/sessions", json={"lang": "es", "turnstile_token": "valid"})
+    assert r.status_code == 200
+
+
+def test_cors_allows_apex_blocks_random(client):
+    allowed = client.options("/demo/sessions", headers={
+        "Origin": "https://theemmafamily.com",
+        "Access-Control-Request-Method": "POST"})
+    assert allowed.headers.get("access-control-allow-origin") == "https://theemmafamily.com"
+    blocked = client.options("/demo/sessions", headers={
+        "Origin": "https://evil.com",
+        "Access-Control-Request-Method": "POST"})
+    assert blocked.headers.get("access-control-allow-origin") != "https://evil.com"
+
+
+def test_demo_config_has_no_secret_keys(client, monkeypatch):
+    monkeypatch.setattr(settings, "TURNSTILE_SITE_KEY", "0xPUBLIC")
+    monkeypatch.setattr(settings, "DEMO_IP_SALT", "super-secret-salt")
+    monkeypatch.setattr(settings, "DEMO_BYPASS_TOKEN", "super-secret-token")
+    d = client.get("/demo/config").json()
+    keys = set(d)
+    assert "turnstile_site_key" in keys and d["turnstile_site_key"] == "0xPUBLIC"
+    # explicitly: NO secret ever leaks
+    for forbidden in ("turnstile_secret", "ip_salt", "bypass_token", "salt", "secret"):
+        assert not any(forbidden in k.lower() for k in keys)
+    assert "super-secret-salt" not in str(d) and "super-secret-token" not in str(d)
