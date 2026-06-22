@@ -201,7 +201,10 @@ def test_concurrent_job_cap_returns_429(client, monkeypatch):
     from core.background import registry
 
     class _Rec:
-        def __init__(self): self.kind = _KIND; self.status = "running"; self.meta = {"phase": "training"}
+        def __init__(self):
+            self.kind = _KIND
+            self.status = "running"
+            self.meta = {"phase": "training"}
     monkeypatch.setattr(registry(), "list",
                         lambda **k: [_Rec() for _ in range(_MAX_CONCURRENT_WAKE_JOBS)])
     r = client.post("/wake/jobs", json={"phrases": ["hey emma"]})
