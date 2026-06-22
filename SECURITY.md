@@ -155,6 +155,29 @@ Cadence + blast radius:
 Email **security@theemmafamily.com** (or open a private security advisory on the
 repo). Please don't file public issues for exploitable bugs.
 
+## 24.6 audit follow-up (adversarial review fixes)
+A 5-agent adversarial audit of the session's changes found and we fixed:
+- **CRITICAL — egress via tool results:** tool `data` + `user_message` reach the
+  Realtime model verbatim; redaction was only on secondary summarize calls. Now
+  redacted at the single `result_callback` seam (`core/conversation.py`), so any
+  secret/PII a tool surfaces (OCR, AX screen text, web snippets) is scrubbed
+  before egress regardless of the tool. (Trade-off: a long hex/base64 string in
+  tool data may be over-redacted — acceptable for security-first.)
+- **CRITICAL — prompt-injection → action:** the confirm gate let any prior user
+  turn unlock a cold `confirmed=True`. Now a destructive cold-confirm is refused
+  (converted to a spoken yes/no) when a tool ran since the user last spoke — the
+  injection signature ("lee la página" → read tool → injected delete). The legit
+  "borra X, sí" preemptive flow (no tool between words and call) still passes.
+- **HIGH — lifecycle tools** (`shutdown`/`restart`/`snooze_listening`) are now
+  `destructive=True` + two-phase confirmed, so injected content can't DoS Emma.
+- **HIGH — `harden_local_files`** skips symlinks (was a startup chmod primitive).
+- **HIGH — shell**: single-digit fd redirects (`1>`), `cp`/`truncate`/`ln -f`/
+  `tee`/`osascript` now confirmation-gated; blocklist regex is DOTALL.
+- **HIGH — Wake Studio backend**: concurrent-job cap (429) + epochs/sample ceilings.
+- **MED**: redact-before-truncate on web/url/research egress; redact user query;
+  redact recall/forget embed query. Dep CVEs cleared (aiohttp, setuptools,
+  pydantic-settings).
+
 ## 24.6 hardening sweep (summary)
 Egress redaction (screen/OCR/web/transcripts → OpenAI), prompt-injection
 resistance (external content is inert data; runtime confirmation gate doesn't

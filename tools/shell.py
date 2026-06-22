@@ -53,7 +53,9 @@ _BLOCKED_RULES = [
     (r"\bosascript\b.*do\s+shell\s+script", "escalar privilegios vía AppleScript"),
     (r"\bnvram\b\s+\S+=", "escribir en la NVRAM del sistema"),
 ]
-_BLOCKED_RE = [(re.compile(p, re.IGNORECASE), reason) for p, reason in _BLOCKED_RULES]
+# DOTALL so `.` crosses newlines — a multi-line `osascript -e $'…\ndo shell
+# script…'` cannot slip the AppleScript privilege-ladder block (24.6 audit).
+_BLOCKED_RE = [(re.compile(p, re.IGNORECASE | re.DOTALL), reason) for p, reason in _BLOCKED_RULES]
 
 # Commands that mutate the filesystem / processes / system state and so must be
 # confirmed by voice before running. The blocklist above is NOT a security
@@ -73,11 +75,17 @@ _DESTRUCTIVE_PATTERNS = [
     r"\bgit\s+reset\s+--hard\b", r"\bgit\s+clean\b", r"--force\b", r"\bgit\s+push\b",
     r"\b(brew|pip|pip3|npm|uv)\s+(uninstall|remove|rm)\b",
     r"\bfind\b.*-delete\b", r"\bfind\b.*-exec\b",
-    # truncating redirect `> file` (not >>, 2>, &>, >&) — and not the `=>`/`->`/`>=`
-    # arrows that show up when Garcia asks Emma to echo or grep code.
-    r"(?<![0-9&>=-])>(?![>&=])",
+    # 24.6 audit: overwrite/clobber verbs that cause data loss WITHOUT a `>` —
+    # cp/install overwrite a file, truncate empties it, ln -f clobbers, tee writes.
+    r"\bcp\b", r"\binstall\b", r"\btruncate\b", r"\btee\b",
+    r"\bln\b[^|;&]*\s-[a-z]*f", r"\bosascript\b",
+    # truncating redirect `> file` — but NOT `>>` (append), `&>`/`>&` (merge),
+    # `2>` (stderr is conventional), or the `=>`/`->`/`>=` arrows in code echoes.
+    # 24.6 audit: only `2`/`&` are excluded before `>`, so a single-digit fd
+    # redirect like `echo x 1> ~/.ssh/authorized_keys` is now flagged.
+    r"(?<![2&>=-])>(?![>&=])",
 ]
-_DESTRUCTIVE_RE = [re.compile(p, re.IGNORECASE) for p in _DESTRUCTIVE_PATTERNS]
+_DESTRUCTIVE_RE = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in _DESTRUCTIVE_PATTERNS]
 
 
 def _is_destructive(command: str) -> bool:

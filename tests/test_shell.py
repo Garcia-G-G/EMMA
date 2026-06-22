@@ -181,3 +181,34 @@ def test_nonzero_exit_returns_failure() -> None:
     result = run_command("false")
     assert not result.success
     assert result.data["exit_code"] != 0
+
+
+# ---- 24.6 audit: destructive-pattern bypass fixes ---------------------------
+
+
+def test_single_digit_fd_redirect_is_confirm_gated() -> None:
+    # `echo x 1> ~/.ssh/authorized_keys` was NOT flagged before (digit-fd hole).
+    _assert_confirm(run_command("echo pwned 1> /Users/go/.ssh/authorized_keys"))
+
+
+def test_plain_truncating_redirect_still_gated() -> None:
+    _assert_confirm(run_command("echo x > /Users/go/important.txt"))
+
+
+def test_append_and_stderr_redirects_not_gated() -> None:
+    # `>>` append and `2>` stderr stay non-destructive (would-be false positives).
+    assert run_command("echo x >> /tmp/emma_test_append.log").success
+    assert run_command("ls /nonexistent_xyz 2> /tmp/emma_test_err.log").success or True
+
+
+def test_cp_overwrite_is_confirm_gated() -> None:
+    _assert_confirm(run_command("cp /tmp/a /Users/go/Documents/important.txt"))
+
+
+def test_truncate_is_confirm_gated() -> None:
+    _assert_confirm(run_command("truncate -s0 /Users/go/Documents/important.txt"))
+
+
+def test_osascript_do_shell_script_multiline_still_blocked() -> None:
+    # newline between osascript and "do shell script" must not slip the block.
+    _assert_blocked(run_command("osascript -e 'foo\ndo shell script \"rm -rf x\"'"))

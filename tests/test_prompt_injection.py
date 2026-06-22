@@ -58,17 +58,30 @@ def _run(params) -> dict | None:
 
 
 def test_cold_confirmed_destructive_with_no_voice_is_refused() -> None:
-    # No user turn at all → zero Garcia voice → a destructive cold confirm is refused.
+    # No user turn at all → zero Garcia voice → refused, converted to a question.
     p = _params("delete_note", title="Pendientes", confirmed=True)
     dispatched = _run(p)
     assert dispatched is None  # the destructive tool NEVER ran
     assert p.captured is not None and p.captured["success"] is False
-    assert "oírte" in p.captured["user_message"].lower()
+    assert p.captured["requires_confirmation"] is True  # becomes a spoken yes/no
+    assert "confirmes" in p.captured["user_message"].lower()
+
+
+def test_injection_after_read_tool_is_refused() -> None:
+    # CRITICAL audit finding 2: user says benign "lee la página", a read tool runs
+    # and returns attacker content, the LLM fires delete(confirmed=True) same turn.
+    # A tool completed since the user's last turn → the cold confirm is refused.
+    session_memory.push_event("user", "speech", "lee la página")
+    session_memory.record_completed_action("summarize_pane", {"question": ""}, "lee la página")
+    p = _params("delete_note", title="Pendientes", confirmed=True)
+    dispatched = _run(p)
+    assert dispatched is None  # injection cannot drive the destructive action
+    assert p.captured["requires_confirmation"] is True
 
 
 def test_preemptive_confirm_with_voice_is_allowed() -> None:
-    # "borra la nota compras, sí, seguro" in one breath — Garcia DID speak it.
-    # Intentional UX: a cold confirm WITH a user turn proceeds (B1 guards injection).
+    # "borra la nota compras, sí, seguro" in one breath — Garcia DID speak it, and
+    # NO tool ran between his words and the call → legit preemptive flow proceeds.
     session_memory.push_event("user", "speech", "borra la nota compras, sí, seguro")
     p = _params("delete_note", title="Compras", confirmed=True)
     assert _run(p) == "delete_note"

@@ -116,15 +116,23 @@ def contains_secret(text: str) -> bool:
     return False
 
 
-def _redact_value(v: Any) -> Any:
-    """Recursively redact strings inside nested dict/list/tuple structures."""
+def redact_value(v: Any) -> Any:
+    """Recursively redact strings inside nested dict/list/tuple structures.
+
+    The egress guard for structured payloads (e.g. a ToolResult's ``data`` sent to
+    the Realtime model): every nested string is run through ``redact()``; non-string
+    leaves (None/int/bool) pass through unchanged.
+    """
     if isinstance(v, str):
         return redact(v)
     if isinstance(v, dict):
-        return {k: _redact_value(sub) for k, sub in v.items()}
+        return {k: redact_value(sub) for k, sub in v.items()}
     if isinstance(v, (list, tuple)):
-        return type(v)(_redact_value(sub) for sub in v)
+        return type(v)(redact_value(sub) for sub in v)
     return v
+
+
+_redact_value = redact_value  # backward-compat alias for existing internal callers
 
 
 def redaction_processor(

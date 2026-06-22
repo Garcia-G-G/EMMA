@@ -75,6 +75,26 @@ def last_user_turn_ts() -> float | None:
     return None
 
 
+def tool_completed_since_last_user_turn() -> bool:
+    """True if a tool finished AFTER the user last spoke (24.6, injection guard).
+
+    The prompt-injection-to-action signature: the user says something benign
+    ("lee esta página"), a READ tool then runs and returns attacker content, and
+    the LLM — in the same turn, with no fresh user voice — tries to fire a
+    destructive ``confirmed=True``. If any tool completed since the last user
+    turn, a cold confirmation is NOT genuine user intent and must be refused.
+    The legit "borra X, sí" preemptive flow has NO tool between the user's words
+    and the destructive call, so it stays allowed.
+    """
+    with _lock:
+        for ev in reversed(_events):
+            if ev.role == "user" and ev.kind in ("speech", "speech_started"):
+                return False  # reached the last user turn first → nothing ran since
+            if ev.role == "tool" and ev.kind == "completed":
+                return True
+    return False
+
+
 def last_user_speech_text() -> str:
     """Content of the most recent user speech event ("" if none)."""
     with _lock:

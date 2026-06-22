@@ -543,7 +543,7 @@ async def recall(query: str | None = None, *, limit: int = 5) -> list[Fact]:
     """
     if not query or not query.strip():
         return await asyncio.to_thread(_recall_sync, None, limit)
-    qvec = await embeddings.embed(query)
+    qvec = await embeddings.embed(redaction.redact(query))  # egress: don't ship a dictated secret
     return await asyncio.to_thread(_recall_vec_sync, _serialize(qvec), limit)
 
 
@@ -561,7 +561,7 @@ async def forget(content_or_id: str | int) -> int:
     text = str(content_or_id).strip()
     if not text:
         return 0
-    vec = await embeddings.embed(text)
+    vec = await embeddings.embed(redaction.redact(text))  # egress: don't ship a dictated secret
     return await asyncio.to_thread(_forget_semantic_sync, _serialize(vec))
 
 

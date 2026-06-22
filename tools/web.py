@@ -169,7 +169,7 @@ async def search_web(query: str) -> ToolResult:
                 },
                 {
                     "role": "user",
-                    "content": f"Query: {query}\n\nResults:\n{snippets}",
+                    "content": f"Query: {redact(query)}\n\nResults:\n{snippets}",
                 },
             ],
             timeout=settings.API_TIMEOUT_S,
@@ -216,7 +216,8 @@ async def summarize_page(url: str) -> ToolResult:
     body = body.strip()
     if not body:
         return ToolResult(False, None, "La página no tenía texto que pudiera extraer.", False)
-    excerpt = redact(body[:6000])  # egress guard: strip secrets/PII before the page leaves
+    excerpt = redact(body)[:6000]  # egress guard: redact BEFORE truncating (a secret split
+    #                                across the cut would dodge the 32-char key floor otherwise)
     try:
         completion = await _get_summary_client().chat.completions.create(
             model="gpt-4o-mini",

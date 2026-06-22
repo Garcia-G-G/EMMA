@@ -3,11 +3,51 @@
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import patch
+
 import pytest
 
+import core.conversation as conv
 import tools.screen_vision_tool as svt
+from tools.base import ToolResult
 
 _CARD = "4111 1111 1111 1111"  # Luhn-valid test card
+
+
+def test_tool_result_data_and_message_redacted_at_seam() -> None:
+    """CRITICAL audit finding 1: a tool's data/user_message reach the Realtime
+    model verbatim — they MUST be redacted at the result_callback seam, so a
+    secret OCR'd/AX-read from the screen never egresses even if the tool forgot."""
+    captured = {}
+
+    class _P:
+        function_name = "look_at_screen"
+
+        def __init__(self):
+            self.arguments: dict = {}
+
+        async def result_callback(self, payload):
+            captured.update(payload)
+
+    async def fake_dispatch(name, args):
+        # a tool that surfaces a visible secret in BOTH channels
+        return ToolResult(
+            True,
+            {"text": f"la tarjeta en pantalla es {_CARD}", "scope": "window"},
+            f"Veo la tarjeta {_CARD}.",
+            False,
+        )
+
+    handler = conv._make_function_handler(conv.SessionControl())
+    with patch("core.conversation.dispatch", new=fake_dispatch):
+        asyncio.run(handler(_P()))
+
+    blob = str(captured)
+    assert _CARD not in blob  # neither data nor user_message leaked the card
+    assert "REDACTED" in captured["user_message"]
+    assert "REDACTED" in captured["data"]["text"]
+    assert captured["data"]["scope"] == "window"  # non-secret data preserved
 
 
 class _FakeCompletion:

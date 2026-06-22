@@ -29,7 +29,9 @@ def harden_local_files() -> dict[str, int]:
     """
     home = Path.home() / ".emma"
     fixed = {"dirs": 0, "files": 0}
-    if not home.exists():
+    # Never operate on a symlinked ~/.emma — a planted symlink must not turn this
+    # into a chmod primitive against an arbitrary target (24.6 audit, HIGH).
+    if not home.exists() or home.is_symlink():
         return fixed
     with contextlib.suppress(OSError):
         if (home.stat().st_mode & 0o777) != 0o700:
@@ -37,6 +39,10 @@ def harden_local_files() -> dict[str, int]:
             fixed["dirs"] += 1
     for p in home.rglob("*"):
         with contextlib.suppress(OSError):
+            # chmod follows symlinks; skip them so a symlink inside ~/.emma can't
+            # redirect the chmod onto ~/.ssh/id_ed25519 etc.
+            if p.is_symlink():
+                continue
             mode = p.stat().st_mode & 0o777
             if p.is_dir() and mode != 0o700:
                 os.chmod(p, 0o700)
