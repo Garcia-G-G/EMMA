@@ -136,3 +136,14 @@ def test_injection_strings_do_not_reach_dispatch_as_actions() -> None:
         session_memory.clear()
         p = _params("delete_note", title=bad, confirmed=True)
         assert _run(p) is None  # cold confirm refused regardless of the string
+
+
+def test_tool_per_turn_cap_counts_actions_not_confirmation_questions() -> None:
+    # audit fix: confirmation QUESTIONS must not count toward the runaway cap.
+    session_memory.clear()
+    session_memory.push_event("user", "speech", "haz algo")
+    for _ in range(15):  # 15 confirmation questions, ZERO completed actions
+        session_memory.push_event("tool", "requires_confirmation:delete_note")
+    assert session_memory.tools_since_last_user_turn() == 0  # questions don't count
+    session_memory.record_completed_action("now_playing", {}, "")
+    assert session_memory.tools_since_last_user_turn() == 1  # a real action counts

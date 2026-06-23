@@ -237,3 +237,18 @@ def test_daily_report_aggregates_no_pii(client, monkeypatch):
     d = client.get("/demo/admin/daily-report").json()
     assert set(d) >= {"sessions_24h", "cost_usd_24h", "daily_ceiling_usd"}
     assert "ip" not in json.dumps(d).lower()
+
+
+def test_client_ip_prefers_fly_header_over_spoofable_xff():
+    # audit fix: leftmost X-Forwarded-For is client-spoofable; trust Fly-Client-IP.
+    from starlette.requests import Request as SRequest
+    def _req(headers):
+        scope = {"type": "http", "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
+                 "client": ("9.9.9.9", 0)}
+        return SRequest(scope)
+    # spoofed XFF must NOT win when Fly sets the real IP
+    ip = demo_session._client_ip(_req({"Fly-Client-IP": "5.5.5.5", "X-Forwarded-For": "1.2.3.4"}))
+    assert ip == "5.5.5.5"
+    # no Fly header → take the RIGHTMOST XFF hop (edge-appended), not the client's leftmost
+    ip2 = demo_session._client_ip(_req({"X-Forwarded-For": "1.2.3.4, 8.8.8.8"}))
+    assert ip2 == "8.8.8.8"

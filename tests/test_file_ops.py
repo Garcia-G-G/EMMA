@@ -124,3 +124,13 @@ async def test_rename_batch_skips_existing_target(monkeypatch, tmp_path) -> None
 
 async def _async(value):
     return value
+
+
+def test_file_edit_denies_dotenv_family(monkeypatch, tmp_path):
+    # audit fix: .env.local / .env.production must be refused like .env.
+    from tools import file_edit
+    monkeypatch.setattr(file_edit, "_home", lambda: tmp_path)
+    assert file_edit._resolve_in_home(str(tmp_path / ".env.local")) is None
+    assert file_edit._resolve_in_home(str(tmp_path / ".env.production")) is None
+    assert file_edit._resolve_in_home(str(tmp_path / ".env")) is None
+    assert file_edit._resolve_in_home(str(tmp_path / "notes.txt")) is not None  # normal file ok

@@ -182,3 +182,16 @@ def test_reflection_routes_secret_to_keychain_not_db(tmp_path) -> None:
         assert len(rows) == 1
         assert "hunter2" not in rows[0]["content"]
         assert rows[0]["vault_ref"] is not None
+
+
+def test_redaction_spares_hashes_uuids_and_ids() -> None:
+    # audit fix: the tool-egress seam must not corrupt legit output the LLM needs.
+    from core.redaction import redact
+    sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"   # 40-char git SHA
+    uuid = "550e8400-e29b-41d4-a716-446655440000"
+    tweet = "1718900000123456789"                       # 19-digit ID
+    for s in (sha, uuid, tweet):
+        assert redact(f"value {s} here") == f"value {s} here", s
+    # but real secrets / cards still go:
+    assert "REDACTED" in redact("sk-proj-" + "a" * 40)
+    assert "REDACTED:CREDIT_CARD" in redact("4111 1111 1111 1111")

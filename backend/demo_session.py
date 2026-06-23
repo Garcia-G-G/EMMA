@@ -203,8 +203,21 @@ def session_config(lang: str) -> dict[str, Any]:
 
 
 def _client_ip(request: Request) -> str:
+    """The visitor's real IP, trusting only the EDGE-set header.
+
+    Audit fix: the leftmost X-Forwarded-For entry is CLIENT-controlled — a hostile
+    visitor could send `X-Forwarded-For: 1.2.3.4` and rotate it per request to mint
+    unlimited demo sessions (the per-IP/24h limit keys on this). Fly sets
+    `Fly-Client-IP` to the true peer; prefer it, then the RIGHTMOST XFF hop (the
+    one the trusted proxy appended), then the socket peer.
+    """
+    fly = request.headers.get("fly-client-ip")
+    if fly:
+        return fly.strip()
     fwd = request.headers.get("x-forwarded-for")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "0.0.0.0")
+    if fwd:
+        return fwd.split(",")[-1].strip()  # rightmost = appended by the trusted edge
+    return request.client.host if request.client else "0.0.0.0"
 
 
 def hash_ip(ip: str) -> str:
@@ -411,9 +424,18 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
                             await ws.send_text(json.dumps({"type": "emma.realtime_error"}))
                             return
                         if etype == "response.done":
-                            u = ev.get("response", {}).get("usage", {})
-                            usage["in"] += int(u.get("input_tokens", 0))
-                            usage["out"] += int(u.get("output_tokens", 0))
+                            u = (ev.get("response", {}) or {}).get("usage", {}) or {}
+                            # GA may report under input_tokens OR *_token_details/total_*;
+                            # read defensively so the cost cap can't silently zero out
+                            # (audit: a wallet brake that reads the wrong key = real $).
+                            tin = int(u.get("input_tokens") or u.get("total_input_tokens") or 0)
+                            tout = int(u.get("output_tokens") or u.get("total_output_tokens") or 0)
+                            usage["in"] += tin
+                            usage["out"] += tout
+                            if (tin == 0 and tout == 0):
+                                # an audio response that billed 0 tokens means the shape
+                                # changed — alert so the ceiling isn't silently defeated.
+                                _maybe_alert_ops("demo_usage_zero", note="response.done usage parsed 0")
                             if cost_usd(usage["in"], usage["out"]) >= cost_cap:
                                 await ws.send_text(json.dumps({"type": "emma.cost_exceeded"}))
                                 return  # cut the session — hard $ ceiling

@@ -38,10 +38,43 @@ def _luhn_ok(digits: str) -> bool:
 
 
 def _card_sub(m: re.Match[str]) -> str:
-    digits = re.sub(r"\D", "", m.group(0))
+    raw = m.group(0)
+    digits = re.sub(r"\D", "", raw)
+    # A bare (un-grouped) run longer than 16 is an ID, not a card — tweet IDs and
+    # epoch-µs values are 17-19 digits and ~1/10 pass Luhn by chance. Real long
+    # cards (19-digit UnionPay/Maestro) are entered grouped. Require a separator
+    # for >16, mirroring _phone_sub's tweet-ID protection (audit 24.x).
+    if len(digits) > 16 and not re.search(r"[ -]", raw):
+        return raw
     if 13 <= len(digits) <= 19 and _luhn_ok(digits):
         return "[REDACTED:CREDIT_CARD]"
-    return m.group(0)
+    return raw
+
+
+_HEX_RUN = re.compile(r"^[0-9a-fA-F]+$")
+# Known vendor key prefixes → always a secret, regardless of charset shape.
+_KEY_PREFIXES = ("sk-", "sk_", "pk_", "rk_", "ghp_", "gho_", "ghu_", "ghs_", "github_pat_",
+                 "xox", "AKIA", "ASIA", "re_", "tvly-", "AIza", "ya29.", "xai-", "dckr_",
+                 "glpat-", "whsec_", "rk_live", "shpat_")
+
+
+def _api_key_sub(m: re.Match[str]) -> str:
+    """Redact a 32+ char run UNLESS it's a content hash / UUID / plain word.
+
+    The generic key rule eats anything 32+ chars, which mangled legit tool output
+    the LLM needs: a 40-char git SHA, a UUID, a long cache-path component (audit:
+    over-redaction at the tool-egress seam). A known vendor prefix is always a
+    secret; otherwise SHAs/md5/UUIDs are pure hex (dashes stripped) and plain
+    words lack a digit — spare those, redact the rest.
+    """
+    run = m.group(0)
+    if any(run.startswith(p) for p in _KEY_PREFIXES):
+        return "[REDACTED:API_KEY_LIKE]"
+    if _HEX_RUN.match(run.replace("-", "")):
+        return run  # SHA1/256, md5, UUID — not a secret, keep it readable
+    if not (any(c.isalpha() for c in run) and any(c.isdigit() for c in run)):
+        return run  # a long plain word / hashtag is not a key
+    return "[REDACTED:API_KEY_LIKE]"
 
 
 def _iban_sub(m: re.Match[str]) -> str:
@@ -68,8 +101,10 @@ _RULES: list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]] 
     ("RFC", re.compile(r"\b[A-Z&Ñ]{3,4}\d{6}[A-Z\d]{3}\b"), "[REDACTED:RFC]"),
     ("US_SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[REDACTED:US_SSN]"),
     ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), _iban_sub),
-    ("API_KEY_LIKE", _API_KEY_RE, "[REDACTED:API_KEY_LIKE]"),
-    ("PHONE_INTL", re.compile(r"\+?\d[\d\s\-()]{7,}\d"), _phone_sub),
+    ("API_KEY_LIKE", _API_KEY_RE, _api_key_sub),
+    # (?<![0-9a-fA-F]) so a digit run that continues a hex sequence (a UUID tail
+    # like ...-a716-446655440000) is NOT mistaken for a phone number.
+    ("PHONE_INTL", re.compile(r"(?<![0-9a-fA-F])\+?\d[\d\s\-()]{7,}\d"), _phone_sub),
 ]
 
 

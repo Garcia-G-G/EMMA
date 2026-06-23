@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -188,8 +189,12 @@ def _frontmost_app() -> Any | None:
 
 # PIDs whose enhanced-UI flag we've already handled this session → verdict.
 # Module scope: resets when the daemon restarts (no persistence). Generic — keyed
-# by PID, never by app name.
-_enhanced_seen: dict[int, bool] = {}
+# by PID, never by app name. Bounded LRU: the macOS PID space recycles, so a
+# stale entry could wrongly mark a NEW app (reused PID) as already-handled, and an
+# unbounded dict leaks over a multi-day daemon (audit fix). 256 covers any real
+# working set of concurrently-running apps.
+_ENHANCED_SEEN_MAX = 256
+_enhanced_seen: OrderedDict[int, bool] = OrderedDict()
 
 
 def _ensure_enhanced_ui(app_elem: Any, pid: int) -> bool:
@@ -204,6 +209,7 @@ def _ensure_enhanced_ui(app_elem: Any, pid: int) -> bool:
     if not _AX_OK or app_elem is None:
         return False
     if pid in _enhanced_seen:
+        _enhanced_seen.move_to_end(pid)  # LRU touch
         return _enhanced_seen[pid]  # already handled — don't re-set
     ok = False
     for attr in (kAXEnhancedUserInterfaceAttribute, kAXManualAccessibilityAttribute):
@@ -217,6 +223,9 @@ def _ensure_enhanced_ui(app_elem: Any, pid: int) -> bool:
     if not ok:
         log.debug("enhanced_ui_refused", pid=pid)
     _enhanced_seen[pid] = ok
+    _enhanced_seen.move_to_end(pid)
+    while len(_enhanced_seen) > _ENHANCED_SEEN_MAX:
+        _enhanced_seen.popitem(last=False)  # evict oldest
     return ok
 
 
