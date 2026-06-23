@@ -108,8 +108,10 @@ def tools_since_last_user_turn() -> int:
         for ev in reversed(_events):
             if ev.role == "user" and ev.kind in ("speech", "speech_started"):
                 break
-            if ev.role == "tool" and (ev.kind == "completed"
-                                      or ev.kind.startswith("requires_confirmation")):
+            # Count only ACTIONS that ran — not confirmation QUESTIONS. A question
+            # (requires_confirmation) and its replayed re-asks are not work; counting
+            # them wedged the cap during a normal confirm round-trip (audit fix).
+            if ev.role == "tool" and ev.kind == "completed":
                 n += 1
     return n
 

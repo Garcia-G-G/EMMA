@@ -114,11 +114,11 @@ async def listen() -> None:
 
     Plays the ack chime on a hit, mirroring the openWakeWord branch's lifecycle.
     """
+    import queue
+
     from vosk import KaldiRecognizer
 
     model = await _get_model()
-    rec = KaldiRecognizer(model, _SAMPLE_RATE, _GRAMMAR)
-
     detected = asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -128,22 +128,44 @@ async def listen() -> None:
     warmup_s = 0.0 if settings.EMMA_TEST_MODE else settings.WAKE_WARMUP_MS / 1000.0
     open_mono = time.monotonic()
 
+    # The PortAudio callback must return within the buffer deadline (~250 ms here),
+    # but Kaldi's AcceptWaveform is a full forward pass that can overrun it →
+    # dropped input + missed wakes (audit fix). So the callback ONLY enqueues raw
+    # bytes (O(1), realtime-safe); a worker thread (which solely owns `rec`) does
+    # the decode. This also removes the cancel-time callback↔teardown race.
+    audio_q: queue.Queue[bytes] = queue.Queue(maxsize=64)
+    stop = threading.Event()
+
     def _cb(indata: Any, frames: int, _t: object, status: object) -> None:
         if status:
             log.warning("input_status", status=str(status))
-        try:
-            if runtime_state.suppress_wake(open_mono, warmup_s):
-                return  # skip during warmup / while the bot speaks (Layer B)
-            data = bytes(indata)
-            if rec.AcceptWaveform(data):
-                text = json.loads(rec.Result()).get("text", "")
-            else:
-                text = json.loads(rec.PartialResult()).get("partial", "")
-            if matches_wake(text):
-                log.info("vosk_wake_heard", text=text)
-                loop.call_soon_threadsafe(detected.set)
-        except Exception as exc:
-            log.warning("vosk_predict_failed", error=str(exc))
+        if runtime_state.suppress_wake(open_mono, warmup_s):
+            return  # warmup / bot speaking (Layer B)
+        # drop a frame rather than block the realtime audio thread if the worker lags
+        with contextlib.suppress(queue.Full):
+            audio_q.put_nowait(bytes(indata))
+
+    def _decode_worker() -> None:
+        rec = KaldiRecognizer(model, _SAMPLE_RATE, _GRAMMAR)  # worker-owned, never the callback's
+        while not stop.is_set():
+            try:
+                data = audio_q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                if rec.AcceptWaveform(data):
+                    text = json.loads(rec.Result()).get("text", "")
+                else:
+                    text = json.loads(rec.PartialResult()).get("partial", "")
+                if matches_wake(text):
+                    log.info("vosk_wake_heard", text=text)
+                    loop.call_soon_threadsafe(detected.set)
+                    return
+            except Exception as exc:
+                log.warning("vosk_predict_failed", error=str(exc))
+
+    worker = threading.Thread(target=_decode_worker, name="vosk-decode", daemon=True)
+    worker.start()
 
     stream = sd.RawInputStream(
         samplerate=_SAMPLE_RATE,
@@ -158,8 +180,11 @@ async def listen() -> None:
         await detected.wait()
     except asyncio.CancelledError:
         log.info("vosk_listen_cancelled")
+        stop.set()  # let the decode worker exit; it never touches a torn-down stream
         _close_stream_background(stream)
         raise
+    finally:
+        stop.set()
 
     stream.stop()
     stream.close()

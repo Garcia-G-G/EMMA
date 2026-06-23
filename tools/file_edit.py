@@ -73,8 +73,8 @@ def _home() -> Path:
 # 24.7-G6: even within $HOME, never write these — credential/secret-bearing
 # paths a prompt-injection could target (the writes are already confirmation-gated,
 # this is defence-in-depth so an injected confirmed=True can't reach them either).
-_DENIED_WITHIN_HOME = (".ssh", ".gnupg", ".aws", ".config/gh", ".emma", ".env",
-                       ".netrc", ".npmrc", "Library/Keychains")
+_DENIED_WITHIN_HOME = (".ssh", ".gnupg", ".aws", ".config/gh", ".emma",
+                       ".netrc", ".npmrc", ".pgpass", ".docker", "Library/Keychains")
 
 
 def _resolve_in_home(raw: str) -> Path | None:
@@ -89,6 +89,10 @@ def _resolve_in_home(raw: str) -> Path | None:
     rel = str(p.relative_to(home))
     if any(rel == d or rel.startswith(d + "/") for d in _DENIED_WITHIN_HOME):
         return None  # secret-bearing dir/file — refuse even inside home
+    # any dotenv family member (.env, .env.local, .env.production, …) — audit fix:
+    # the bare ".env" prefix missed the most common secret files.
+    if p.name == ".env" or p.name.startswith(".env."):
+        return None
     return p
 
 
