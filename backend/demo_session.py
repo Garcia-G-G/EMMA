@@ -165,14 +165,34 @@ def _load_prompt(lang: str) -> str:
 
 
 def session_config(lang: str) -> dict[str, Any]:
-    """The Realtime ``session.update`` the BRIDGE sends (never the client). Locks
-    voice = coral, the demo persona, and exactly the 4 whitelisted tools."""
+    """The GA Realtime ``session.update`` the BRIDGE sends (never the client).
+
+    GA shape (25.0.3) — deltas vs the deprecated beta shape:
+      - session.type = "realtime" is now REQUIRED.
+      - "modalities" → "output_modalities".
+      - voice + audio formats move under session.audio.{input,output}; format is
+        an object {type:"audio/pcm", rate:24000}, not the old "pcm16" string.
+      - turn_detection moves under session.audio.input.
+      - tools stay at session.tools as {type:"function", name, description, parameters}.
+    Mirrors the fields OpenAI echoes in session.created. Locks voice=coral, the
+    demo persona, and exactly the 4 whitelisted tools.
+    """
     return {
         "type": "session.update",
         "session": {
+            "type": "realtime",
             "instructions": _load_prompt(lang),
-            "voice": settings.DEMO_REALTIME_VOICE,
-            "modalities": ["audio", "text"],
+            "output_modalities": ["audio"],
+            "audio": {
+                "input": {
+                    "format": {"type": "audio/pcm", "rate": 24000},
+                    "turn_detection": {"type": "server_vad"},
+                },
+                "output": {
+                    "format": {"type": "audio/pcm", "rate": 24000},
+                    "voice": settings.DEMO_REALTIME_VOICE,
+                },
+            },
             "tools": [t["schema"] for t in _DEMO_TOOLS.values()],
             "tool_choice": "auto",
         },
@@ -295,6 +315,23 @@ async def demo_daily_report(request: Request) -> Any:
 # ---- A2: the audio bridge ---------------------------------------------------
 
 
+async def _await_session_created(oai: Any, timeout: float = 10.0) -> dict[str, Any]:
+    """Consume frames until OpenAI's GA ``session.created`` (the schema we mirror).
+
+    Raises on an ``error`` frame or timeout so the bridge fails loudly instead of
+    sending a session.update into the void. Returns the session.created event.
+    """
+    async with asyncio.timeout(timeout):
+        async for msg in oai:
+            ev = json.loads(msg if isinstance(msg, str) else msg.decode())
+            t = ev.get("type", "")
+            if t == "session.created":
+                return ev
+            if t == "error":
+                raise RuntimeError(f"openai_realtime_error: {ev.get('error', {})}")
+    raise TimeoutError("no session.created from OpenAI")
+
+
 async def _run_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     entry = _DEMO_TOOLS.get(name)
     if entry is None:  # defence-in-depth: model asked for a non-whitelisted tool
@@ -328,12 +365,16 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
     bytes_in = [0]  # 24.7-B3: cumulative inbound — cut on the anti-drain ceiling
 
     oai_url = f"{settings.OPENAI_REALTIME_URL}?model={settings.OPENAI_REALTIME_MODEL}"
-    headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "OpenAI-Beta": "realtime=v1"}
+    # 25.0.3 GA: NO "OpenAI-Beta" header. Sending it (or beta-shape frames) makes
+    # OpenAI close with 4000 beta_api_shape_disabled on the first frame.
+    headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
 
     try:
         async with websockets.connect(oai_url, additional_headers=headers, max_size=None) as oai:
-            # Inject OUR session config first — voice, persona, the 4 tools. Any
-            # session.update the client sends afterwards is dropped (below).
+            # GA: send OUR session.update AFTER session.created arrives, so we
+            # mirror the schema OpenAI just advertised. Any session.update the
+            # client sends afterwards is dropped (below).
+            await _await_session_created(oai)
             await oai.send(json.dumps(session_config(lang)))
 
             async def client_to_openai() -> None:
@@ -361,6 +402,14 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
                     with contextlib.suppress(Exception):
                         ev = json.loads(text)
                         etype = ev.get("type", "")
+                        if settings.DEMO_DEBUG_REALTIME:
+                            log.info("oai_event", type=etype)  # dev-mode shape iteration aid
+                        if etype == "error":
+                            # GA surfaces a bad session.update / frame here instead
+                            # of a silent close. Log the field, tell the client.
+                            log.warning("oai_realtime_error", error=ev.get("error", {}))
+                            await ws.send_text(json.dumps({"type": "emma.realtime_error"}))
+                            return
                         if etype == "response.done":
                             u = ev.get("response", {}).get("usage", {})
                             usage["in"] += int(u.get("input_tokens", 0))
