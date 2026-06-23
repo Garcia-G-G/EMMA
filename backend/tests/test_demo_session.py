@@ -105,7 +105,7 @@ def test_exactly_four_demo_tools() -> None:
 
 def test_session_config_injects_only_whitelisted_tools_and_coral() -> None:
     cfg = demo_session.session_config("es")["session"]
-    assert cfg["voice"] == "coral"
+    assert cfg["audio"]["output"]["voice"] == "coral"  # 25.0.3 GA: voice under audio.output
     assert {t["name"] for t in cfg["tools"]} == set(demo_session.DEMO_TOOL_NAMES)
     assert "vive en tu Mac" in cfg["instructions"]  # demo persona, not the daemon's
 

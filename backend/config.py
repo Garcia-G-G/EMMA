@@ -21,8 +21,12 @@ PLAN_CAPS: dict[str, dict[str, object]] = {
 class Settings:
     # ---- OpenAI (server-side only) ----
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-    OPENAI_REALTIME_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-2")
+    # 25.0.3: GA model name (beta "gpt-realtime-2" is gone). session.created echoes
+    # "gpt-realtime". Override via env if OpenAI ships a dated GA snapshot.
+    OPENAI_REALTIME_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime")
     OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime"
+    # Dump every OpenAI Realtime event type to the log — on while iterating on GA shape.
+    DEMO_DEBUG_REALTIME = os.environ.get("DEMO_DEBUG_REALTIME", "").lower() in ("1", "true", "yes")
 
     # ---- session tokens / cookies ----
     JWT_SECRET = os.environ.get("JWT_SECRET", "dev-insecure-change-me")
