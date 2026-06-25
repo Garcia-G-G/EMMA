@@ -25,6 +25,47 @@ log = structlog.get_logger("emma.tools.screen_vision")
 
 _NO_WINDOW = "No veo una ventana enfocada ahora mismo."
 
+# Apps whose AX tree is sparse BY DESIGN — a terminal or a blank document has
+# almost nothing for AX to expose, so a thin read there is expected, not a
+# failure. We surface `thin_by_design=True` so the LLM does NOT chain a wasteful
+# screenshot fallback for them. (27.3 — a classifier of expected-thinness, not a
+# per-app routing branch.)
+_THIN_BY_DESIGN_APPS = {
+    "terminal", "iterm", "iterm2", "alacritty", "kitty", "wezterm", "warp",
+    "hyper", "ghostty", "tmux",
+}
+
+
+def _ax_density(
+    static_texts: list[str], buttons: list[str], app: str,
+    bounds: tuple[float, float, float, float] | None,
+) -> dict[str, Any]:
+    """A small content-density signal the LLM reads from `data` to decide whether
+    the AX read was too thin and it should fall back to `look_at_screen` (27.3).
+
+    We never branch on this in tool code — we only *report* it. The chaining
+    decision lives in the system prompt at the LLM layer.
+    """
+    lines = [t for t in static_texts if t and t.strip()]
+    text = "\n".join(lines)
+    chars = len(text)
+    n_static = len(lines)
+    n_buttons = len(buttons)
+    big_window = bool(bounds and bounds[2] > 600 and bounds[3] > 400)
+    appears_thin = (
+        chars < 80
+        or (len(lines) < 3 and big_window)
+        or (n_static == 0 and n_buttons < 4)
+    )
+    return {
+        "ax_lines": len(lines),
+        "ax_chars": chars,
+        "ax_buttons": n_buttons,
+        "ax_static_text": n_static,
+        "ax_appears_thin": appears_thin,
+        "thin_by_design": (app or "").strip().lower() in _THIN_BY_DESIGN_APPS,
+    }
+
 
 def _best_button(name: str, labels: list[str]) -> str | None:
     """Exact / substring match first, then a high-confidence fuzzy match."""
@@ -61,7 +102,11 @@ async def describe_screen() -> ToolResult:
     r = await sv.current_screen()
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    return ToolResult(True, {"screen": r.structured, "web_content": r.web_content}, _short_summary(r), False)
+    density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    return ToolResult(
+        True, {"screen": r.structured, "web_content": r.web_content, "density": density},
+        _short_summary(r), False,
+    )
 
 
 @tool()
@@ -71,7 +116,11 @@ async def read_window_text() -> ToolResult:
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
     text = " ".join(r.texts).strip() or "(no hay texto visible para leer)"
-    return ToolResult(True, {"screen": r.structured, "web_content": r.web_content}, text[:600], False)
+    density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    return ToolResult(
+        True, {"screen": r.structured, "web_content": r.web_content, "density": density},
+        text[:600], False,
+    )
 
 
 @tool()
@@ -319,7 +368,9 @@ async def read_pane_text() -> ToolResult:
     pane = await asyncio.to_thread(sv.focused_pane)
     if pane is None or not pane.snippet:
         return ToolResult(False, None, "No logro identificar el panel para leerlo.", False)
-    return ToolResult(True, {"pane": _pane_data(pane)}, pane.snippet[:600], False)
+    snippet_lines = pane.snippet.splitlines()
+    density = _ax_density(snippet_lines, [], pane.app, pane.bounds)
+    return ToolResult(True, {"pane": _pane_data(pane), "density": density}, pane.snippet[:600], False)
 
 
 @tool()
