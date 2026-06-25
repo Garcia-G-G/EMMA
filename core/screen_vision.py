@@ -442,6 +442,7 @@ class ScreenRead:
     texts: list[str]
     structured: str  # the flattened App/Window/Buttons/Fields/Text block
     web_content: bool = False  # True when the read crossed an embedded web area
+    bounds: tuple[float, float, float, float] | None = None  # window x, y, w, h (27.3 density)
 
 
 def _current_screen_sync() -> ScreenRead | None:
@@ -458,6 +459,7 @@ def _current_screen_sync() -> ScreenRead | None:
         texts=parts["texts"],
         structured=_format_screen(app, win),
         web_content=bool(parts["web_content"]),
+        bounds=_bounds(win),
     )
 
 
