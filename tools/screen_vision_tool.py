@@ -103,8 +103,12 @@ async def describe_screen() -> ToolResult:
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
     density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    # 27.3.post: flatten the two decision flags to top-level so the system prompt
+    # reads `ax_appears_thin` / `thin_by_design` directly (no `density.` drill).
     return ToolResult(
-        True, {"screen": r.structured, "web_content": r.web_content, "density": density},
+        True, {"screen": r.structured, "web_content": r.web_content, "density": density,
+               "ax_appears_thin": density["ax_appears_thin"],
+               "thin_by_design": density["thin_by_design"]},
         _short_summary(r), False,
     )
 
@@ -117,8 +121,11 @@ async def read_window_text() -> ToolResult:
         return ToolResult(False, None, _NO_WINDOW, False)
     text = " ".join(r.texts).strip() or "(no hay texto visible para leer)"
     density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    # 27.3.post: see describe_screen above.
     return ToolResult(
-        True, {"screen": r.structured, "web_content": r.web_content, "density": density},
+        True, {"screen": r.structured, "web_content": r.web_content, "density": density,
+               "ax_appears_thin": density["ax_appears_thin"],
+               "thin_by_design": density["thin_by_design"]},
         text[:600], False,
     )
 
@@ -370,7 +377,13 @@ async def read_pane_text() -> ToolResult:
         return ToolResult(False, None, "No logro identificar el panel para leerlo.", False)
     snippet_lines = pane.snippet.splitlines()
     density = _ax_density(snippet_lines, [], pane.app, pane.bounds)
-    return ToolResult(True, {"pane": _pane_data(pane), "density": density}, pane.snippet[:600], False)
+    # 27.3.post: see describe_screen — flatten thin flags to top level.
+    return ToolResult(
+        True, {"pane": _pane_data(pane), "density": density,
+               "ax_appears_thin": density["ax_appears_thin"],
+               "thin_by_design": density["thin_by_design"]},
+        pane.snippet[:600], False,
+    )
 
 
 @tool()

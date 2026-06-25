@@ -119,6 +119,26 @@ async def login_page() -> str:
     return (_STATIC / "login.html").read_text(encoding="utf-8")
 
 
+# LANDING-27.post: the lock-screen CTAs (_landing/index.html:482,486,490) link to
+# /login + /plans + /download. Previously only /login existed; the other two 404'd.
+# Register is rendered server-side so signup flows from the landing don't bounce
+# through /login first. Each page is a minimal HTML shell that pulls live data
+# from existing JSON endpoints (/api/plans, /api/account, etc).
+@app.get("/plans", response_class=HTMLResponse)
+async def plans_page() -> str:
+    return (_STATIC / "plans.html").read_text(encoding="utf-8")
+
+
+@app.get("/download", response_class=HTMLResponse)
+async def download_page() -> str:
+    return (_STATIC / "download.html").read_text(encoding="utf-8")
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page() -> str:
+    return (_STATIC / "register.html").read_text(encoding="utf-8")
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request) -> Any:
     if await current_user(request) is None:
