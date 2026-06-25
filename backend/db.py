@@ -7,6 +7,7 @@ one source of truth.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import time
 import uuid
@@ -44,11 +45,26 @@ CREATE TABLE IF NOT EXISTS demo_hits (
 """
 
 
+# LANDING-27: columns added to the existing users table. ALTER is idempotent via
+# the try/except (SQLite raises if the column already exists) — safe on every connect.
+_MIGRATIONS = (
+    "ALTER TABLE users ADD COLUMN password_hash TEXT",
+    "ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN reset_token TEXT",
+    "ALTER TABLE users ADD COLUMN reset_expires REAL",
+    "ALTER TABLE users ADD COLUMN deleted_at REAL",
+)
+
+
 def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(settings.DATABASE_URL, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
+    for stmt in _MIGRATIONS:
+        with contextlib.suppress(sqlite3.OperationalError):  # column already exists
+            conn.execute(stmt)
+    conn.commit()
     return conn
 
 
@@ -102,6 +118,113 @@ def set_plan_by_customer(stripe_customer_id: str, plan: str) -> None:
     try:
         conn.execute("UPDATE users SET plan=? WHERE stripe_customer_id=?", (plan, stripe_customer_id))
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ---- email/password accounts (LANDING-27) -----------------------------------
+
+
+def get_user_by_email(email: str) -> dict[str, Any] | None:
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM users WHERE lower(email)=lower(?) AND deleted_at IS NULL", (email,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_local_user(email: str, password_hash: str, name: str = "") -> dict[str, Any] | None:
+    """Create an email/password user. Returns the row, or None if the email exists."""
+    conn = connect()
+    try:
+        try:
+            conn.execute(
+                "INSERT INTO users(email,name,provider,provider_id,password_hash,created_at) "
+                "VALUES(?,?,?,?,?,?)",
+                (email, name, "local", "", password_hash, time.time()),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return None  # UNIQUE(email) — already registered
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (email,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def set_password(user_id: int, password_hash: str) -> None:
+    conn = connect()
+    try:
+        conn.execute("UPDATE users SET password_hash=?, reset_token=NULL, reset_expires=NULL "
+                     "WHERE id=?", (password_hash, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_reset_token(email: str, token: str, expires: float) -> bool:
+    conn = connect()
+    try:
+        cur = conn.execute(
+            "UPDATE users SET reset_token=?, reset_expires=? WHERE lower(email)=lower(?) "
+            "AND deleted_at IS NULL", (token, expires, email))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def user_by_reset_token(token: str, now: float | None = None) -> dict[str, Any] | None:
+    now = now or time.time()
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM users WHERE reset_token=? AND reset_expires > ? AND deleted_at IS NULL",
+            (token, now),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def set_email(user_id: int, email: str) -> bool:
+    conn = connect()
+    try:
+        try:
+            conn.execute("UPDATE users SET email=?, email_verified=0 WHERE id=?", (email, user_id))
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # taken
+    finally:
+        conn.close()
+
+
+def soft_delete_user(user_id: int) -> None:
+    """GDPR soft delete — anonymize email + stamp deleted_at (hard purge is a later job)."""
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE users SET deleted_at=?, password_hash=NULL, reset_token=NULL, "
+            "email=? WHERE id=?", (time.time(), f"deleted-{user_id}@removed.invalid", user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def user_seconds_today(user_id: int, now: float | None = None) -> float:
+    """Seconds of demo this user spent in the last 24h — for the per-plan daily cap."""
+    now = now or time.time()
+    conn = connect()
+    try:
+        v = conn.execute(
+            "SELECT COALESCE(SUM(seconds_used),0) FROM sessions WHERE user_id=? AND started_at > ?",
+            (user_id, now - 86400),
+        ).fetchone()[0]
+        return float(v or 0.0)
     finally:
         conn.close()
 

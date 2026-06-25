@@ -10,12 +10,24 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Per-plan session caps. Free is the default; paid tiers lift the limits.
+# Per-plan caps (LANDING-27). One source of truth the demo bridge reads to size a
+# session. ``session_seconds`` = per-session length; ``daily_seconds`` = user/day
+# ceiling (0 = none beyond monthly); ``monthly_seconds`` = user/month; ``cost_cap_cents``
+# = hard $/session ceiling. Free is the anonymous 60s/IP discovery path.
 PLAN_CAPS: dict[str, dict[str, object]] = {
-    "free": {"max_session_seconds": 120, "daily_sessions": 2, "unlimited": False},
-    "pro": {"max_session_seconds": 600, "daily_sessions": 0, "unlimited": True},
-    "team": {"max_session_seconds": 1800, "daily_sessions": 0, "unlimited": True},
+    "free":  {"session_seconds": 60,   "daily_seconds": 60,    "monthly_seconds": 0,
+              "cost_cap_cents": 40},
+    "pro":   {"session_seconds": 300,  "daily_seconds": 600,   "monthly_seconds": 3600,
+              "cost_cap_cents": 200},
+    "power": {"session_seconds": 900,  "daily_seconds": 1800,  "monthly_seconds": 12000,
+              "cost_cap_cents": 1000},
 }
+# Back-compat: the old "team" tier maps to "power".
+PLAN_CAPS["team"] = PLAN_CAPS["power"]
+
+
+def plan_caps(plan: str | None) -> dict[str, object]:
+    return PLAN_CAPS.get(plan or "free", PLAN_CAPS["free"])
 
 
 class Settings:
@@ -75,7 +87,8 @@ class Settings:
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "")
-    STRIPE_PRICE_TEAM = os.environ.get("STRIPE_PRICE_TEAM", "")
+    STRIPE_PRICE_POWER = os.environ.get("STRIPE_PRICE_POWER", "")
+    STRIPE_PRICE_TEAM = os.environ.get("STRIPE_PRICE_TEAM", "")  # legacy alias for power
 
     # ---- Wake Word Studio (Prompt 16.3) ----
     # Auth-gate the Studio by default; flip to false only for local dev.

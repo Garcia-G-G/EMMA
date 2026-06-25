@@ -22,7 +22,9 @@ router = APIRouter()
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
-_PRICE = {"pro": settings.STRIPE_PRICE_PRO, "team": settings.STRIPE_PRICE_TEAM}
+_PRICE = {"pro": settings.STRIPE_PRICE_PRO,
+          "power": settings.STRIPE_PRICE_POWER or settings.STRIPE_PRICE_TEAM,
+          "team": settings.STRIPE_PRICE_TEAM}  # LANDING-27: pro/power (team = legacy)
 
 
 @router.post("/api/billing/checkout", response_model=CheckoutResponse)

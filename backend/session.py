@@ -39,10 +39,12 @@ async def verify_captcha(token: str, ip: str) -> bool:
         return False
 
 
-def issue_token(sid: str, kind: str, max_seconds: int, user_id: int | None) -> str:
+def issue_token(sid: str, kind: str, max_seconds: int, user_id: int | None,
+                cost_cap_cents: int | None = None) -> str:
     now = int(time.time())
     payload = {
         "sid": sid, "kind": kind, "max_seconds": max_seconds, "user_id": user_id,
+        "cost_cap_cents": cost_cap_cents,  # signed → the WS can't be tricked into a bigger cap
         "iat": now, "exp": now + settings.SESSION_TOKEN_TTL_S,
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
@@ -85,9 +87,11 @@ async def session_start(body: SessionStartRequest, request: Request) -> SessionS
         )
 
     caps = PLAN_CAPS.get(user["plan"], PLAN_CAPS["free"])
-    if not caps["unlimited"] and db.user_sessions_today(user["id"]) >= int(caps["daily_sessions"]):
-        raise HTTPException(429, "Llegaste a tu límite diario. Sube de plan para sesiones ilimitadas.")
-    max_seconds = int(caps["max_session_seconds"])
+    # LANDING-27 cap schema: enforce the per-user daily-seconds ceiling.
+    daily = int(caps["daily_seconds"])
+    if daily and db.user_seconds_today(user["id"]) >= daily:
+        raise HTTPException(429, "Llegaste a tu límite diario. Sube de plan para más tiempo.")
+    max_seconds = int(caps["session_seconds"])
     sid = db.create_session(user["id"])
     tok = issue_token(sid, "user", max_seconds, user["id"])
     return SessionStartResponse(session_token=tok, realtime_url=f"/realtime?token={tok}", max_seconds=max_seconds)
