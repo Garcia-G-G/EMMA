@@ -202,6 +202,12 @@ async def reflect_async(window: list[short_term.Turn]) -> None:
         log.info("reflection_committed", personal=personal, secret=secret)
 
 
+# Strong refs to in-flight reflection tasks. asyncio only holds a WEAK ref to a
+# bare create_task() result, so without this the GC can collect the task mid-write
+# and silently drop the fact extraction (the "facts captured automatically" promise).
+_INFLIGHT: set[asyncio.Task[None]] = set()
+
+
 def schedule_reflection(window: list[short_term.Turn]) -> asyncio.Task[None] | None:
     """Start reflection in the background. Returns the task (or None on no-op)."""
     if not window:
@@ -210,4 +216,7 @@ def schedule_reflection(window: list[short_term.Turn]) -> asyncio.Task[None] | N
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return None
-    return loop.create_task(reflect_async(list(window)))
+    task = loop.create_task(reflect_async(list(window)))
+    _INFLIGHT.add(task)
+    task.add_done_callback(_INFLIGHT.discard)
+    return task

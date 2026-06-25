@@ -139,3 +139,38 @@ def test_persistence_marks_inflight_aborted_after_restart(tmp_path):
     assert rec is not None
     assert rec.status == "aborted"
     assert "restart" in rec.error
+
+
+def test_completed_task_frees_handle_and_buffer(tmp_path):
+    reg = _reg(tmp_path)
+
+    async def noop(ctrl):
+        ctrl.append_output("hi\n")
+        return 0
+
+    async def run():
+        rec = await reg.start("rt", "shell", noop)
+        await reg.wait(rec.id, timeout_s=3)
+        return rec.id
+
+    task_id = asyncio.run(run())
+    # the live handle + output buffer must not pin memory after completion
+    assert task_id not in reg._handles
+    assert task_id not in reg._output_bufs
+    # but the record (with its final output) is retained
+    assert reg.get(task_id).last_output.strip() == "hi"
+
+
+def test_load_compacts_duplicate_rows(tmp_path):
+    db = tmp_path / "tasks.jsonl"
+    # Append-only history: the same task id written 3 times (start + 2 updates).
+    rows = [
+        {"id": "t1", "name": "x", "kind": "shell", "started_at": 100.0, "status": "running"},
+        {"id": "t1", "name": "x", "kind": "shell", "started_at": 100.0, "status": "running"},
+        {"id": "t1", "name": "x", "kind": "shell", "started_at": 100.0, "status": "completed"},
+    ]
+    db.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    reg = background._Registry(db_path=db)
+    assert len(reg._tasks) == 1
+    # load rewrites the file compacted → one row per id
+    assert len(db.read_text().splitlines()) == 1

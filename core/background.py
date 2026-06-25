@@ -32,6 +32,10 @@ log = structlog.get_logger("emma.background")
 _TASKS_DB = Path.home() / ".emma" / "tasks.jsonl"
 _OUTPUT_BUFFER_BYTES = 8192
 MAX_PARALLEL_TASKS = 8
+# Cap retained history so a long-lived daemon's tasks.jsonl + in-memory dicts don't
+# grow without bound. The file is rewritten compacted on load and every N writes.
+_MAX_RECORDS = 500
+_COMPACT_EVERY = 200
 
 
 Status = Literal["pending", "running", "completed", "failed", "cancelled", "aborted"]
@@ -57,6 +61,7 @@ class _Registry:
         self._tasks: dict[str, TaskRecord] = {}
         self._handles: dict[str, asyncio.Task[Any]] = {}
         self._output_bufs: dict[str, deque[str]] = {}
+        self._writes = 0
         self._db.parent.mkdir(parents=True, exist_ok=True)
         self._load_persisted()
 
@@ -73,15 +78,40 @@ class _Registry:
                 if rec.status in ("pending", "running"):
                     rec.status = "aborted"
                     rec.error = "daemon restarted while task was running"
-                self._tasks[rec.id] = rec
+                self._tasks[rec.id] = rec  # dict keyed by id → duplicate rows collapse
             except Exception as exc:
                 log.warning("task_log_parse_failed", error=str(exc))
+        # Bound memory + rewrite the file compacted (the append-only log accumulates
+        # a start row + a complete row per task across every restart).
+        if self._tasks:
+            self._compact_memory()
+            self._rewrite_file()
+
+    def _compact_memory(self) -> None:
+        if len(self._tasks) <= _MAX_RECORDS:
+            return
+        keep = sorted(self._tasks.values(), key=lambda r: r.started_at, reverse=True)[:_MAX_RECORDS]
+        self._tasks = {r.id: r for r in keep}
+
+    def _rewrite_file(self) -> None:
+        try:
+            ordered = sorted(self._tasks.values(), key=lambda r: r.started_at)
+            payload = "".join(json.dumps(asdict(r), ensure_ascii=False) + "\n" for r in ordered)
+            tmp = self._db.with_suffix(".jsonl.tmp")
+            tmp.write_text(payload, encoding="utf-8")
+            tmp.replace(self._db)  # atomic swap
+        except Exception as exc:
+            log.error("task_compact_failed", error=str(exc))
 
     def _persist(self, rec: TaskRecord) -> None:
         try:
             line = json.dumps(asdict(rec), ensure_ascii=False)
             with self._db.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
+            self._writes += 1
+            if self._writes % _COMPACT_EVERY == 0:  # periodic compaction keeps the file bounded
+                self._compact_memory()
+                self._rewrite_file()
         except Exception as exc:
             log.error("task_persist_failed", error=str(exc), task=rec.id)
 
@@ -159,6 +189,10 @@ class _Registry:
                     elapsed_s=int(rec.ended_at - rec.started_at),
                 )
                 await _notify_macos(name, rec.status, rec.error or rec.last_output[-180:])
+                # Final state is on `rec` (persisted); drop the live handle + output
+                # buffer so completed tasks don't pin memory for the daemon's lifetime.
+                self._handles.pop(task_id, None)
+                self._output_bufs.pop(task_id, None)
 
         self._handles[task_id] = asyncio.create_task(_wrapper(), name=f"emma-bg-{name}")
         return rec
