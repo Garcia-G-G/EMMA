@@ -9,3 +9,4 @@ pyjwt>=2.9
 stripe>=10.0
 pydantic>=2.7
 python-multipart>=0.0.9
+structlog>=24.0

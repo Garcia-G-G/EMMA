@@ -49,7 +49,8 @@ async def realtime(ws: WebSocket) -> None:
     usage = {"in": 0, "out": 0}
 
     oai_url = f"{settings.OPENAI_REALTIME_URL}?model={settings.OPENAI_REALTIME_MODEL}"
-    headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "OpenAI-Beta": "realtime=v1"}
+    # GA Realtime API as of 2026-06: NO OpenAI-Beta header. Beta shape was deprecated.
+    headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
 
     try:
         async with websockets.connect(oai_url, additional_headers=headers, max_size=None) as oai:
