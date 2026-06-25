@@ -1,7 +1,7 @@
 # Fly.io config for the Emma backend (Prompt 31, Part E). NOT deployed yet —
 # `fly launch` / `fly deploy` once the account + secrets exist (see SETUP.md).
 app = "emma-backend"
-primary_region = "qro"   # Querétaro — closest to Garcia
+primary_region = "dfw"   # Dallas — nearest Fly region to Monterrey
 
 [build]
   dockerfile = "Dockerfile"
