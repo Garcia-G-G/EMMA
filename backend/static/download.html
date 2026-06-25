@@ -1,0 +1,63 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — descarga</title>
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='34%25' cy='30%25' r='75%25'%3E%3Cstop offset='0%25' stop-color='%233a3a44'/%3E%3Cstop offset='48%25' stop-color='%2315151b'/%3E%3Cstop offset='100%25' stop-color='%230b0b0f'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/tokens.css">
+<style>
+  main{max-width:620px;margin:0 auto;padding:80px 40px}
+  h1{margin:0 0 12px}
+  .lede{color:var(--ink-soft);font-size:18px;line-height:1.55;margin:0 0 30px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px 0}
+  a.dl{display:flex;flex-direction:column;gap:6px;background:var(--bg-elev);border:1px solid var(--rule);
+    border-radius:12px;padding:20px;transition:border-color .15s var(--ease),transform .15s var(--ease)}
+  a.dl:hover{border-color:var(--accent-q);transform:translateY(-1px)}
+  a.dl b{font-family:var(--font-display);font-size:18px;font-weight:600}
+  a.dl .sub{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);letter-spacing:.02em}
+  .ver{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);letter-spacing:.04em}
+  .ver a{color:var(--accent)}
+  .steps{margin-top:30px;background:var(--bg-elev);border:1px solid var(--rule);border-radius:12px;
+    padding:24px;color:var(--ink-soft);font-size:15px;line-height:1.75}
+  .steps b{color:var(--ink);font-weight:500}
+  @media(max-width:520px){.row{grid-template-columns:1fr}main{padding:56px 22px}}
+</style></head><body>
+<nav class="site-nav"><div class="row">
+  <a class="brand" href="https://theemmafamily.com"><span class="mk"></span>Emma</a>
+  <div class="nav-right"><div class="nav-links"><a href="/plans">Planes</a><a href="/login">Entrar</a></div></div>
+</div></nav>
+<main>
+  <h1>Instala Emma</h1>
+  <p class="lede">Llámala con «Hey Emma» y úsala sin límite. Trae tu llave de OpenAI; tu voz vive en tu Mac.</p>
+  <div class="row">
+    <a class="dl" id="dlmac" href="#" rel="noopener"><b>macOS</b><span class="sub">.pkg · Apple Silicon + Intel</span></a>
+    <a class="dl" id="dlwin" href="#" rel="noopener"><b>Windows</b><span class="sub">.msi · pronto</span></a>
+  </div>
+  <div class="ver">Versión <span id="ver">…</span> · <a href="/api/downloads/changelog">cambios</a></div>
+  <div class="steps" id="changelog">
+    <p><b>Después de instalar:</b></p>
+    <p>1. Concede los permisos cuando Emma los pida (micrófono, accesibilidad, automatización).</p>
+    <p>2. Pega tu llave de OpenAI en el panel de configuración inicial.</p>
+    <p>3. Di «Hey Emma» y empieza.</p>
+  </div>
+</main>
+<footer class="site-foot"><div class="row">
+  <span>hecho por Garcia · Monterrey, MX · 2026</span>
+  <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/dashboard">panel</a></span>
+</div></footer>
+<script>
+async function init(){
+  try{
+    const r=await fetch("/api/downloads/latest");
+    if(r.ok){
+      const d=await r.json();
+      if(d.mac)document.getElementById("dlmac").href=d.mac;
+      if(d.win)document.getElementById("dlwin").href=d.win;
+      if(d.version)document.getElementById("ver").textContent=d.version;
+    }
+  }catch(e){}
+}
+init();
+</script>
+</body></html>
