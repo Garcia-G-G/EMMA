@@ -37,8 +37,8 @@ from fastapi import APIRouter, Header, HTTPException, Request, WebSocket
 from pydantic import BaseModel
 
 from backend import db
-from backend.auth import require_user
-from backend.config import settings
+from backend.auth import current_user, require_user
+from backend.config import plan_caps, settings
 from backend.realtime_proxy import cost_usd
 from backend.session import decode_token, issue_token, verify_captcha
 
@@ -262,33 +262,55 @@ async def create_demo_session(
         _maybe_alert_ops("demo_daily_ceiling_hit", cost=round(db.day_cost_usd(), 2))
         raise HTTPException(503, "El demo está descansando hoy, vuelve mañana.")
 
-    if not bypass:
-        if not await verify_captcha(body.turnstile_token, ip):
-            _attempt_log(iph, "/demo/sessions", 403)
-            raise HTTPException(403, "Verificación anti-bot fallida. Recarga e intenta de nuevo.")
-        # 1 per IP per 24h — keyed on the HASH, never the raw IP.
-        if db.demo_count_24h(iph) >= 1:
-            _attempt_log(iph, "/demo/sessions", 429)
-            raise HTTPException(
-                429,
-                detail={"error": "rate_limited", "retry_after_s": 86400,
-                        "message": "Ya hablaste con Emma hoy. Vuelve mañana o instálala "
-                        "para uso ilimitado."},
-            )
-        db.record_demo_hit(iph)
+    user = None if bypass else await current_user(request)
+    if user is not None:
+        # LANDING-27 authed path: per-plan length + cost, cookie auth (not IP),
+        # bounded by the user's own daily/monthly caps instead of 1/IP.
+        caps = plan_caps(user.get("plan"))
+        daily = int(caps["daily_seconds"])
+        if daily and db.user_seconds_today(user["id"]) >= daily:
+            raise HTTPException(429, "Ya usaste tu tiempo de hoy. Vuelve mañana o usa tu "
+                                "propia API key de OpenAI.")
+        monthly = int(caps["monthly_seconds"])
+        if monthly and float(user.get("monthly_seconds_used") or 0) >= monthly:
+            raise HTTPException(402, detail={"error": "monthly_exceeded", "overage_url": "/plans",
+                                "message": "Llegaste a tu tiempo del mes. Sube de plan o "
+                                "habilita la tarifa por minuto."})
+        secs = int(caps["session_seconds"])
+        cost_cents = int(caps["cost_cap_cents"])
+        sid = db.create_session(user["id"])
+        tok = issue_token(sid, "demo", secs, user["id"], cost_cents)
+        _attempt_log(iph, "/demo/sessions", 200)
+    else:
+        # Anonymous free discovery path: 60s, 1/IP/24h, Turnstile.
+        if not bypass:
+            if not await verify_captcha(body.turnstile_token, ip):
+                _attempt_log(iph, "/demo/sessions", 403)
+                raise HTTPException(403, "Verificación anti-bot fallida. Recarga e intenta de nuevo.")
+            if db.demo_count_24h(iph) >= 1:  # keyed on the HASH, never the raw IP
+                _attempt_log(iph, "/demo/sessions", 429)
+                raise HTTPException(
+                    429,
+                    detail={"error": "rate_limited", "retry_after_s": 86400,
+                            "message": "Ya hablaste con Emma hoy. Crea una cuenta para más "
+                            "tiempo, o instálala."},
+                )
+            db.record_demo_hit(iph)
+        caps = plan_caps("free")
+        secs = int(caps["session_seconds"])
+        cost_cents = int(caps["cost_cap_cents"])
+        sid = db.create_session(None)
+        tok = issue_token(sid, "demo", secs, None, cost_cents)
+        _attempt_log(iph, "/demo/sessions", 200)
 
-    _attempt_log(iph, "/demo/sessions", 200)
     lang = "en" if body.lang == "en" else "es"
-    secs = settings.DEMO_TALK_SECONDS
-    sid = db.create_session(None)
-    tok = issue_token(sid, "demo", secs, None)
     now = time.time()
     return {
         "session_id": sid,
         "ws_url": f"/demo/ws/{sid}?token={tok}&lang={lang}",
         "warning_at_seconds": settings.DEMO_WARNING_SECONDS,
         "expires_at": dt.datetime.fromtimestamp(now + secs, tz=dt.UTC).isoformat(),
-        "cost_cap_cents": settings.DEMO_COST_CAP_CENTS,
+        "cost_cap_cents": cost_cents,
         "duration_seconds": secs,
     }
 
@@ -371,8 +393,10 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
         return
 
     await ws.accept()
-    max_seconds = settings.DEMO_TALK_SECONDS
-    cost_cap = settings.DEMO_COST_CAP_CENTS / 100.0
+    # LANDING-27: per-plan duration + cost cap travel in the SIGNED token, so an
+    # authed Pro/Power user gets their longer session and a client can't inflate it.
+    max_seconds = int(claims.get("max_seconds") or settings.DEMO_TALK_SECONDS)
+    cost_cap = int(claims.get("cost_cap_cents") or settings.DEMO_COST_CAP_CENTS) / 100.0
     started = time.time()
     usage = {"in": 0, "out": 0}
     bytes_in = [0]  # 24.7-B3: cumulative inbound — cut on the anti-drain ceiling

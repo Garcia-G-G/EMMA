@@ -45,13 +45,19 @@ if settings.GITHUB_OAUTH_CLIENT_ID:
     )
 
 
+def set_session_cookie(response: Response, uid: int) -> None:
+    """Set the signed, HttpOnly, SameSite=Lax, Secure-on-HTTPS 30-day session cookie."""
+    response.set_cookie(
+        _COOKIE, _serializer.dumps({"uid": uid}),
+        max_age=_MAX_AGE, httponly=True,
+        secure=settings.PUBLIC_URL.lower().startswith("https"), samesite="lax",
+    )
+
+
 def login_user(response: Response, email: str, name: str, provider: str, provider_id: str) -> dict[str, Any]:
     """Upsert the user and set the signed session cookie. Returns the user row."""
     user = db.upsert_user(email=email, name=name, provider=provider, provider_id=provider_id)
-    response.set_cookie(
-        _COOKIE, _serializer.dumps({"uid": user["id"]}),
-        max_age=_MAX_AGE, httponly=True, secure=True, samesite="lax",
-    )
+    set_session_cookie(response, user["id"])
     return user
 
 

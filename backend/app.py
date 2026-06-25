@@ -17,7 +17,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from backend import auth, db, demo_session, realtime_proxy, stripe_routes
+from backend import (
+    account_routes,
+    auth,
+    auth_local,
+    db,
+    demo_session,
+    realtime_proxy,
+    stripe_routes,
+)
 
 # wake_routes disabled in Fly deploy — depends on daemon's core.background / config.settings.
 # Re-enable after vendoring those modules into backend/ (follow-up prompt 16.3.1).
@@ -51,6 +59,8 @@ if not settings.CLOUDFLARE_TURNSTILE_SECRET:
 app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
 app.include_router(auth.router)
+app.include_router(auth_local.router)
+app.include_router(account_routes.router)
 app.include_router(stripe_routes.router)
 # app.include_router(wake_routes.router)  # disabled in Fly deploy
 app.include_router(demo_session.router)
@@ -64,6 +74,26 @@ db.init_db()
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/plans")
+async def api_plans() -> dict[str, Any]:
+    """Public pricing structure the plans page renders (LANDING-27). Prices are
+    presentational; the binding caps live server-side in PLAN_CAPS."""
+    return {
+        "currency": "usd",
+        "plans": [
+            {"id": "pro", "name": "Pro", "monthly": 19, "yearly": 190,
+             "session_min": 5, "daily_min": 10, "monthly_min": 60,
+             "features": ["Instalación .pkg", "Trae tu API key de OpenAI",
+                          "Soporte por correo (48h)"]},
+            {"id": "power", "name": "Power", "monthly": 49, "yearly": 490,
+             "session_min": 15, "daily_min": 30, "monthly_min": 200,
+             "features": ["Todo lo de Pro", "Actualizaciones prioritarias",
+                          "Soporte 24h + chat", "Acceso anticipado"]},
+        ],
+        "overage_per_min_usd": 0.30,
+    }
 
 
 @app.get("/demo/config")
