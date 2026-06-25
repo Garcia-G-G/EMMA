@@ -123,3 +123,22 @@ class Settings:
 
 
 settings = Settings()
+
+_INSECURE_DEFAULT = "dev-insecure-change-me"
+
+
+def assert_secure_secrets() -> None:
+    """Refuse to boot in prod with the committed dev signing keys.
+
+    The default JWT/SESSION secrets are public (in this repo). If a prod host (HTTPS
+    PUBLIC_URL) is ever deployed without overriding them, anyone could forge session
+    cookies and demo JWTs. Fail loud at startup instead of silently trusting them.
+    """
+    if not settings.PUBLIC_URL.lower().startswith("https"):
+        return  # local/dev over http — defaults are fine
+    weak = [n for n in ("JWT_SECRET", "SESSION_SECRET")
+            if getattr(settings, n) == _INSECURE_DEFAULT]
+    if weak:
+        raise RuntimeError(
+            f"Refusing to start: {', '.join(weak)} still set to the insecure dev "
+            "default on an HTTPS deploy. Set them via the host's secret store.")

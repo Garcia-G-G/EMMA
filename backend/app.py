@@ -31,7 +31,9 @@ from backend import (
 # Re-enable after vendoring those modules into backend/ (follow-up prompt 16.3.1).
 from backend import session as session_mod
 from backend.auth import current_user, require_user
-from backend.config import PLAN_CAPS, settings
+from backend.config import PLAN_CAPS, assert_secure_secrets, settings
+
+assert_secure_secrets()  # fail loud if a prod (HTTPS) host is still on the dev signing keys
 
 app = FastAPI(title="Emma")
 # 25.0.1-B2: the landing only ever lives on the apex + www; the backend at

@@ -16,7 +16,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from backend import db
-from backend.auth import current_user, require_user
+from backend.auth import clear_session_cookie, current_user, require_user
 from backend.config import plan_caps, settings
 from backend.passwords import hash_password, password_problem, verify_password
 
@@ -120,7 +120,7 @@ async def change_email(body: EmailChange, request: Request) -> dict[str, Any]:
 async def delete_account(request: Request, response: Response) -> dict[str, Any]:
     user = await require_user(request)
     db.soft_delete_user(user["id"])  # anonymize now; hard purge is a later job
-    response.delete_cookie("emma_session")
+    clear_session_cookie(response)
     log.info("account_deleted", uid=user["id"])
     return {"ok": True}
 
