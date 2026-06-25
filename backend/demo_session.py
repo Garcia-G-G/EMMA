@@ -39,6 +39,7 @@ from pydantic import BaseModel
 from backend import db
 from backend.auth import current_user, require_user
 from backend.config import plan_caps, settings
+from backend.netutil import client_ip as _client_ip
 from backend.realtime_proxy import cost_usd
 from backend.session import decode_token, issue_token, verify_captcha
 
@@ -202,24 +203,6 @@ def session_config(lang: str) -> dict[str, Any]:
 # ---- IP hashing + bypass ----------------------------------------------------
 
 
-def _client_ip(request: Request) -> str:
-    """The visitor's real IP, trusting only the EDGE-set header.
-
-    Audit fix: the leftmost X-Forwarded-For entry is CLIENT-controlled — a hostile
-    visitor could send `X-Forwarded-For: 1.2.3.4` and rotate it per request to mint
-    unlimited demo sessions (the per-IP/24h limit keys on this). Fly sets
-    `Fly-Client-IP` to the true peer; prefer it, then the RIGHTMOST XFF hop (the
-    one the trusted proxy appended), then the socket peer.
-    """
-    fly = request.headers.get("fly-client-ip")
-    if fly:
-        return fly.strip()
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[-1].strip()  # rightmost = appended by the trusted edge
-    return request.client.host if request.client else "0.0.0.0"
-
-
 def hash_ip(ip: str) -> str:
     """sha256(ip + salt). Raw IPs are NEVER stored or logged (privacy convention)."""
     return hashlib.sha256((ip + settings.DEMO_IP_SALT).encode()).hexdigest()
@@ -272,7 +255,7 @@ async def create_demo_session(
             raise HTTPException(429, "Ya usaste tu tiempo de hoy. Vuelve mañana o usa tu "
                                 "propia API key de OpenAI.")
         monthly = int(caps["monthly_seconds"])
-        if monthly and float(user.get("monthly_seconds_used") or 0) >= monthly:
+        if monthly and db.user_seconds_month(user["id"]) >= monthly:
             raise HTTPException(402, detail={"error": "monthly_exceeded", "overage_url": "/plans",
                                 "message": "Llegaste a tu tiempo del mes. Sube de plan o "
                                 "habilita la tarifa por minuto."})

@@ -56,20 +56,41 @@ _MIGRATIONS = (
 )
 
 
-def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(settings.DATABASE_URL, timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+# Paths whose schema + migrations have already run this process. Re-running the
+# full `executescript` + 5 ALTERs on EVERY query was a real lock-contention + perf
+# cost on the hot demo path; do it once per DB file instead. (Tests use a fresh
+# tmp path each, so each still gets initialized exactly once.)
+_INITIALIZED: set[str] = set()
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     for stmt in _MIGRATIONS:
         with contextlib.suppress(sqlite3.OperationalError):  # column already exists
             conn.execute(stmt)
     conn.commit()
+    _INITIALIZED.add(settings.DATABASE_URL)
+
+
+def connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.DATABASE_URL, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    if settings.DATABASE_URL not in _INITIALIZED:
+        _ensure_schema(conn)
     return conn
 
 
 def init_db() -> None:
-    connect().close()
+    # Force (re)creation for this path — also covers a test that points at a fresh DB.
+    conn = sqlite3.connect(settings.DATABASE_URL, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        _ensure_schema(conn)
+    finally:
+        conn.close()
 
 
 # ---- users ------------------------------------------------------------------
@@ -92,9 +113,14 @@ def upsert_user(email: str, name: str, provider: str, provider_id: str) -> dict[
 
 
 def get_user(user_id: int) -> dict[str, Any] | None:
+    # `AND deleted_at IS NULL` is load-bearing: the cookie session resolves the user
+    # BY ID here, so without this filter a soft-deleted account keeps authenticating
+    # (downloads, demo minutes, billing) until its 30-day cookie expires.
     conn = connect()
     try:
-        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE id=? AND deleted_at IS NULL", (user_id,)
+        ).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -229,6 +255,24 @@ def user_seconds_today(user_id: int, now: float | None = None) -> float:
         conn.close()
 
 
+def user_seconds_month(user_id: int, now: float | None = None) -> float:
+    """Seconds spent in the last 30 days — the per-plan MONTHLY cap, windowed.
+
+    The `users.monthly_seconds_used` counter is lifetime-cumulative and never resets,
+    so reading it as month-to-date turned the monthly cap into a permanent lockout.
+    We compute the window from `sessions` instead (same approach as the daily cap)."""
+    now = now or time.time()
+    conn = connect()
+    try:
+        v = conn.execute(
+            "SELECT COALESCE(SUM(seconds_used),0) FROM sessions WHERE user_id=? AND started_at > ?",
+            (user_id, now - 2592000),
+        ).fetchone()[0]
+        return float(v or 0.0)
+    finally:
+        conn.close()
+
+
 # ---- sessions ---------------------------------------------------------------
 
 
@@ -247,17 +291,22 @@ def create_session(user_id: int | None) -> str:
 def end_session(sid: str, seconds: float, tokens_in: int, tokens_out: int, cost_usd: float) -> None:
     conn = connect()
     try:
-        conn.execute(
-            "UPDATE sessions SET ended_at=?, seconds_used=?, tokens_in=?, tokens_out=?, cost_usd=? WHERE id=?",
+        # Idempotent: both the demo WS and the realtime proxy call this in a finally,
+        # and a reconnect can fire it twice for one sid. Only the FIRST close (ended_at
+        # still NULL) bills the user's running counters — a re-entrant close no-ops.
+        cur = conn.execute(
+            "UPDATE sessions SET ended_at=?, seconds_used=?, tokens_in=?, tokens_out=?, cost_usd=? "
+            "WHERE id=? AND ended_at IS NULL",
             (time.time(), seconds, tokens_in, tokens_out, round(cost_usd, 4), sid),
         )
-        row = conn.execute("SELECT user_id FROM sessions WHERE id=?", (sid,)).fetchone()
-        if row and row["user_id"]:
-            conn.execute(
-                "UPDATE users SET monthly_session_count=monthly_session_count+1, "
-                "monthly_seconds_used=monthly_seconds_used+? WHERE id=?",
-                (seconds, row["user_id"]),
-            )
+        if cur.rowcount:
+            row = conn.execute("SELECT user_id FROM sessions WHERE id=?", (sid,)).fetchone()
+            if row and row["user_id"]:
+                conn.execute(
+                    "UPDATE users SET monthly_session_count=monthly_session_count+1, "
+                    "monthly_seconds_used=monthly_seconds_used+? WHERE id=?",
+                    (seconds, row["user_id"]),
+                )
         conn.commit()
     finally:
         conn.close()

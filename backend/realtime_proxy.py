@@ -24,6 +24,15 @@ from backend.session import decode_token
 router = APIRouter()
 
 
+def _is_client_session_frame(raw: str) -> bool:
+    """True if a browser frame tries to reconfigure the session (instructions, tools,
+    voice, model). Those must be dropped — only our server-side session.update is trusted."""
+    try:
+        return str(json.loads(raw).get("type", "")).startswith("session.")
+    except Exception:
+        return False
+
+
 def cost_usd(tokens_in: int, tokens_out: int) -> float:
     """Estimate session cost from Realtime token usage."""
     return round(
@@ -42,9 +51,15 @@ async def realtime(ws: WebSocket) -> None:
         await ws.close(code=4401)  # invalid/expired session token
         return
 
+    if claims.get("kind") not in ("demo", "user"):
+        await ws.close(code=4401)
+        return
+
     await ws.accept()
     sid = str(claims["sid"])
     max_seconds = int(claims.get("max_seconds", settings.DEMO_SESSION_SECONDS))
+    # Hard $/session ceiling — signed into the token so the client can't widen it.
+    cost_cap = int(claims.get("cost_cap_cents") or settings.DEMO_COST_CAP_CENTS) / 100.0
     started = time.time()
     usage = {"in": 0, "out": 0}
 
@@ -56,7 +71,12 @@ async def realtime(ws: WebSocket) -> None:
         async with websockets.connect(oai_url, additional_headers=headers, max_size=None) as oai:
             async def client_to_openai() -> None:
                 while True:
-                    await oai.send(await ws.receive_text())
+                    raw = await ws.receive_text()
+                    # NEVER let the browser reconfigure the session (instructions, tools,
+                    # voice, model). Only OUR session.update — sent server-side — is trusted.
+                    if _is_client_session_frame(raw):
+                        continue
+                    await oai.send(raw)
 
             async def openai_to_client() -> None:
                 async for msg in oai:
@@ -69,7 +89,11 @@ async def realtime(ws: WebSocket) -> None:
                     await ws.send_text(msg if isinstance(msg, str) else msg.decode())
 
             async def hard_timeout() -> None:
-                await asyncio.sleep(max_seconds)
+                # Wake periodically so the cost cap can also end the session early.
+                while time.time() - started < max_seconds:
+                    if cost_usd(usage["in"], usage["out"]) >= cost_cap:
+                        break
+                    await asyncio.sleep(1.0)
                 with contextlib.suppress(Exception):
                     await ws.send_text(json.dumps({"type": "emma.session_expired"}))
 

@@ -22,8 +22,9 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, field_validator
 
 from backend import db
-from backend.auth import current_user, set_session_cookie
+from backend.auth import clear_session_cookie, current_user, set_session_cookie
 from backend.config import settings
+from backend.netutil import client_ip as _client_ip
 from backend.passwords import hash_password, password_problem, verify_password
 
 log = structlog.get_logger("emma.auth")
@@ -35,13 +36,6 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _LOGIN_FAILS: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=16))
 _LOGIN_MAX_FAILS = 5
 _LOGIN_WINDOW_S = 300
-
-
-def _client_ip(request: Request) -> str:
-    # Trust the edge-set header, not the spoofable leftmost XFF (audit).
-    return (request.headers.get("fly-client-ip")
-            or (request.headers.get("x-forwarded-for", "").split(",")[-1].strip())
-            or (request.client.host if request.client else "0.0.0.0"))
 
 
 def _too_many_fails(ip: str, now: float | None = None) -> bool:
@@ -115,13 +109,19 @@ async def login(body: Credentials, request: Request, response: Response) -> dict
 
 @router.post("/api/auth/logout")
 async def logout(response: Response) -> dict:
-    response.delete_cookie("emma_session")
+    clear_session_cookie(response)
     return {"ok": True}
 
 
 @router.post("/api/auth/reset-request")
-async def reset_request(body: ResetRequest) -> dict:
-    # Always 200 — never reveal whether the email exists (enumeration guard).
+async def reset_request(body: ResetRequest, request: Request) -> dict:
+    # Always 200 — never reveal whether the email exists (enumeration guard). But
+    # throttle per-IP so this can't be used to email-bomb a victim, drain the Resend
+    # quota, or churn a victim's in-flight reset token (shares the login bucket).
+    ip = _client_ip(request)
+    if _too_many_fails(ip):
+        raise HTTPException(429, "Demasiados intentos. Espera unos minutos.")
+    _record_fail(ip)
     token = secrets.token_urlsafe(32)
     if db.set_reset_token(str(body.email).lower(), token, time.time() + 3600):
         link = f"{settings.PUBLIC_URL}/auth/reset?token={token}"

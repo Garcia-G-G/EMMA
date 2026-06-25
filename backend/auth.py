@@ -54,6 +54,15 @@ def set_session_cookie(response: Response, uid: int) -> None:
     )
 
 
+def clear_session_cookie(response: Response) -> None:
+    """Delete the session cookie with the SAME attributes it was set with — a
+    samesite/secure/path mismatch can leave the cookie in place in some browsers."""
+    response.delete_cookie(
+        _COOKIE, path="/", httponly=True,
+        secure=settings.PUBLIC_URL.lower().startswith("https"), samesite="lax",
+    )
+
+
 def login_user(response: Response, email: str, name: str, provider: str, provider_id: str) -> dict[str, Any]:
     """Upsert the user and set the signed session cookie. Returns the user row."""
     user = db.upsert_user(email=email, name=name, provider=provider, provider_id=provider_id)
@@ -67,7 +76,7 @@ async def current_user(request: Request) -> dict[str, Any] | None:
         return None
     try:
         data = _serializer.loads(raw, max_age=_MAX_AGE)
-    except (BadSignature, Exception):
+    except BadSignature:  # covers SignatureExpired (subclass); other errors must surface
         return None
     return db.get_user(int(data.get("uid", 0)))
 
@@ -123,7 +132,7 @@ async def _github_primary_email(client: Any, token: Any) -> str:
 @router.get("/auth/logout")
 async def logout() -> Any:
     response = RedirectResponse(url="/")
-    response.delete_cookie(_COOKIE)
+    clear_session_cookie(response)
     return response
 
 

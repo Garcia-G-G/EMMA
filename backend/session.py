@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from backend import db
 from backend.auth import current_user
 from backend.config import PLAN_CAPS, settings
+from backend.netutil import client_ip as _client_ip
 from backend.schemas import SessionStartRequest, SessionStartResponse
 
 router = APIRouter()
@@ -53,11 +54,6 @@ def issue_token(sid: str, kind: str, max_seconds: int, user_id: int | None,
 def decode_token(token: str) -> dict[str, Any]:
     """Decode + verify a session_token. Raises jwt exceptions on tamper/expiry."""
     return dict(jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"]))
-
-
-def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    return (fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "0.0.0.0"))
 
 
 @router.post("/api/session/start", response_model=SessionStartResponse)
