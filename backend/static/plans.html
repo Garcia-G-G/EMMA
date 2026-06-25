@@ -1,0 +1,71 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — planes</title>
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='34%25' cy='30%25' r='75%25'%3E%3Cstop offset='0%25' stop-color='%233a3a44'/%3E%3Cstop offset='48%25' stop-color='%2315151b'/%3E%3Cstop offset='100%25' stop-color='%230b0b0f'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/tokens.css">
+<style>
+  main{max-width:var(--maxw);margin:0 auto;padding:80px 40px}
+  h1{margin:0 0 12px}
+  .lede{color:var(--ink-soft);font-size:18px;max-width:46em;margin:0 0 36px}
+  .cmp td.cta{padding-top:24px}
+  .cmp .buy{width:100%;justify-content:center}
+  .note{margin-top:22px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
+  .note a{color:var(--accent)}
+  @media(max-width:760px){main{padding:56px 22px}}
+</style></head><body>
+<nav class="site-nav"><div class="row">
+  <a class="brand" href="https://theemmafamily.com"><span class="mk"></span>Emma</a>
+  <div class="nav-right"><div class="nav-links"><a href="/download">Descarga</a><a href="/login">Entrar</a></div></div>
+</div></nav>
+<main>
+  <h1>Planes</h1>
+  <p class="lede">Tu llave de OpenAI, en tu Mac. Tú le pagas el cómputo a OpenAI directo — Emma cobra solo por el software.</p>
+  <table class="cmp" id="tbl">
+    <tbody><tr><td class="ink-soft">Cargando…</td></tr></tbody>
+  </table>
+  <p class="note">Excedentes: <span id="overage">$0.30/min</span> después del tope mensual · cancela cuando quieras desde tu panel · <a href="https://theemmafamily.com">← portada</a></p>
+</main>
+<footer class="site-foot"><div class="row">
+  <span>hecho por Garcia · Monterrey, MX · 2026</span>
+  <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/download">descarga</a><a href="/login">entrar</a></span>
+</div></footer>
+<script>
+async function init(){
+  let data;
+  try{ data=await (await fetch("/api/plans")).json(); }
+  catch(e){ document.getElementById("tbl").innerHTML='<tbody><tr><td>No pude cargar los planes. <a href="https://theemmafamily.com" style="color:var(--accent)">Volver</a></td></tr></tbody>'; return; }
+  const me=await fetch("/api/auth/whoami").then(r=>r.ok?r.json():null).catch(()=>null);
+  const isAuthed=!!(me&&me.user);
+  if(data.overage_per_min_usd!=null)document.getElementById("overage").textContent="$"+data.overage_per_min_usd.toFixed(2)+"/min";
+  const P=data.plans;  // [pro, power]
+  const cell=(p,v)=>`<td>${v}</td>`;
+  const cta=(p)=> isAuthed
+    ? `<button class="btn btn-primary buy" onclick="checkout('${p.id}')">Suscribirme</button>`
+    : `<button class="btn btn-primary buy" onclick="location.href='/register?next=/plans'">Crea cuenta</button>`;
+  const rows=[
+    ["",       P.map(p=>`<span style="font-family:var(--font-display);font-size:18px;font-weight:600">${p.name}</span>`)],
+    ["Precio", P.map(p=>`<span class="price">$${p.monthly}</span><span class="per"> / mes</span>`)],
+    ["Por sesión", P.map(p=>`${p.session_min} min`)],
+    ["Al día",     P.map(p=>`${p.daily_min} min`)],
+    ["Al mes",     P.map(p=>`${p.monthly_min} min`)],
+    ["API key",    P.map(_=>`la tuya (OpenAI)`)],
+  ];
+  let html="<tbody>";
+  for(const [k,vals] of rows){
+    html+=`<tr><td>${k}</td>${vals.map(v=>`<td>${v}</td>`).join("")}</tr>`;
+  }
+  html+=`<tr><td></td>${P.map(p=>`<td class="cta">${cta(p)}</td>`).join("")}</tr>`;
+  html+="</tbody>";
+  document.getElementById("tbl").innerHTML=html;
+}
+async function checkout(plan){
+  const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
+  if(r.ok){ const d=await r.json(); location.href=d.url; }
+  else{ alert("Pagos aún no están configurados. Pronto."); }
+}
+init();
+</script>
+</body></html>
