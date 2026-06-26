@@ -2,15 +2,17 @@
    page (landing + the 5 backend pages). Edit here; both copies stay identical.
    Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
 :root{
-  --bg:#08090d;          /* Linear near-black, slight cool undertone (LANDING-30) */
-  --bg-elev:#0e0f15;     /* cards / elevated panes */
-  --ink:#ffffff;         /* high contrast — required */
-  --ink-soft:#9595a4;    /* cool grey */
-  --rule:#1a1b22;        /* dividers, hairlines */
-  --accent:#a7a8fb;      /* Linear cool periwinkle — the accent */
-  --accent-q:#5b5c84;    /* accent dim — for hover/inactive */
-  --accent-2:#ff7a9c;    /* hot-pink complement — bg mesh ONLY, sparingly */
-  --warm:#ff8c3a;        /* Emma's orange — the orb canvas ONLY, never a CSS bg */
+  /* LANDING-31: Apple AirPods Pro cream + Artisan layout signals. Shared with
+     _landing/tokens.css. Light backgrounds. Warm clay accent. */
+  --bg:#faf6ef;          /* warm cream — primary surface */
+  --bg-elev:#f0e7d6;     /* elevated cards / pricing surfaces */
+  --ink:#1a1308;         /* deep warm-brown — primary text */
+  --ink-soft:#5a4628;    /* secondary text */
+  --rule:#d8cebd;        /* hairlines on cream */
+  --accent:#a04a16;      /* warm clay — links, eyebrow, mono labels */
+  --accent-q:#c08c5a;    /* lighter clay for hover/inactive */
+  --accent-2:#8a3e10;    /* deeper oxblood for italic emphasis */
+  --warm:#ff8c3a;        /* Emma's orange — orb canvas ONLY, never a CSS bg */
 
   --font-display:"Inter Tight",-apple-system,BlinkMacSystemFont,Inter,sans-serif;
   --font-body:Inter,system-ui,-apple-system,sans-serif;
@@ -29,7 +31,7 @@ body{
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
 }
-::selection{background:var(--accent);color:#08090d}
+::selection{background:var(--accent);color:#faf6ef}
 a{color:inherit;text-decoration:none}
 img,svg,canvas{display:block;max-width:100%}
 
@@ -46,13 +48,13 @@ p{margin:0}
 .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .ink-soft{color:var(--ink-soft)}
 code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
-  background:rgba(167,168,251,.10);padding:1px 6px;border-radius:4px}
+  background:rgba(160,74,22,.10);padding:1px 6px;border-radius:4px}
 
 .container{max-width:var(--maxw);margin:0 auto;padding:0 40px}
 @media(max-width:760px){.container{padding:0 22px}}
 
 /* ---- header ---- */
-.site-nav{position:sticky;top:0;z-index:40;background:rgba(8,9,13,.72);
+.site-nav{position:sticky;top:0;z-index:40;background:rgba(250,246,239,.78);
   backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid var(--rule)}
 .site-nav .row{max-width:var(--maxw);margin:0 auto;padding:16px 40px;
   display:flex;align-items:center;justify-content:space-between}
@@ -85,18 +87,18 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .btn:hover{border-color:var(--accent-q);transform:translateY(-1px)}
 .btn .arr{transition:transform .2s var(--ease)}
 .btn:hover .arr{transform:translateX(3px)}
-/* Linear-style: quiet, 150ms ease-out, max 1px lift. Periwinkle primary. */
+/* Apple-style: warm clay primary, soft glow on hover. */
 .btn-primary{
-  background:var(--accent); color:#0a0a12; font-weight:600; letter-spacing:.01em;
-  border:1px solid #c4c5ff; padding:13px 24px; border-radius:9px;
-  box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 8px 24px rgba(167,168,251,.22);
+  background:var(--accent); color:#faf6ef; font-weight:600; letter-spacing:.01em;
+  border:1px solid #d9b07a; padding:13px 24px; border-radius:9px;
+  box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 8px 24px rgba(160,74,22,.22);
   transition:transform .15s ease-out, background .15s ease-out, box-shadow .15s ease-out}
-.btn-primary:hover{transform:translateY(-1px); background:#b8b9ff; box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px rgba(167,168,251,.3)}
+.btn-primary:hover{transform:translateY(-1px); background:#b85a2a; box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px rgba(160,74,22,.3)}
 .btn-ghost{
   background:transparent; border:1px solid var(--rule); color:var(--ink);
   font-weight:500; letter-spacing:.01em; padding:13px 24px; border-radius:9px;
   transition:border-color .15s ease-out, background .15s ease-out}
-.btn-ghost:hover{border-color:var(--accent-q); background:rgba(167,168,251,.06)}
+.btn-ghost:hover{border-color:var(--accent-q); background:rgba(160,74,22,.06)}
 
 /* ---- section scaffolding ---- */
 .section{border-top:1px solid var(--rule)}
@@ -126,9 +128,9 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
   border-radius:8px;padding:14px 14px;color:var(--ink);font-family:var(--font-body);
   font-size:15px;outline:none;transition:border-color .15s var(--ease)}
 .field input:focus{border-color:var(--accent-q)}
-.field input::placeholder{color:#54545c}
+.field input::placeholder{color:#a89072}
 .form-note{font-size:13px;color:var(--ink-soft);margin-top:6px;min-height:18px}
-.form-note.err{color:#d98a6a}.form-note.ok{color:var(--accent)}
+.form-note.err{color:#c4543a}.form-note.ok{color:var(--accent)}
 
 /* ---- footer ---- */
 .site-foot{border-top:1px solid var(--rule);font-family:var(--font-mono);font-size:12px;
@@ -143,7 +145,7 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 /* ---- ambient: Linear gradient mesh (cool) + grain. No warm drift (LANDING-30). ---- */
 .bg-mesh{position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:
-    radial-gradient(circle at 88% 12%, rgba(167,168,251,0.12), transparent 45%),
+    radial-gradient(circle at 88% 12%, rgba(160,74,22,0.12), transparent 45%),
     radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
 .bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
@@ -151,7 +153,7 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .ambient-glow{display:none}
 .ambient-grid{position:fixed;inset:0;z-index:-2;pointer-events:none;
   background:
-    radial-gradient(circle at 88% 12%, rgba(167,168,251,0.12), transparent 45%),
+    radial-gradient(circle at 88% 12%, rgba(160,74,22,0.12), transparent 45%),
     radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
 .ambient-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
