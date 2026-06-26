@@ -2,13 +2,13 @@
    page (landing + the 5 backend pages). Edit here; both copies stay identical.
    Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
 :root{
-  --bg:#08090c;          /* primary surface — slight cool tint vs pure black */
-  --bg-elev:#11131a;     /* cards / elevated panes */
-  --ink:#f4f6fb;         /* primary text */
-  --ink-soft:#94a0b4;    /* secondary text — cool grey */
-  --rule:#1c1f28;        /* dividers, hairlines */
-  --accent:#cbd6ea;      /* off-white with cool tint — SINGLE accent, no warm brown */
-  --accent-q:#5b6a83;    /* accent dim — cool steel for hover/inactive */
+  --bg:#0b0603;          /* warm near-black surface (LANDING-29 warm revert) */
+  --bg-elev:#170d05;     /* cards / elevated panes */
+  --ink:#fff0d4;         /* primary text — warm cream */
+  --ink-soft:#b89268;    /* secondary text — muted warm tan (not loud orange) */
+  --rule:#2a1a0d;        /* dividers, hairlines */
+  --accent:#ff7a1a;      /* warm amber — SINGLE accent, used punctually */
+  --accent-q:#7a3f12;    /* accent dim — for hover/inactive */
 
   --font-display:"Geist","Geist Display",system-ui,-apple-system,"SF Pro Display",sans-serif;
   --font-body:"Geist",system-ui,-apple-system,"SF Pro Text",Helvetica,sans-serif;
@@ -27,7 +27,7 @@ body{
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
 }
-::selection{background:var(--accent);color:#08090c}
+::selection{background:var(--accent);color:#0b0603}
 a{color:inherit;text-decoration:none}
 img,svg,canvas{display:block;max-width:100%}
 
@@ -44,13 +44,13 @@ p{margin:0}
 .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .ink-soft{color:var(--ink-soft)}
 code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
-  background:rgba(203,214,234,.08);padding:1px 6px;border-radius:4px}
+  background:rgba(255,122,26,.10);padding:1px 6px;border-radius:4px}
 
 .container{max-width:var(--maxw);margin:0 auto;padding:0 40px}
 @media(max-width:760px){.container{padding:0 22px}}
 
 /* ---- header ---- */
-.site-nav{position:sticky;top:0;z-index:40;background:rgba(10,10,11,.72);
+.site-nav{position:sticky;top:0;z-index:40;background:rgba(11,6,3,.72);
   backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid var(--rule)}
 .site-nav .row{max-width:var(--maxw);margin:0 auto;padding:16px 40px;
   display:flex;align-items:center;justify-content:space-between}
@@ -58,13 +58,13 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
   font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink)}
 .brand .mk{width:22px;height:22px;border-radius:50%;position:relative;
   background:
-    radial-gradient(140% 140% at 32% 22%, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 16%),
-    radial-gradient(120% 120% at 34% 32%, #404858 0%, #161a24 42%, #06080c 100%);
+    radial-gradient(140% 140% at 32% 22%, rgba(255,224,170,.7) 0%, rgba(255,224,170,0) 16%),
+    radial-gradient(120% 120% at 34% 32%, #5a3a1e 0%, #2a1606 42%, #0b0603 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.15),
+    inset 0 1px 0 rgba(255,210,138,.18),
     inset 0 -6px 12px rgba(0,0,0,.6),
     0 0 0 1px var(--rule),
-    0 0 14px rgba(80,120,180,.10)}
+    0 0 14px rgba(255,122,26,.12)}
 .nav-links{display:flex;gap:28px;font-family:var(--font-mono);font-size:12px;
   letter-spacing:.04em;text-transform:uppercase}
 .nav-links a{color:var(--ink-soft);transition:color .15s var(--ease)}
@@ -87,8 +87,8 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .btn:hover{border-color:var(--accent-q);transform:translateY(-1px)}
 .btn .arr{transition:transform .2s var(--ease)}
 .btn:hover .arr{transform:translateX(3px)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#0a0a0b;font-weight:500}
-.btn-primary:hover{background:#cf9a66;border-color:#cf9a66}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0c02;font-weight:600}
+.btn-primary:hover{background:#ff8c3a;border-color:#ff8c3a}
 .btn-ghost{background:transparent}
 
 /* ---- section scaffolding ---- */
