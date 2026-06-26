@@ -2,13 +2,14 @@
    page (landing + the 5 backend pages). Edit here; both copies stay identical.
    Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
 :root{
-  --bg:#0b0603;          /* warm near-black surface (LANDING-29 warm revert) */
-  --bg-elev:#170d05;     /* cards / elevated panes */
+  --bg:#0e0a05;          /* warm near-black with orange undertone (LANDING-29.1) */
+  --bg-elev:#1a1308;     /* cards / elevated panes */
   --ink:#fff0d4;         /* primary text — warm cream */
-  --ink-soft:#b89268;    /* secondary text — muted warm tan (not loud orange) */
-  --rule:#2a1a0d;        /* dividers, hairlines */
-  --accent:#ff7a1a;      /* warm amber — SINGLE accent, used punctually */
-  --accent-q:#7a3f12;    /* accent dim — for hover/inactive */
+  --ink-soft:#a89072;    /* secondary text — muted warm tan */
+  --rule:#2a1f12;        /* dividers, hairlines */
+  --accent:#ff8c3a;      /* Emma's orange — the brand */
+  --accent-q:#7a3e10;    /* accent dim — for hover/inactive */
+  --accent-glow:#ffc77a; /* gold; used ONLY in the shader, never as a CSS gradient */
 
   --font-display:"Geist","Geist Display",system-ui,-apple-system,"SF Pro Display",sans-serif;
   --font-body:"Geist",system-ui,-apple-system,"SF Pro Text",Helvetica,sans-serif;
@@ -44,7 +45,7 @@ p{margin:0}
 .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .ink-soft{color:var(--ink-soft)}
 code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
-  background:rgba(255,122,26,.10);padding:1px 6px;border-radius:4px}
+  background:rgba(255,140,58,.10);padding:1px 6px;border-radius:4px}
 
 .container{max-width:var(--maxw);margin:0 auto;padding:0 40px}
 @media(max-width:760px){.container{padding:0 22px}}
@@ -64,7 +65,7 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
     inset 0 1px 0 rgba(255,210,138,.18),
     inset 0 -6px 12px rgba(0,0,0,.6),
     0 0 0 1px var(--rule),
-    0 0 14px rgba(255,122,26,.12)}
+    0 0 14px rgba(255,140,58,.12)}
 .nav-links{display:flex;gap:28px;font-family:var(--font-mono);font-size:12px;
   letter-spacing:.04em;text-transform:uppercase}
 .nav-links a{color:var(--ink-soft);transition:color .15s var(--ease)}
@@ -88,7 +89,7 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .btn .arr{transition:transform .2s var(--ease)}
 .btn:hover .arr{transform:translateX(3px)}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0c02;font-weight:600}
-.btn-primary:hover{background:#ff8c3a;border-color:#ff8c3a}
+.btn-primary:hover{background:#ffa052;border-color:#ffa052}
 .btn-ghost{background:transparent}
 
 /* ---- section scaffolding ---- */
@@ -133,6 +134,27 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .site-foot .links{display:flex;gap:18px}
 @media(max-width:760px){.site-foot .row{padding:26px 22px}}
 
+/* ---- ambient layers — keep the page alive between scroll moments (LANDING-29.1) ---- */
+.ambient-glow{position:fixed;inset:0;z-index:-3;pointer-events:none;overflow:hidden}
+.ambient-glow::before{content:"";position:absolute;left:-20vw;top:-10vh;width:90vw;height:90vh;
+  background:radial-gradient(circle, #ff8c3a, transparent 60%);
+  filter:blur(180px);opacity:.32;
+  animation:glow-drift 56s ease-in-out infinite alternate;will-change:transform}
+@keyframes glow-drift{
+  0%{transform:translate3d(0,0,0)}
+  33%{transform:translate3d(40vw,20vh,0)}
+  66%{transform:translate3d(20vw,50vh,0)}
+  100%{transform:translate3d(-10vw,30vh,0)}
+}
+.ambient-grid{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background-image:radial-gradient(rgba(255,140,58,.04) 1px, transparent 1px);
+  background-size:32px 32px;
+  -webkit-mask-image:radial-gradient(ellipse 70% 50% at 50% 50%, black 60%, transparent 100%);
+          mask-image:radial-gradient(ellipse 70% 50% at 50% 50%, black 60%, transparent 100%)}
+.ambient-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:white;filter:url(#grain);opacity:.04;mix-blend-mode:overlay}
+
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
+  .ambient-glow::before{animation:none}
 }
