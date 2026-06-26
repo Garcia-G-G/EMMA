@@ -2,18 +2,19 @@
    page (landing + the 5 backend pages). Edit here; both copies stay identical.
    Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
 :root{
-  --bg:#0e0a05;          /* warm near-black with orange undertone (LANDING-29.1) */
-  --bg-elev:#1a1308;     /* cards / elevated panes */
-  --ink:#fff0d4;         /* primary text — warm cream */
-  --ink-soft:#a89072;    /* secondary text — muted warm tan */
-  --rule:#2a1f12;        /* dividers, hairlines */
-  --accent:#ff8c3a;      /* Emma's orange — the brand */
-  --accent-q:#7a3e10;    /* accent dim — for hover/inactive */
-  --accent-glow:#ffc77a; /* gold; used ONLY in the shader, never as a CSS gradient */
+  --bg:#08090d;          /* Linear near-black, slight cool undertone (LANDING-30) */
+  --bg-elev:#0e0f15;     /* cards / elevated panes */
+  --ink:#ffffff;         /* high contrast — required */
+  --ink-soft:#9595a4;    /* cool grey */
+  --rule:#1a1b22;        /* dividers, hairlines */
+  --accent:#a7a8fb;      /* Linear cool periwinkle — the accent */
+  --accent-q:#5b5c84;    /* accent dim — for hover/inactive */
+  --accent-2:#ff7a9c;    /* hot-pink complement — bg mesh ONLY, sparingly */
+  --warm:#ff8c3a;        /* Emma's orange — the orb canvas ONLY, never a CSS bg */
 
-  --font-display:"Geist","Geist Display",system-ui,-apple-system,"SF Pro Display",sans-serif;
-  --font-body:"Geist",system-ui,-apple-system,"SF Pro Text",Helvetica,sans-serif;
-  --font-mono:"JetBrains Mono","SF Mono",ui-monospace,"Roboto Mono",monospace;
+  --font-display:"Inter Tight",-apple-system,BlinkMacSystemFont,Inter,sans-serif;
+  --font-body:Inter,system-ui,-apple-system,sans-serif;
+  --font-mono:"Geist Mono","JetBrains Mono","SF Mono",ui-monospace,monospace;
 
   --maxw:1280px;
   --gutter:24px;
@@ -28,7 +29,7 @@ body{
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
 }
-::selection{background:var(--accent);color:#0b0603}
+::selection{background:var(--accent);color:#08090d}
 a{color:inherit;text-decoration:none}
 img,svg,canvas{display:block;max-width:100%}
 
@@ -45,27 +46,23 @@ p{margin:0}
 .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .ink-soft{color:var(--ink-soft)}
 code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
-  background:rgba(255,140,58,.10);padding:1px 6px;border-radius:4px}
+  background:rgba(167,168,251,.10);padding:1px 6px;border-radius:4px}
 
 .container{max-width:var(--maxw);margin:0 auto;padding:0 40px}
 @media(max-width:760px){.container{padding:0 22px}}
 
 /* ---- header ---- */
-.site-nav{position:sticky;top:0;z-index:40;background:rgba(11,6,3,.72);
+.site-nav{position:sticky;top:0;z-index:40;background:rgba(8,9,13,.72);
   backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid var(--rule)}
 .site-nav .row{max-width:var(--maxw);margin:0 auto;padding:16px 40px;
   display:flex;align-items:center;justify-content:space-between}
 .brand{display:inline-flex;align-items:center;gap:11px;font-family:var(--font-display);
   font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink)}
-.brand .mk{width:22px;height:22px;border-radius:50%;position:relative;
+.brand .mk{width:20px;height:20px;border-radius:50%;position:relative;
   background:
-    radial-gradient(140% 140% at 32% 22%, rgba(255,224,170,.7) 0%, rgba(255,224,170,0) 16%),
-    radial-gradient(120% 120% at 34% 32%, #5a3a1e 0%, #2a1606 42%, #0b0603 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,210,138,.18),
-    inset 0 -6px 12px rgba(0,0,0,.6),
-    0 0 0 1px var(--rule),
-    0 0 14px rgba(255,140,58,.12)}
+    radial-gradient(140% 140% at 32% 24%, rgba(255,210,150,.85) 0%, rgba(255,170,90,0) 22%),
+    radial-gradient(120% 120% at 36% 34%, #ffae5a 0%, #7a3e10 46%, #1a0e02 100%);
+  box-shadow:0 0 0 1px var(--rule), 0 0 12px rgba(255,140,58,.25)}
 .nav-links{display:flex;gap:28px;font-family:var(--font-mono);font-size:12px;
   letter-spacing:.04em;text-transform:uppercase}
 .nav-links a{color:var(--ink-soft);transition:color .15s var(--ease)}
@@ -88,35 +85,18 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .btn:hover{border-color:var(--accent-q);transform:translateY(-1px)}
 .btn .arr{transition:transform .2s var(--ease)}
 .btn:hover .arr{transform:translateX(3px)}
+/* Linear-style: quiet, 150ms ease-out, max 1px lift. Periwinkle primary. */
 .btn-primary{
-  background:linear-gradient(180deg, #ffb878 0%, #ff8c3a 70%, #ff6f1a 100%);
-  color:#1a0e02; font-weight:700; letter-spacing:.02em;
-  border:none; padding:14px 26px; border-radius:10px;
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.30) inset,
-    0 -1px 0 rgba(0,0,0,.15) inset,
-    0 0 0 1px rgba(255,140,58,.5),
-    0 10px 28px rgba(255,140,58,.32),
-    0 0 60px rgba(255,140,58,.18);
-  transition:transform .12s var(--ease), box-shadow .18s var(--ease)}
-.btn-primary:hover{
-  transform:translateY(-1px);
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.36) inset,
-    0 -1px 0 rgba(0,0,0,.15) inset,
-    0 0 0 1px rgba(255,140,58,.65),
-    0 14px 36px rgba(255,140,58,.42),
-    0 0 80px rgba(255,140,58,.28)}
+  background:var(--accent); color:#0a0a12; font-weight:600; letter-spacing:.01em;
+  border:1px solid #c4c5ff; padding:13px 24px; border-radius:9px;
+  box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 8px 24px rgba(167,168,251,.22);
+  transition:transform .15s ease-out, background .15s ease-out, box-shadow .15s ease-out}
+.btn-primary:hover{transform:translateY(-1px); background:#b8b9ff; box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px rgba(167,168,251,.3)}
 .btn-ghost{
-  background:transparent;
-  border:1px solid rgba(255,140,58,.4);
-  color:var(--ink); font-weight:600; letter-spacing:.01em;
-  padding:13px 24px; border-radius:10px;
-  transition:.18s var(--ease)}
-.btn-ghost:hover{
-  border-color:rgba(255,199,122,.65);
-  background:rgba(255,140,58,.08);
-  box-shadow:0 0 24px rgba(255,140,58,.18)}
+  background:transparent; border:1px solid var(--rule); color:var(--ink);
+  font-weight:500; letter-spacing:.01em; padding:13px 24px; border-radius:9px;
+  transition:border-color .15s ease-out, background .15s ease-out}
+.btn-ghost:hover{border-color:var(--accent-q); background:rgba(167,168,251,.06)}
 
 /* ---- section scaffolding ---- */
 .section{border-top:1px solid var(--rule)}
@@ -160,27 +140,22 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .site-foot .links{display:flex;gap:18px}
 @media(max-width:760px){.site-foot .row{padding:26px 22px}}
 
-/* ---- ambient layers — keep the page alive between scroll moments (LANDING-29.1) ---- */
-.ambient-glow{position:fixed;inset:0;z-index:-3;pointer-events:none;overflow:hidden}
-.ambient-glow::before{content:"";position:absolute;left:-20vw;top:-10vh;width:90vw;height:90vh;
-  background:radial-gradient(circle, #ff8c3a, transparent 60%);
-  filter:blur(180px);opacity:.32;
-  animation:glow-drift 56s ease-in-out infinite alternate;will-change:transform}
-@keyframes glow-drift{
-  0%{transform:translate3d(0,0,0)}
-  33%{transform:translate3d(40vw,20vh,0)}
-  66%{transform:translate3d(20vw,50vh,0)}
-  100%{transform:translate3d(-10vw,30vh,0)}
-}
+/* ---- ambient: Linear gradient mesh (cool) + grain. No warm drift (LANDING-30). ---- */
+.bg-mesh{position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(167,168,251,0.12), transparent 45%),
+    radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
+.bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
+/* compat: any page still emitting the old ambient divs degrades to the mesh look */
+.ambient-glow{display:none}
 .ambient-grid{position:fixed;inset:0;z-index:-2;pointer-events:none;
-  background-image:radial-gradient(rgba(255,140,58,.04) 1px, transparent 1px);
-  background-size:32px 32px;
-  -webkit-mask-image:radial-gradient(ellipse 70% 50% at 50% 50%, black 60%, transparent 100%);
-          mask-image:radial-gradient(ellipse 70% 50% at 50% 50%, black 60%, transparent 100%)}
+  background:
+    radial-gradient(circle at 88% 12%, rgba(167,168,251,0.12), transparent 45%),
+    radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
 .ambient-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:white;filter:url(#grain);opacity:.04;mix-blend-mode:overlay}
+  background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
-  .ambient-glow::before{animation:none}
 }
