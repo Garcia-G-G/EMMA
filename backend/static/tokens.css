@@ -88,9 +88,35 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .btn:hover{border-color:var(--accent-q);transform:translateY(-1px)}
 .btn .arr{transition:transform .2s var(--ease)}
 .btn:hover .arr{transform:translateX(3px)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#1a0c02;font-weight:600}
-.btn-primary:hover{background:#ffa052;border-color:#ffa052}
-.btn-ghost{background:transparent}
+.btn-primary{
+  background:linear-gradient(180deg, #ffb878 0%, #ff8c3a 70%, #ff6f1a 100%);
+  color:#1a0e02; font-weight:700; letter-spacing:.02em;
+  border:none; padding:14px 26px; border-radius:10px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.30) inset,
+    0 -1px 0 rgba(0,0,0,.15) inset,
+    0 0 0 1px rgba(255,140,58,.5),
+    0 10px 28px rgba(255,140,58,.32),
+    0 0 60px rgba(255,140,58,.18);
+  transition:transform .12s var(--ease), box-shadow .18s var(--ease)}
+.btn-primary:hover{
+  transform:translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.36) inset,
+    0 -1px 0 rgba(0,0,0,.15) inset,
+    0 0 0 1px rgba(255,140,58,.65),
+    0 14px 36px rgba(255,140,58,.42),
+    0 0 80px rgba(255,140,58,.28)}
+.btn-ghost{
+  background:transparent;
+  border:1px solid rgba(255,140,58,.4);
+  color:var(--ink); font-weight:600; letter-spacing:.01em;
+  padding:13px 24px; border-radius:10px;
+  transition:.18s var(--ease)}
+.btn-ghost:hover{
+  border-color:rgba(255,199,122,.65);
+  background:rgba(255,140,58,.08);
+  box-shadow:0 0 24px rgba(255,140,58,.18)}
 
 /* ---- section scaffolding ---- */
 .section{border-top:1px solid var(--rule)}
