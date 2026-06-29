@@ -2,8 +2,9 @@
    page (landing + the 5 backend pages). Edit here; both copies stay identical.
    Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
 :root{
-  /* LANDING-31: Apple AirPods Pro cream + Artisan layout signals. Shared with
-     _landing/tokens.css. Light backgrounds. Warm clay accent. */
+  /* LANDING-31: Apple AirPods Pro cream palette + Artisan layout signals.
+     Light backgrounds. Warm clay accent. Emma's orb stays warm against the
+     cream — high contrast comes from form, not chroma. */
   --bg:#faf6ef;          /* warm cream — primary surface */
   --bg-elev:#f0e7d6;     /* elevated cards / pricing surfaces */
   --ink:#1a1308;         /* deep warm-brown — primary text */
