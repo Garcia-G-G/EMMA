@@ -15,10 +15,12 @@ pages, OG images, README, social posts):
    attribution line.
 4. **No invented personal narrative.** Copy is product-focused: what Emma
    does, how she runs, what she costs. Not who built her.
-5. **Visual identity is the small `.mk` brand mark in the nav.** Do NOT
-   re-add a large WebGL orb / triangulated wireframe / "atom" mark in the
-   hero canvas — that direction was rejected. The hero stays
-   typography-driven.
+5. **Visual identity is the ATOM** — clean line-art orbit rings + a small
+   glowing nucleus (+ orbiting electrons), rendered as inline SVG/CSS.
+   Emma must be PRESENT and beautiful in the hero, and the same atom is the
+   nav mark. REJECTED directions (do not bring back): the WebGL/Three.js
+   triangulated wireframe ("orb inside a cage"), and a plain glossy sphere/
+   orb as the logo. The mark is the atom, not a sphere.
 6. **Don't assume the maker's identity or location anywhere in code
    comments, prompts, or generated assets either.** If a feature needs an
    origin (e.g. system prompt examples), use generic placeholders.

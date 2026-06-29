@@ -61,11 +61,7 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
   display:flex;align-items:center;justify-content:space-between}
 .brand{display:inline-flex;align-items:center;gap:11px;font-family:var(--font-display);
   font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink)}
-.brand .mk{width:20px;height:20px;border-radius:50%;position:relative;
-  background:
-    radial-gradient(140% 140% at 32% 24%, rgba(255,210,150,.85) 0%, rgba(255,170,90,0) 22%),
-    radial-gradient(120% 120% at 36% 34%, #ffae5a 0%, #7a3e10 46%, #1a0e02 100%);
-  box-shadow:0 0 0 1px var(--rule), 0 0 12px rgba(255,140,58,.25)}
+.brand .mk{width:24px;height:24px;display:block;overflow:visible}
 .nav-links{display:flex;gap:28px;font-family:var(--font-mono);font-size:12px;
   letter-spacing:.04em;text-transform:uppercase}
 .nav-links a{color:var(--ink-soft);transition:color .15s var(--ease)}
