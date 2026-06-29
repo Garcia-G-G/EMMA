@@ -2,6 +2,30 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Public-copy rules (mandatory — do NOT violate)
+
+These apply to anything that ships to the public web (landing, backend HTML
+pages, OG images, README, social posts):
+
+1. **Never reference the maker by name.** No "Garcia", no "made by Garcia",
+   no "soy Garcia", no first-person maker paragraph.
+2. **Never assert a geographic origin.** No "Monterrey, MX", no "MTY", no
+   "made in <city>". The maker has not consented to that being public.
+3. **Footer is generic.** `© 2026 emma` (or equivalent in EN). No personal
+   attribution line.
+4. **No invented personal narrative.** Copy is product-focused: what Emma
+   does, how she runs, what she costs. Not who built her.
+5. **Visual identity is the small `.mk` brand mark in the nav.** Do NOT
+   re-add a large WebGL orb / triangulated wireframe / "atom" mark in the
+   hero canvas — that direction was rejected. The hero stays
+   typography-driven.
+6. **Don't assume the maker's identity or location anywhere in code
+   comments, prompts, or generated assets either.** If a feature needs an
+   origin (e.g. system prompt examples), use generic placeholders.
+
+If you find any existing copy violating these rules, remove it. If you're
+unsure what to put in place, leave a TODO and ask — do not invent.
+
 ## What Emma is
 
 Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~120 tools, and maintains long-term memory in a local SQLite store.
