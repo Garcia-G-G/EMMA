@@ -89,7 +89,7 @@ async def api_plans() -> dict[str, Any]:
         "plans": [
             {"id": "pro", "name": "Pro", "monthly": 19, "yearly": 190,
              "session_min": 5, "daily_min": 10, "monthly_min": 60,
-             "features": ["Instalación .pkg", "Trae tu API key de OpenAI",
+             "features": ["Instalación .pkg", "Minutos incluidos + excedente medido",
                           "Soporte por correo (48h)"]},
             {"id": "power", "name": "Power", "monthly": 49, "yearly": 490,
              "session_min": 15, "daily_min": 30, "monthly_min": 200,

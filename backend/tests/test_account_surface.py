@@ -97,3 +97,10 @@ def test_require_admin_gate(client, monkeypatch):
     r = client.get("/api/admin/overview")
     assert r.status_code == 200
     assert "spend_today_usd" in r.json()
+
+
+def test_api_plans_is_managed(client):
+    d = client.get("/api/plans").json()
+    blob = str(d).lower()
+    assert "trae tu api key" not in blob and "byok" not in blob
+    assert d["plans"][0]["id"] == "pro"
