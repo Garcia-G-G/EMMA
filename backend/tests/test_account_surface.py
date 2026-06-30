@@ -73,3 +73,13 @@ def test_dashboard_api_managed_shape(client):
     assert d["subscription"]["plan"] == "free"
     assert "active" in d["subscription"]
     assert set(d["downloads"]) == {"mac", "win"}
+
+
+def test_dashboard_page_has_account_settings(client):
+    _register(client)
+    body = client.get("/dashboard").text
+    assert "/api/me/password" in body
+    assert "/api/me/email" in body
+    assert "/api/me" in body            # delete account
+    assert "Tu uso este mes" in body
+    assert "min/sesión" not in body     # managed: no cap framing shown

@@ -27,15 +27,18 @@
 </div></nav>
 <main>
   <div class="head"><h1>Hola, <span id="name">…</span></h1><span class="plan-tag" id="plan">…</span></div>
-  <div class="grid">
-    <div class="panel"><h2>Sesiones este mes</h2><div class="big" id="sessions">–</div></div>
-    <div class="panel"><h2>Minutos usados</h2><div class="big" id="minutes">–</div></div>
+  <div class="panel span"><h2>Tu uso este mes</h2>
+    <div class="grid" style="margin-top:6px">
+      <div><div class="big" id="sessions">–</div><div class="ink-soft">sesiones</div></div>
+      <div><div class="big" id="minutes">–</div><div class="ink-soft">minutos hablados</div></div>
+    </div>
+    <div class="ink-soft" id="usagenote" style="margin-top:12px"></div>
   </div>
-  <div class="panel span" style="margin-top:16px"><h2>Tu plan</h2>
-    <div class="ink-soft" id="capdesc">…</div>
+  <div class="panel span" style="margin-top:16px"><h2>Tu suscripción</h2>
+    <div class="ink-soft" id="subdesc">…</div>
     <div class="acts">
       <button class="btn btn-primary" onclick="upgrade('pro');return false">Subir a Pro</button>
-      <button class="btn btn-ghost" onclick="portal();return false">Cambiar plan</button>
+      <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
     </div>
   </div>
   <div class="panel span" style="margin-top:16px"><h2>Descarga Emma</h2>
@@ -47,6 +50,20 @@
   <div class="panel span" style="margin-top:16px"><h2>Tus sesiones</h2>
     <table class="cmp"><thead><tr><th>Inicio</th><th>Duración</th><th>Costo</th></tr></thead>
       <tbody id="rows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody></table>
+  </div>
+  <div class="panel span" style="margin-top:16px"><h2>Cuenta</h2>
+    <form onsubmit="return changePw(event)" style="margin-bottom:18px">
+      <div class="field"><label for="curpw">Contraseña actual</label><input id="curpw" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="newpw">Nueva contraseña</label><input id="newpw" type="password" minlength="8" autocomplete="new-password" placeholder="mínimo 8 caracteres"></div>
+      <button class="btn btn-ghost" type="submit">Cambiar contraseña</button>
+      <span class="form-note" id="pwnote"></span>
+    </form>
+    <form onsubmit="return changeEmail(event)" style="margin-bottom:18px">
+      <div class="field"><label for="newemail">Cambiar correo</label><input id="newemail" type="email" autocomplete="email"></div>
+      <button class="btn btn-ghost" type="submit">Actualizar correo</button>
+      <span class="form-note" id="emnote"></span>
+    </form>
+    <button class="btn btn-ghost" onclick="delAccount();return false" style="color:#c4543a;border-color:#e0b3a8">Borrar mi cuenta</button>
   </div>
   <p class="logout"><a href="/auth/logout">Cerrar sesión</a></p>
 </main>
@@ -61,18 +78,15 @@ async function load(){
   document.getElementById("name").textContent=d.user.name||d.user.email;
   document.getElementById("plan").textContent=d.user.plan;
   document.getElementById("sessions").textContent=d.usage.sessions;
-  document.getElementById("minutes").textContent=(d.usage.seconds/60).toFixed(1);
-  const cap=d.caps||{};
-  const perSes=Math.round((cap.session_seconds||0)/60);
-  const perDay=Math.round((cap.daily_seconds||0)/60);
-  const perMonth=Math.round((cap.monthly_seconds||0)/60);
-  const parts=[perSes+" min por sesión"];
-  if(perDay>0)parts.push(perDay+" min/día");
-  if(perMonth>0)parts.push(perMonth+" min/mes");
-  document.getElementById("capdesc").textContent=parts.join(" · ");
-  document.getElementById("dlmac").href=d.downloads.mac;
-  document.getElementById("dlwin").href=d.downloads.win;
-  const rows=d.recent.map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
+  document.getElementById("minutes").textContent=d.usage.minutes.toFixed(1);
+  document.getElementById("usagenote").textContent=
+    "El detalle de cobro aparecerá aquí cuando actives un plan de pago.";
+  document.getElementById("subdesc").textContent= d.subscription.active
+    ? ("Plan "+d.subscription.plan+" · activo")
+    : ("Plan "+d.subscription.plan+" · sin suscripción activa");
+  document.getElementById("dlmac").href=d.downloads.mac||"#";
+  document.getElementById("dlwin").href=d.downloads.win||"#";
+  const rows=(d.recent||[]).map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
     `<td>${(s.seconds_used||0).toFixed(0)}s</td><td>$${(s.cost_usd||0).toFixed(3)}</td></tr>`).join("");
   document.getElementById("rows").innerHTML=rows||'<tr><td colspan="3" class="ink-soft">Aún no hay sesiones.</td></tr>';
 }
@@ -83,6 +97,27 @@ async function upgrade(plan){
 async function portal(){
   const r=await fetch("/api/billing/portal",{method:"POST"});
   if(r.ok){ const d=await r.json(); location.href=d.url; } else { alert("Aún no tienes suscripción."); }
+}
+async function changePw(ev){ ev.preventDefault();
+  const n=document.getElementById("pwnote"); n.className="form-note"; n.textContent="…";
+  const r=await fetch("/api/me/password",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({current_password:document.getElementById("curpw").value,new_password:document.getElementById("newpw").value})});
+  const d=await r.json().catch(()=>({}));
+  n.className="form-note "+(r.ok?"ok":"err"); n.textContent=r.ok?"Contraseña actualizada.":(d.detail||"No se pudo cambiar.");
+  return false;
+}
+async function changeEmail(ev){ ev.preventDefault();
+  const n=document.getElementById("emnote"); n.className="form-note"; n.textContent="…";
+  const r=await fetch("/api/me/email",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email:document.getElementById("newemail").value})});
+  const d=await r.json().catch(()=>({}));
+  n.className="form-note "+(r.ok?"ok":"err"); n.textContent=r.ok?"Correo actualizado.":(d.detail||"No se pudo actualizar.");
+  return false;
+}
+async function delAccount(){
+  if(!confirm("¿Seguro? Esto anonimiza tu cuenta y cierra tu sesión.")) return;
+  const r=await fetch("/api/me",{method:"DELETE"});
+  if(r.ok){ location.href="https://theemmafamily.com"; } else { alert("No se pudo borrar la cuenta."); }
 }
 load();
 </script>
