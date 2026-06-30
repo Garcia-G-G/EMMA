@@ -159,11 +159,12 @@ async def dashboard(request: Request) -> Any:
 @app.get("/api/dashboard")
 async def api_dashboard(request: Request) -> Any:
     user = await require_user(request)
-    caps = PLAN_CAPS.get(user["plan"], PLAN_CAPS["free"])
+    seconds = round(float(user["monthly_seconds_used"] or 0), 1)
     return JSONResponse({
         "user": {"email": user["email"], "name": user["name"], "plan": user["plan"]},
-        "usage": {"sessions": user["monthly_session_count"], "seconds": round(user["monthly_seconds_used"], 1)},
-        "caps": caps,
+        "usage": {"sessions": user["monthly_session_count"],
+                  "seconds": seconds, "minutes": round(seconds / 60, 1)},
+        "subscription": {"plan": user["plan"], "active": bool(user.get("stripe_customer_id"))},
         "recent": db.recent_sessions(user["id"]),
         "downloads": {"mac": settings.DOWNLOAD_PKG_URL, "win": settings.DOWNLOAD_MSI_URL},
     })
