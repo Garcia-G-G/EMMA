@@ -83,3 +83,17 @@ def test_dashboard_page_has_account_settings(client):
     assert "/api/me" in body            # delete account
     assert "Tu uso este mes" in body
     assert "min/sesión" not in body     # managed: no cap framing shown
+
+
+def test_admin_overview_requires_login(client):
+    assert client.get("/api/admin/overview").status_code in (401, 403)
+
+
+def test_require_admin_gate(client, monkeypatch):
+    _register(client, email="boss@theemmafamily.com", pw="correcthorse9")
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
+    assert client.get("/api/admin/overview").status_code == 403
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "boss@theemmafamily.com")
+    r = client.get("/api/admin/overview")
+    assert r.status_code == 200
+    assert "spend_today_usd" in r.json()
