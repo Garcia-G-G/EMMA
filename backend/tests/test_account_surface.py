@@ -45,3 +45,14 @@ def test_public_pages_have_logged_out_account_menu(client):
         assert 'acct-menu' in body, f"{path} missing Cuenta dropdown"
         assert '<li><a href="/login">Entrar</a></li>' in body, f"{path} missing Entrar item"
         assert '<li><a href="/register">Crear cuenta</a></li>' in body, f"{path} missing Crear cuenta item"
+
+
+def test_legal_pages(client):
+    p = client.get("/privacy")
+    assert p.status_code == 200
+    assert "Privacidad" in p.text
+    assert "OpenAI" in p.text and "Stripe" in p.text  # subprocessors disclosed
+    t = client.get("/terms")
+    assert t.status_code == 200
+    assert "Términos" in t.text
+    assert "[PLACEHOLDER" in t.text  # entity/jurisdiction left for legal review

@@ -1,0 +1,60 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — Privacidad</title>
+<meta name="theme-color" content="#faf6ef">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/tokens.css">
+<style>
+  .legal{max-width:760px;margin:0 auto;padding:64px 40px}
+  .legal h1{margin:0 0 6px}
+  .legal .updated{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin:0 0 32px}
+  .legal h2{font-size:20px;margin:34px 0 10px}
+  .legal p,.legal li{color:var(--ink-soft);line-height:1.65}
+  .legal ul{padding-left:20px}
+  @media(max-width:760px){.legal{padding:44px 22px}}
+</style></head><body>
+<nav class="site-nav"><div class="row">
+  <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
+  <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><div class="acct-menu"><button class="acct-btn" aria-haspopup="true">Cuenta ▾</button><ul class="acct-list" role="menu"><li><a href="/login">Entrar</a></li><li><a href="/register">Crear cuenta</a></li></ul></div><a class="btn btn-primary nav-cta" href="/download">Descargar Emma</a></div></div>
+</div></nav>
+<main class="legal">
+  <h1>Privacidad</h1>
+  <p class="updated">Última actualización: 2026-06-30</p>
+
+  <h2>Qué guardamos</h2>
+  <ul>
+    <li>Tu cuenta: correo, nombre y (si entras con Google/GitHub) tu identificador del proveedor.</li>
+    <li>Tu uso: segundos de conversación y costo por sesión, para mostrarte tu consumo y facturarte.</li>
+    <li>Del demo público: una versión <strong>cifrada (hash)</strong> de tu IP — nunca la IP en crudo.</li>
+  </ul>
+
+  <h2>Dónde vive</h2>
+  <ul>
+    <li>Los datos de tu cuenta viven en nuestro servidor (base de datos cifrada en disco).</li>
+    <li>Tus secretos (contraseñas) se guardan solo como hash; nunca en texto plano.</li>
+    <li>Lo que Emma aprende de ti en tu Mac (memoria local) <strong>se queda en tu Mac</strong>; no se sube.</li>
+  </ul>
+
+  <h2>Con quién lo compartimos</h2>
+  <p>Emma procesa tu voz y texto durante una sesión a través de <strong>OpenAI</strong> (como nuestro
+  subprocesador, bajo el modelo administrado). Usamos <strong>Stripe</strong> para pagos,
+  <strong>Resend</strong> para correos transaccionales, <strong>Cloudflare</strong> para entrega y
+  protección, y Google/GitHub si eliges entrar con ellos. <strong>No vendemos tus datos</strong> ni los
+  usamos para publicidad.</p>
+
+  <h2>Cookies</h2>
+  <p>Una sola cookie de sesión, firmada y HttpOnly, para mantenerte con la sesión iniciada.</p>
+
+  <h2>Borrar tu cuenta</h2>
+  <p>Puedes borrar tu cuenta desde tu panel. Anonimizamos tus datos de inmediato; la purga definitiva
+  ocurre en un proceso posterior.</p>
+
+  <h2>Contacto</h2>
+  <p>Para cualquier solicitud sobre tus datos, escríbenos a <a href="mailto:[PLACEHOLDER — correo de contacto]">[PLACEHOLDER — correo de contacto]</a>.</p>
+</main>
+<footer class="site-foot"><div class="row">
+  <span>© 2026 emma</span>
+  <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/privacy">privacidad</a><a href="/terms">términos</a></span>
+</div></footer>
+</body></html>
