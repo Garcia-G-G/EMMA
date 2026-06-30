@@ -43,6 +43,7 @@ class Settings:
     # ---- session tokens / cookies ----
     JWT_SECRET = os.environ.get("JWT_SECRET", "dev-insecure-change-me")
     SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-insecure-change-me")
+    ADMIN_EMAILS = os.environ.get("ADMIN_EMAILS", "")  # comma-separated operator emails
     SESSION_TOKEN_TTL_S = 300  # signed session_token validity (5 min) — A3
     DEMO_SESSION_SECONDS = int(os.environ.get("DEMO_SESSION_SECONDS", "120"))
 
