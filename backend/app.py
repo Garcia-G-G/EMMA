@@ -139,6 +139,16 @@ async def register_page() -> str:
     return (_STATIC / "register.html").read_text(encoding="utf-8")
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page() -> str:
+    return (_STATIC / "privacy.html").read_text(encoding="utf-8")
+
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_page() -> str:
+    return (_STATIC / "terms.html").read_text(encoding="utf-8")
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request) -> Any:
     if await current_user(request) is None:
