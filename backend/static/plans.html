@@ -22,7 +22,7 @@
 </div></nav>
 <main>
   <h1>Planes</h1>
-  <p class="lede">Emma es una suscripción de software, plana. Tú traes tu llave de OpenAI y le pagas el cómputo directo a OpenAI (~$0.06/min con gpt-realtime). Nosotros cobramos solo por Emma.</p>
+  <p class="lede">Emma se encarga del cómputo por ti — no necesitas tu propia llave de OpenAI. Pagas una cuota mensual con minutos incluidos y un excedente medido si hablas de más.</p>
   <table class="cmp" id="tbl">
     <tbody><tr><td class="ink-soft">Cargando…</td></tr></tbody>
   </table>
@@ -47,7 +47,7 @@ async function init(){
   const rows=[
     ["",       P.map(p=>`<span style="font-family:var(--font-display);font-size:18px;font-weight:600">${p.name}</span>`)],
     ["Precio", P.map(p=>`<span class="price">$${p.monthly}</span><span class="per"> / mes</span>`)],
-    ["API key",    P.map(_=>`la tuya (OpenAI)`)],
+    ["Cómputo",    P.map(_=>`administrado por Emma`)],
   ];
   let html="<tbody>";
   for(const [k,vals] of rows){
