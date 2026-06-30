@@ -1,0 +1,41 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — operación</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/tokens.css">
+<style>
+  main{max-width:760px;margin:0 auto;padding:56px 40px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .panel{background:var(--bg-elev);border:1px solid var(--rule);border-radius:12px;padding:22px}
+  .panel h2{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin:0 0 8px;font-weight:500}
+  .big{font-family:var(--font-display);font-size:32px;font-weight:600}
+  .err{color:#c4543a;margin-top:20px}
+  @media(max-width:760px){main{padding:44px 22px}.grid{grid-template-columns:1fr}}
+</style></head><body>
+<nav class="site-nav"><div class="row">
+  <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/></g></svg>Emma · operación</a>
+</div></nav>
+<main>
+  <h1 style="margin:0 0 24px">Operación</h1>
+  <div class="grid">
+    <div class="panel"><h2>Gasto OpenAI hoy</h2><div class="big" id="today">–</div></div>
+    <div class="panel"><h2>Gasto OpenAI este mes</h2><div class="big" id="month">–</div></div>
+    <div class="panel"><h2>Sesiones (24h)</h2><div class="big" id="sessions">–</div></div>
+    <div class="panel"><h2>Presupuesto mensual</h2><div class="big" id="budget">–</div></div>
+  </div>
+  <p class="ink-soft" style="margin-top:18px">Ingresos y margen llegan en un seguimiento (requiere datos de Stripe).</p>
+  <p class="err" id="err" hidden>No autorizado.</p>
+</main>
+<script>
+async function load(){
+  const r=await fetch("/api/admin/overview");
+  if(!r.ok){ document.getElementById("err").hidden=false; return; }
+  const d=await r.json();
+  document.getElementById("today").textContent="$"+d.spend_today_usd.toFixed(2);
+  document.getElementById("month").textContent="$"+d.spend_month_usd.toFixed(2);
+  document.getElementById("sessions").textContent=d.sessions_today;
+  document.getElementById("budget").textContent="$"+d.monthly_budget_usd;
+}
+load();
+</script>
+</body></html>

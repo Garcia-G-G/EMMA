@@ -19,6 +19,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from backend import (
     account_routes,
+    admin_routes,
     auth,
     auth_local,
     db,
@@ -66,6 +67,7 @@ app.include_router(account_routes.router)
 app.include_router(stripe_routes.router)
 # app.include_router(wake_routes.router)  # disabled in Fly deploy
 app.include_router(demo_session.router)
+app.include_router(admin_routes.router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
@@ -154,6 +156,13 @@ async def dashboard(request: Request) -> Any:
     if await current_user(request) is None:
         return RedirectResponse("/login")
     return HTMLResponse((_STATIC / "dashboard.html").read_text(encoding="utf-8"))
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request) -> Any:
+    if await current_user(request) is None:
+        return RedirectResponse("/login")
+    return HTMLResponse((_STATIC / "admin.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/dashboard")
