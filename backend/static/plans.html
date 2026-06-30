@@ -15,25 +15,18 @@
   .note{margin-top:22px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
   .note a{color:var(--accent)}
   @media(max-width:760px){main{padding:56px 22px}}
-</style></head><body><div class="bg-glow" aria-hidden="true"></div>
-
-<div class="ambient-glow" aria-hidden="true"></div>
-<div class="ambient-grid" aria-hidden="true"></div>
-<div class="ambient-grain" aria-hidden="true"></div>
-<svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
-  <filter id="grain"><feTurbulence baseFrequency="0.9" numOctaves="2" seed="3"/></filter>
-</svg>
+</style></head><body>
 <nav class="site-nav"><div class="row">
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
-  <div class="nav-right"><div class="nav-links"><a href="/download">Descarga</a><a href="/login">Entrar</a></div></div>
+  <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><a class="nav-link" href="/login">Entrar</a><a class="btn btn-primary nav-cta" href="/download">Descargar Emma</a></div></div>
 </div></nav>
 <main>
   <h1>Planes</h1>
-  <p class="lede">Tu llave de OpenAI, en tu Mac. Tú le pagas el cómputo a OpenAI directo — Emma cobra solo por el software.</p>
+  <p class="lede">Emma es una suscripción de software, plana. Tú traes tu llave de OpenAI y le pagas el cómputo directo a OpenAI (~$0.06/min con gpt-realtime). Nosotros cobramos solo por Emma.</p>
   <table class="cmp" id="tbl">
     <tbody><tr><td class="ink-soft">Cargando…</td></tr></tbody>
   </table>
-  <p class="note">Excedentes: <span id="overage">$0.30/min</span> después del tope mensual · cancela cuando quieras desde tu panel · <a href="https://theemmafamily.com">← portada</a></p>
+  <p class="note">Cancela cuando quieras desde tu panel · <a href="https://theemmafamily.com">← portada</a></p>
 </main>
 <footer class="site-foot"><div class="row">
   <span>© 2026 emma</span>
@@ -46,7 +39,6 @@ async function init(){
   catch(e){ document.getElementById("tbl").innerHTML='<tbody><tr><td>No pude cargar los planes. <a href="https://theemmafamily.com" style="color:var(--accent)">Volver</a></td></tr></tbody>'; return; }
   const me=await fetch("/api/auth/whoami").then(r=>r.ok?r.json():null).catch(()=>null);
   const isAuthed=!!(me&&me.user);
-  if(data.overage_per_min_usd!=null)document.getElementById("overage").textContent="$"+data.overage_per_min_usd.toFixed(2)+"/min";
   const P=data.plans;  // [pro, power]
   const cell=(p,v)=>`<td>${v}</td>`;
   const cta=(p)=> isAuthed
@@ -55,9 +47,6 @@ async function init(){
   const rows=[
     ["",       P.map(p=>`<span style="font-family:var(--font-display);font-size:18px;font-weight:600">${p.name}</span>`)],
     ["Precio", P.map(p=>`<span class="price">$${p.monthly}</span><span class="per"> / mes</span>`)],
-    ["Por sesión", P.map(p=>`${p.session_min} min`)],
-    ["Al día",     P.map(p=>`${p.daily_min} min`)],
-    ["Al mes",     P.map(p=>`${p.monthly_min} min`)],
     ["API key",    P.map(_=>`la tuya (OpenAI)`)],
   ];
   let html="<tbody>";
