@@ -88,6 +88,17 @@ async def require_user(request: Request) -> dict[str, Any]:
     return user
 
 
+async def require_admin(request: Request) -> dict[str, Any]:
+    """Gate operator-only endpoints: a logged-in user whose email is in
+    settings.ADMIN_EMAILS (comma-separated). 401 if anon, 403 if not an admin."""
+    user = await require_user(request)
+    from backend.config import settings
+    allow = {e.strip().lower() for e in (settings.ADMIN_EMAILS or "").split(",") if e.strip()}
+    if (user.get("email") or "").lower() not in allow:
+        raise HTTPException(403, "No autorizado.")
+    return user
+
+
 # ---- routes -----------------------------------------------------------------
 
 
