@@ -15,8 +15,9 @@
   --accent-2:#8a3e10;    /* deeper oxblood for italic emphasis */
   --warm:#ff8c3a;        /* Emma's orange — orb canvas ONLY, never a CSS bg */
 
-  --font-display:"Inter Tight",-apple-system,BlinkMacSystemFont,Inter,sans-serif;
-  --font-body:Inter,system-ui,-apple-system,sans-serif;
+  /* LANDING-33: Geist (Vercel) — refined product/AI face, off generic Inter. */
+  --font-display:"Geist","Inter Display","Inter Tight",-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-body:"Geist",system-ui,-apple-system,sans-serif;
   --font-mono:"Geist Mono","JetBrains Mono","SF Mono",ui-monospace,monospace;
 
   --maxw:1280px;
@@ -36,10 +37,11 @@ body{
 a{color:inherit;text-decoration:none}
 img,svg,canvas{display:block;max-width:100%}
 
-h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:600}
-h1{font-size:clamp(40px,6.6vw,80px);letter-spacing:-.02em;line-height:.95}
-h2{font-size:clamp(30px,3.6vw,44px);letter-spacing:-.01em;line-height:1.05}
+h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:600;font-feature-settings:"ss01","ss02","kern","liga"}
+h1{font-size:clamp(40px,6.6vw,80px);letter-spacing:-.03em;line-height:.95;text-wrap:balance}
+h2{font-size:clamp(30px,3.6vw,44px);letter-spacing:-.018em;line-height:1.05}
 h3{font-size:20px;letter-spacing:-.01em;line-height:1.2;font-weight:500}
+p{font-feature-settings:"kern","liga","calt"}
 p{margin:0}
 
 /* micro / label — the only place type goes uppercase */
@@ -139,21 +141,24 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .site-foot .links{display:flex;gap:18px}
 @media(max-width:760px){.site-foot .row{padding:26px 22px}}
 
-/* ---- ambient: Linear gradient mesh (cool) + grain. No warm drift (LANDING-30). ---- */
-.bg-mesh{position:fixed;inset:0;z-index:-2;pointer-events:none;
-  background:
-    radial-gradient(circle at 88% 12%, rgba(160,74,22,0.12), transparent 45%),
-    radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
+/* ---- ambient (LANDING-33): ONE drifting warm glow + grain. No cool/pink wash. ---- */
+.bg-glow{position:fixed;inset:0;z-index:-2;pointer-events:none;overflow:hidden}
+.bg-glow::before{content:"";position:absolute;left:-15vw;top:-10vh;width:80vw;height:80vh;
+  background:radial-gradient(circle, rgba(255,140,58,0.18), transparent 60%);
+  filter:blur(140px);animation:bg-drift 60s ease-in-out infinite alternate;will-change:transform}
+@keyframes bg-drift{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(30vw,15vh,0)}100%{transform:translate3d(-10vw,25vh,0)}}
 .bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
-/* compat: any page still emitting the old ambient divs degrades to the mesh look */
-.ambient-glow{display:none}
-.ambient-grid{position:fixed;inset:0;z-index:-2;pointer-events:none;
-  background:
-    radial-gradient(circle at 88% 12%, rgba(160,74,22,0.12), transparent 45%),
-    radial-gradient(circle at 12% 88%, rgba(255,122,156,0.08), transparent 50%)}
-.ambient-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
+/* compat: old ambient/mesh divs from prior passes render nothing now */
+.bg-mesh,.ambient-glow,.ambient-grid,.ambient-grain{display:none}
+
+/* section hairline that draws across on scroll-in (subtle aliveness) */
+.section{position:relative}
+.section::before{content:"";position:absolute;left:0;top:0;height:1px;width:var(--draw,0%);
+  background:var(--accent-q);transition:width .6s var(--ease)}
+.section.in-view::before{--draw:100%}
+
+@media(prefers-reduced-motion:reduce){.bg-glow::before{animation:none}.section::before{transition:none}}
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
