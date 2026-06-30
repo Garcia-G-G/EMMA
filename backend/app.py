@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +31,7 @@ from backend import (
 # wake_routes disabled in Fly deploy — depends on daemon's core.background / config.settings.
 # Re-enable after vendoring those modules into backend/ (follow-up prompt 16.3.1).
 from backend import session as session_mod
-from backend.auth import current_user, require_user
+from backend.auth import current_user, require_admin, require_user
 from backend.config import assert_secure_secrets, settings
 
 assert_secure_secrets()  # fail loud if a prod (HTTPS) host is still on the dev signing keys
@@ -160,7 +160,9 @@ async def dashboard(request: Request) -> Any:
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request) -> Any:
-    if await current_user(request) is None:
+    try:
+        await require_admin(request)  # gate the PAGE, not just the API
+    except HTTPException:
         return RedirectResponse("/login")
     return HTMLResponse((_STATIC / "admin.html").read_text(encoding="utf-8"))
 

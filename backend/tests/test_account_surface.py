@@ -110,3 +110,23 @@ def test_plans_page_managed_copy(client):
     body = client.get("/plans").text
     assert "trae tu llave" not in body.lower()
     assert "administrado" in body.lower() or "incluidos" in body.lower()
+
+
+def test_download_page_managed_copy(client):
+    body = client.get("/download").text.lower()
+    assert "trae tu llave" not in body
+    assert "pega tu llave" not in body
+
+
+def test_admin_page_is_admin_gated(client, monkeypatch):
+    # anon → redirect to login
+    r = client.get("/admin")
+    assert r.status_code in (302, 307) and "/login" in r.headers.get("location", "")
+    # logged-in non-admin → still redirected (page not leaked)
+    _register(client, email="nobody@x.com", pw="correcthorse9")
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
+    r2 = client.get("/admin")
+    assert r2.status_code in (302, 307), "non-admin must not get the admin page"
+    # admin → 200 page
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "nobody@x.com")
+    assert client.get("/admin").status_code == 200

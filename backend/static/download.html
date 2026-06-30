@@ -29,16 +29,16 @@
 </div></nav>
 <main>
   <h1>Instala Emma</h1>
-  <p class="lede">Llámala con «Hey Emma» y úsala sin límite. Trae tu llave de OpenAI; tu voz vive en tu Mac.</p>
+  <p class="lede">Llámala con «Hey Emma». Inicia sesión, activa tu plan y empieza — nosotros nos encargamos del cómputo. Tu memoria y tus secretos viven en tu Mac.</p>
   <div class="row">
-    <a class="dl" id="dlmac" href="#" rel="noopener"><b>macOS</b><span class="sub">.pkg · Apple Silicon + Intel</span></a>
+    <a class="dl" id="dlmac" href="/api/downloads/latest" rel="noopener"><b>macOS</b><span class="sub">.pkg · Apple Silicon + Intel</span></a>
     <a class="dl" id="dlwin" href="#" rel="noopener"><b>Windows</b><span class="sub">.msi · pronto</span></a>
   </div>
   <div class="ver">Versión <span id="ver">…</span> · <a href="/api/downloads/changelog">cambios</a></div>
   <div class="steps" id="changelog">
     <p><b>Después de instalar:</b></p>
     <p>1. Concede los permisos cuando Emma los pida (micrófono, accesibilidad, automatización).</p>
-    <p>2. Pega tu llave de OpenAI en el panel de configuración inicial.</p>
+    <p>2. Inicia sesión con tu cuenta de Emma y activa tu plan.</p>
     <p>3. Di «Hey Emma» y empieza.</p>
   </div>
 </main>
@@ -47,14 +47,17 @@
   <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/dashboard">panel</a><a href="/privacy">privacidad</a><a href="/terms">términos</a></span>
 </div></footer>
 <script>
+// The mac tile links straight to /api/downloads/latest (302 → .pkg for signed-in
+// users; login-gated for telemetry). Only the version string is fetched here, from
+// the PUBLIC changelog endpoint (the old code called .json() on a 302 and the
+// buttons stayed dead).
 async function init(){
   try{
-    const r=await fetch("/api/downloads/latest");
+    const r=await fetch("/api/downloads/changelog");
     if(r.ok){
       const d=await r.json();
-      if(d.mac)document.getElementById("dlmac").href=d.mac;
-      if(d.win)document.getElementById("dlwin").href=d.win;
-      if(d.version)document.getElementById("ver").textContent=d.version;
+      const v=(d.versions&&d.versions[0]&&d.versions[0].version)||"";
+      if(v)document.getElementById("ver").textContent=v;
     }
   }catch(e){}
 }

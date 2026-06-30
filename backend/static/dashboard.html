@@ -77,13 +77,14 @@ async function load(){
   const d=await r.json();
   document.getElementById("name").textContent=d.user.name||d.user.email;
   document.getElementById("plan").textContent=d.user.plan;
-  document.getElementById("sessions").textContent=d.usage.sessions;
-  document.getElementById("minutes").textContent=d.usage.minutes.toFixed(1);
+  document.getElementById("sessions").textContent=(d.usage&&d.usage.sessions)||0;
+  document.getElementById("minutes").textContent=((d.usage&&d.usage.minutes)||0).toFixed(1);
   document.getElementById("usagenote").textContent=
     "El detalle de cobro aparecerá aquí cuando actives un plan de pago.";
-  document.getElementById("subdesc").textContent= d.subscription.active
-    ? ("Plan "+d.subscription.plan+" · activo")
-    : ("Plan "+d.subscription.plan+" · sin suscripción activa");
+  const sub=d.subscription||{plan:d.user.plan,active:false};
+  document.getElementById("subdesc").textContent= sub.active
+    ? ("Plan "+sub.plan+" · activo")
+    : ("Plan "+sub.plan+" · sin suscripción activa");
   document.getElementById("dlmac").href=d.downloads.mac||"#";
   document.getElementById("dlwin").href=d.downloads.win||"#";
   const rows=(d.recent||[]).map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
