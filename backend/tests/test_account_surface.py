@@ -56,3 +56,9 @@ def test_legal_pages(client):
     assert t.status_code == 200
     assert "Términos" in t.text
     assert "[PLACEHOLDER" in t.text  # entity/jurisdiction left for legal review
+
+
+def test_footers_link_legal(client):
+    for path in ("/login", "/register", "/plans", "/download"):
+        body = client.get(path).text
+        assert '/privacy' in body and '/terms' in body, f"{path} footer missing legal links"
