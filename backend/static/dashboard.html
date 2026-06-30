@@ -20,17 +20,10 @@
   .cmp{margin-top:6px}
   .logout{margin-top:26px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
   @media(max-width:760px){main{padding:44px 22px}.grid{grid-template-columns:1fr}}
-</style></head><body><div class="bg-glow" aria-hidden="true"></div>
-
-<div class="ambient-glow" aria-hidden="true"></div>
-<div class="ambient-grid" aria-hidden="true"></div>
-<div class="ambient-grain" aria-hidden="true"></div>
-<svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
-  <filter id="grain"><feTurbulence baseFrequency="0.9" numOctaves="2" seed="3"/></filter>
-</svg>
+</style></head><body>
 <nav class="site-nav"><div class="row">
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
-  <div class="nav-right"><div class="nav-links"><a href="/plans">Planes</a><a href="/download">Descarga</a></div></div>
+  <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><div class="acct-menu"><button class="acct-btn" aria-haspopup="true">Cuenta ▾</button><ul class="acct-list" role="menu"><li><a href="/dashboard">Dashboard</a></li><li><a href="/api/billing/portal" data-method="post">Cambiar plan</a></li><li><a href="/auth/logout">Cerrar sesión</a></li></ul></div></div></div>
 </div></nav>
 <main>
   <div class="head"><h1>Hola, <span id="name">…</span></h1><span class="plan-tag" id="plan">…</span></div>

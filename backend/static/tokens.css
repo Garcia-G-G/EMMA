@@ -149,8 +149,6 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 @keyframes bg-drift{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(30vw,15vh,0)}100%{transform:translate3d(-10vw,25vh,0)}}
 .bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
-/* compat: old ambient/mesh divs from prior passes render nothing now */
-.bg-mesh,.ambient-glow,.ambient-grid,.ambient-grain{display:none}
 
 /* section hairline that draws across on scroll-in (subtle aliveness) */
 .section{position:relative}
@@ -163,3 +161,18 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
 }
+
+/* CLEANUP-1: Raycast nav — ghost links + one filled CTA + CSS-only account menu */
+.nav-cta{padding:9px 16px;border-radius:8px;text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+.acct-menu{position:relative}
+.acct-btn{background:none;border:0;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono);
+  font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:6px 2px}
+.acct-list{position:absolute;right:0;top:calc(100% + 6px);background:var(--bg-elev);
+  border:1px solid var(--rule);border-radius:8px;padding:6px;display:none;min-width:180px;
+  list-style:none;margin:0;z-index:50}
+.acct-menu:focus-within .acct-list,.acct-menu:hover .acct-list{display:block}
+.acct-list li{margin:0}
+.acct-list a{display:block;padding:8px 12px;font-size:13px;border-radius:5px;color:var(--ink-soft)}
+.acct-list a:hover{background:rgba(255,140,58,.08);color:var(--ink)}
+/* keep the Descargar pill + account menu visible on mobile; hide only text links */
+@media(max-width:760px){.nav-links{display:flex!important;gap:14px}.nav-links .nav-link{display:none}}
