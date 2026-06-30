@@ -104,3 +104,9 @@ def test_api_plans_is_managed(client):
     blob = str(d).lower()
     assert "trae tu api key" not in blob and "byok" not in blob
     assert d["plans"][0]["id"] == "pro"
+
+
+def test_plans_page_managed_copy(client):
+    body = client.get("/plans").text
+    assert "trae tu llave" not in body.lower()
+    assert "administrado" in body.lower() or "incluidos" in body.lower()
