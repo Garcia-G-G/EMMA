@@ -25,8 +25,8 @@
   <h1>Inicia sesión</h1>
   <p class="lede">Entra para guardar tu uso, subir de plan y conectar tus servicios.</p>
   <form id="f" onsubmit="return doLogin(event)">
-    <div class="field"><label for="email">Email</label><input id="email" type="email" required autocomplete="email" placeholder="tu@email.com"></div>
-    <div class="field"><label for="pw">Contraseña</label><input id="pw" type="password" required autocomplete="current-password" placeholder="tu contraseña"></div>
+    <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="username" placeholder="tu@email.com"></div>
+    <div class="field"><label for="pw">Contraseña</label><input id="pw" name="password" type="password" required autocomplete="current-password" placeholder="tu contraseña"></div>
     <button id="go" class="btn btn-primary go" type="submit">Entrar</button>
     <div class="form-note err" id="err"></div>
   </form>
