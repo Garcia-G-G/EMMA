@@ -37,3 +37,11 @@ def test_login_page_has_email_password_form(client):
     assert '/api/auth/login' in body
     assert 'type="password"' in body
     assert 'Continuar con Google' in body  # OAuth still present
+
+
+def test_public_pages_have_logged_out_account_menu(client):
+    for path in ("/login", "/register", "/plans", "/download"):
+        body = client.get(path).text
+        assert 'acct-menu' in body, f"{path} missing Cuenta dropdown"
+        assert '<li><a href="/login">Entrar</a></li>' in body, f"{path} missing Entrar item"
+        assert '<li><a href="/register">Crear cuenta</a></li>' in body, f"{path} missing Crear cuenta item"
