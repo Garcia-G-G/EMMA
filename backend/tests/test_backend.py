@@ -125,7 +125,8 @@ def test_dashboard_api_gated(client):
     _login(client)
     r = client.get("/api/dashboard")
     assert r.status_code == 200 and r.json()["user"]["plan"] == "free"
-    assert "caps" in r.json() and "downloads" in r.json()
+    assert "subscription" in r.json() and "downloads" in r.json()
+    assert "caps" not in r.json()  # managed: no user-facing hard caps
 
 
 def test_dashboard_page_redirects_anon(client):

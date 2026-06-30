@@ -62,3 +62,14 @@ def test_footers_link_legal(client):
     for path in ("/login", "/register", "/plans", "/download"):
         body = client.get(path).text
         assert '/privacy' in body and '/terms' in body, f"{path} footer missing legal links"
+
+
+def test_dashboard_api_managed_shape(client):
+    _register(client)
+    d = client.get("/api/dashboard").json()
+    assert "caps" not in d                       # managed: no user-facing hard caps
+    assert d["usage"]["sessions"] == 0
+    assert "minutes" in d["usage"]               # minutes, not raw seconds-only
+    assert d["subscription"]["plan"] == "free"
+    assert "active" in d["subscription"]
+    assert set(d["downloads"]) == {"mac", "win"}
