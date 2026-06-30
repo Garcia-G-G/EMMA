@@ -11,6 +11,9 @@
   .auth .card{width:100%;max-width:400px}
   .auth h1{margin:0 0 8px}
   .auth .lede{color:var(--ink-soft);margin:0 0 28px;font-size:16px}
+  .auth button.go{width:100%;justify-content:center;margin-top:6px}
+  .or{display:flex;align-items:center;gap:14px;margin:22px 0 12px;font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--rule)}
   .auth .alt{display:flex;align-items:center;justify-content:center;width:100%;margin:10px 0;text-transform:none;letter-spacing:0;font-family:var(--font-body);font-size:15px}
   .auth .back{margin-top:24px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
 </style></head><body>
@@ -21,6 +24,13 @@
 <main class="auth"><div class="card">
   <h1>Inicia sesión</h1>
   <p class="lede">Entra para guardar tu uso, subir de plan y conectar tus servicios.</p>
+  <form id="f" onsubmit="return doLogin(event)">
+    <div class="field"><label for="email">Email</label><input id="email" type="email" required autocomplete="email" placeholder="tu@email.com"></div>
+    <div class="field"><label for="pw">Contraseña</label><input id="pw" type="password" required autocomplete="current-password" placeholder="tu contraseña"></div>
+    <button id="go" class="btn btn-primary go" type="submit">Entrar</button>
+    <div class="form-note err" id="err"></div>
+  </form>
+  <div class="or">o</div>
   <a class="btn alt" href="/auth/google">Continuar con Google</a>
   <a class="btn alt" href="/auth/github">Continuar con GitHub</a>
   <div class="back"><a href="https://theemmafamily.com">← Volver a la portada</a> · <a href="/register">Crear cuenta</a></div>
@@ -29,4 +39,21 @@
   <span>© 2026 emma</span>
   <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/download">descarga</a></span>
 </div></footer>
+<script>
+const NEXT=(new URLSearchParams(location.search)).get("next")||"/dashboard";
+async function doLogin(ev){
+  ev.preventDefault();
+  const err=document.getElementById("err"); err.textContent="";
+  const btn=document.getElementById("go"); btn.disabled=true; btn.textContent="Entrando…";
+  try{
+    const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({email:document.getElementById("email").value,password:document.getElementById("pw").value})});
+    if(r.ok){ location.href=NEXT; return false; }
+    const d=await r.json().catch(()=>({}));
+    err.textContent=d.detail||d.message||"Correo o contraseña incorrectos.";
+  }catch(e){ err.textContent="Sin conexión. Intenta de nuevo."; }
+  btn.disabled=false; btn.textContent="Entrar";
+  return false;
+}
+</script>
 </body></html>
