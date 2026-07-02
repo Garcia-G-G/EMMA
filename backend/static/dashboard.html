@@ -7,85 +7,171 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/tokens.css?v=5">
 <style>
-  main{max-width:880px;margin:0 auto;padding:56px 40px}
-  .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:30px}
+  main{max-width:1080px;margin:0 auto;padding:48px 40px 80px}
+  /* hero */
+  .dash-hero{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:34px}
+  .eyebrow-sm{font-family:var(--font-mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .eyebrow-sm .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .dash-hero h1{font-size:clamp(30px,4vw,46px);line-height:1;letter-spacing:-.02em;word-break:break-word}
+  .hero-sub{color:var(--ink-soft);margin-top:10px;font-size:15px}
+  .hero-side{display:flex;align-items:center;gap:14px;flex-shrink:0}
   .plan-tag{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;
-    color:var(--accent);border:1px solid var(--accent-q);padding:6px 13px;border-radius:999px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .panel{background:var(--bg-elev);border:1px solid var(--rule);border-radius:12px;padding:22px}
-  .panel h2{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin:0 0 12px;font-weight:500}
-  .big{font-family:var(--font-display);font-size:32px;font-weight:600;letter-spacing:-.01em}
-  .panel.span{grid-column:1/-1}
-  .acts{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
-  .cmp{margin-top:6px}
-  .logout{margin-top:26px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
-  @media(max-width:760px){main{padding:44px 22px}.grid{grid-template-columns:1fr}}
+    color:var(--accent);border:1px solid var(--accent-q);padding:7px 14px;border-radius:999px;background:rgba(160,74,22,.05)}
+  /* KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+  .kpi{background:var(--bg-elev);border:1px solid var(--rule);border-radius:14px;padding:22px 24px;
+    position:relative;overflow:hidden;transition:transform .15s var(--ease),border-color .15s var(--ease)}
+  .kpi:hover{transform:translateY(-2px);border-color:var(--accent-q)}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.75}
+  .kpi-top{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-soft);display:flex;align-items:center;gap:8px}
+  .kpi-num{font-family:var(--font-display);font-size:40px;font-weight:600;letter-spacing:-.02em;line-height:1.1;margin-top:14px}
+  .kpi-sub{font-size:13px;color:var(--ink-soft);margin-top:2px}
+  /* grid */
+  .dash-grid{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;margin-top:16px;align-items:start}
+  .col-main,.col-side{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--bg-elev);border:1px solid var(--rule);border-radius:14px;padding:24px}
+  .card-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
+  .card-h h2{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-soft)}
+  .card-h .aside{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft)}
+  /* usage meter */
+  .meter{height:10px;border-radius:999px;background:rgba(160,74,22,.12);overflow:hidden}
+  .meter-fill{height:100%;width:0;border-radius:999px;
+    background:linear-gradient(90deg,var(--accent),var(--warm));transition:width .6s var(--ease)}
+  .meter-label{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin-top:10px;
+    display:flex;justify-content:space-between;gap:10px}
+  .meter-label b{color:var(--ink);font-weight:600}
+  .note{font-size:13px;margin-top:12px}
+  .acts{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}
+  .dl-card .acts{margin-top:0;flex-direction:column}
+  .dl-card .btn{width:100%;justify-content:center}
+  /* tables inherit .cmp from tokens.css */
+  .cmp td .btn{padding:7px 12px;font-size:11px}
+  /* account danger zone */
+  .acct-card{margin-top:16px}
+  .acct-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .danger{margin-top:22px;padding-top:18px;border-top:1px solid var(--rule)}
+  .btn-danger{color:#c4543a;border-color:#e0b3a8}
+  .logout-row{margin-top:26px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em}
+  .logout-row a{color:var(--ink-soft)}.logout-row a:hover{color:var(--accent)}
+  @media(max-width:860px){.dash-grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.acct-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){main{padding:36px 20px 60px}.dash-hero{flex-direction:column;align-items:flex-start}}
 </style></head><body>
 <nav class="site-nav"><div class="row">
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
-  <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><div class="acct-menu"><button class="acct-btn" id="acctBtn" aria-haspopup="true"><span id="acctEmail">Cuenta</span> ▾</button><ul class="acct-list" role="menu"><li><a href="/dashboard">Dashboard</a></li><li><a href="#" onclick="portal();return false">Cambiar plan</a></li><li><a href="/auth/logout">Cerrar sesión</a></li></ul></div></div></div>
+  <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><div class="acct-menu"><button class="acct-btn" id="acctBtn" aria-haspopup="true"><span id="acctEmail">Cuenta</span> ▾</button><ul class="acct-list" role="menu"><li><a href="/dashboard">Panel</a></li><li><a href="#" onclick="portal();return false">Cambiar plan</a></li><li><a href="/auth/logout">Cerrar sesión</a></li></ul></div></div></div>
 </div></nav>
 <main>
-  <div class="head"><h1>Hola, <span id="name">…</span></h1><span class="plan-tag" id="plan">…</span></div>
-  <div class="panel span"><h2>Tu uso este mes</h2>
-    <div class="grid" style="margin-top:6px">
-      <div><div class="big" id="sessions">–</div><div class="ink-soft">sesiones</div></div>
-      <div><div class="big" id="minutes">–</div><div class="ink-soft">minutos hablados</div></div>
+  <header class="dash-hero">
+    <div>
+      <div class="eyebrow-sm"><span class="dot"></span>Tu panel</div>
+      <h1>Hola, <span id="name">…</span></h1>
+      <p class="hero-sub">Aquí está tu actividad y tus dispositivos.</p>
     </div>
-    <div class="ink-soft" id="usagenote" style="margin-top:12px"></div>
-  </div>
-  <div class="panel span" style="margin-top:16px"><h2>Tu suscripción</h2>
-    <div class="ink-soft" id="subdesc">…</div>
-    <div class="acts">
-      <button class="btn btn-primary" id="upbtn" onclick="upgrade('pro');return false">Subir a Pro</button>
-      <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
+    <div class="hero-side">
+      <span class="plan-tag" id="plan">…</span>
+      <a class="btn btn-primary" href="/pair">Vincular Mac</a>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><div class="kpi-top"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>Sesiones</div>
+      <div class="kpi-num" id="sessions">–</div><div class="kpi-sub">este mes</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>Minutos</div>
+      <div class="kpi-num" id="minutes">–</div><div class="kpi-sub">hablados este mes</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>Gasto</div>
+      <div class="kpi-num" id="spend">–</div><div class="kpi-sub">este mes</div></div>
+  </section>
+
+  <div class="dash-grid">
+    <div class="col-main">
+      <div class="card">
+        <div class="card-h"><h2>Tu plan</h2><span class="aside" id="subdesc">…</span></div>
+        <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+        <div class="meter-label"><span id="meterLabel">…</span></div>
+        <div class="ink-soft note" id="usagenote"></div>
+        <div class="acts">
+          <button class="btn btn-primary" id="upbtn" onclick="upgrade('pro');return false">Subir a Pro</button>
+          <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Sesiones recientes</h2></div>
+        <table class="cmp"><thead><tr><th>Inicio</th><th>Duración</th><th>Costo</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody></table>
+      </div>
+    </div>
+    <div class="col-side">
+      <div class="card">
+        <div class="card-h"><h2>Tus Macs</h2></div>
+        <table class="cmp" id="devicesTbl">
+          <thead><tr><th>Nombre</th><th>Última</th><th></th></tr></thead>
+          <tbody id="devRows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card dl-card">
+        <div class="card-h"><h2>Descarga Emma</h2></div>
+        <div class="acts">
+          <a class="btn btn-primary" id="dlmac" href="#">Para Mac (.pkg)</a>
+          <a class="btn btn-ghost" id="dlwin" href="#">Para Windows (.msi)</a>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="panel span" style="margin-top:16px"><h2>Dispositivos conectados</h2>
-    <table class="cmp" id="devicesTbl">
-      <thead><tr><th>Nombre</th><th>Última actividad</th><th></th></tr></thead>
-      <tbody id="devRows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody>
-    </table>
-  </div>
-  <div class="panel span" style="margin-top:16px"><h2>Descarga Emma</h2>
-    <div class="acts">
-      <a class="btn btn-primary" id="dlmac" href="#">Para Mac (.pkg)</a>
-      <a class="btn btn-ghost" id="dlwin" href="#">Para Windows (.msi)</a>
+
+  <div class="card acct-card">
+    <div class="card-h"><h2>Cuenta</h2></div>
+    <div class="acct-grid">
+      <form onsubmit="return changePw(event)">
+        <div class="field"><label for="curpw">Contraseña actual</label><input id="curpw" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="newpw">Nueva contraseña</label><input id="newpw" type="password" minlength="8" autocomplete="new-password" placeholder="mínimo 8 caracteres"></div>
+        <button class="btn btn-ghost" type="submit">Cambiar contraseña</button>
+        <span class="form-note" id="pwnote"></span>
+      </form>
+      <form onsubmit="return changeEmail(event)">
+        <div class="field"><label for="newemail">Cambiar correo</label><input id="newemail" type="email" autocomplete="email"></div>
+        <button class="btn btn-ghost" type="submit">Actualizar correo</button>
+        <span class="form-note" id="emnote"></span>
+      </form>
+    </div>
+    <div class="danger">
+      <button class="btn btn-ghost btn-danger" onclick="delAccount();return false">Borrar mi cuenta</button>
     </div>
   </div>
-  <div class="panel span" style="margin-top:16px"><h2>Tus sesiones</h2>
-    <table class="cmp"><thead><tr><th>Inicio</th><th>Duración</th><th>Costo</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody></table>
-  </div>
-  <div class="panel span" style="margin-top:16px"><h2>Cuenta</h2>
-    <form onsubmit="return changePw(event)" style="margin-bottom:18px">
-      <div class="field"><label for="curpw">Contraseña actual</label><input id="curpw" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="newpw">Nueva contraseña</label><input id="newpw" type="password" minlength="8" autocomplete="new-password" placeholder="mínimo 8 caracteres"></div>
-      <button class="btn btn-ghost" type="submit">Cambiar contraseña</button>
-      <span class="form-note" id="pwnote"></span>
-    </form>
-    <form onsubmit="return changeEmail(event)" style="margin-bottom:18px">
-      <div class="field"><label for="newemail">Cambiar correo</label><input id="newemail" type="email" autocomplete="email"></div>
-      <button class="btn btn-ghost" type="submit">Actualizar correo</button>
-      <span class="form-note" id="emnote"></span>
-    </form>
-    <button class="btn btn-ghost" onclick="delAccount();return false" style="color:#c4543a;border-color:#e0b3a8">Borrar mi cuenta</button>
-  </div>
-  <p class="logout"><a href="/auth/logout">Cerrar sesión</a></p>
+  <p class="logout-row"><a href="/auth/logout">Cerrar sesión</a></p>
 </main>
 <footer class="site-foot"><div class="row">
   <span>© 2026 emma</span>
   <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/download">descarga</a><a href="/privacy">privacidad</a><a href="/terms">términos</a></span>
 </div></footer>
 <script>
+const PLAN_CAPS={pro:60,power:200};   // monthly_min from /api/plans; free has no fixed cap
 async function load(){
   const r=await fetch("/api/dashboard"); if(r.status===401){ location.href="/login"; return; }
   const d=await r.json();
   document.getElementById("name").textContent=d.user.name||d.user.email;
   document.getElementById("acctEmail").textContent=d.user.email;
-  document.getElementById("plan").textContent=d.user.plan;
-  document.getElementById("sessions").textContent=(d.usage&&d.usage.sessions)||0;
-  document.getElementById("minutes").textContent=((d.usage&&d.usage.minutes)||0).toFixed(1);
+  document.getElementById("plan").textContent="Plan "+d.user.plan;
+  const sessions=(d.usage&&d.usage.sessions)||0, minutes=(d.usage&&d.usage.minutes)||0;
+  document.getElementById("sessions").textContent=sessions;
+  document.getElementById("minutes").textContent=minutes.toFixed(1);
+  // spend = sum of recent session costs this period
+  const spend=(d.recent||[]).reduce((s,x)=>s+(x.cost_usd||0),0);
+  document.getElementById("spend").textContent="$"+spend.toFixed(2);
+  // usage meter
+  const cap=PLAN_CAPS[d.user.plan];
+  const fill=document.getElementById("meterFill"), lbl=document.getElementById("meterLabel");
+  if(cap){
+    const pct=Math.min(100,Math.round((minutes/cap)*100));
+    fill.style.width=pct+"%";
+    lbl.innerHTML="<b>"+minutes.toFixed(1)+"</b> / "+cap+" min este mes · "+pct+"%";
+  } else {
+    // free plan: show activity against Pro's 60-min tier as a soft reference
+    fill.style.width=Math.min(100,Math.round((minutes/60)*100))+"%";
+    lbl.innerHTML="<b>"+minutes.toFixed(1)+"</b> min este mes · plan gratis";
+  }
   document.getElementById("usagenote").textContent=
     "El detalle de cobro aparecerá aquí cuando actives un plan de pago.";
   const sub=d.subscription||{plan:d.user.plan,active:false};

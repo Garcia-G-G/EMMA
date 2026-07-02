@@ -63,6 +63,7 @@ class _EmailModel(BaseModel):
 class Credentials(_EmailModel):
     email: str
     password: str
+    name: str = ""  # optional; used by /register (login ignores it)
 
 
 class ResetRequest(_EmailModel):
@@ -83,7 +84,8 @@ async def register(body: Credentials, response: Response) -> dict:
     problem = password_problem(body.password)
     if problem:
         raise HTTPException(400, problem)
-    user = db.create_local_user(str(body.email).lower(), hash_password(body.password))
+    user = db.create_local_user(
+        str(body.email).lower(), hash_password(body.password), name=(body.name or "").strip()[:80])
     if user is None:
         raise HTTPException(409, "Ya existe una cuenta con ese correo.")
     set_session_cookie(response, user["id"])  # auto-login after register
