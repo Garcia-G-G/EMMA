@@ -111,6 +111,18 @@ def test_logout_clears_cookie(client):
     assert client.get("/api/auth/whoami").json()["authenticated"] is False
 
 
+def test_get_auth_logout_redirects_not_404(client):
+    # The nav + dashboard "Cerrar sesión" link points at GET /auth/logout. It must
+    # NOT be shadowed by the dynamic /auth/{provider} route (which would resolve
+    # provider="logout" and 404). It should redirect to the public landing and
+    # clear the session cookie.
+    client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
+    r = client.get("/auth/logout", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert "theemmafamily.com" in r.headers.get("location", "")
+    assert client.get("/api/auth/whoami").json()["authenticated"] is False
+
+
 def test_login_rate_limited_after_5_fails(client):
     client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
     client.cookies.clear()

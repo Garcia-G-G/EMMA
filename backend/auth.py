@@ -116,6 +116,17 @@ async def require_device(request: Request) -> dict[str, Any]:
 # ---- routes -----------------------------------------------------------------
 
 
+@router.get("/auth/logout")
+async def logout() -> Any:
+    # MUST precede the dynamic "/auth/{provider}" route below: FastAPI matches in
+    # definition order, so if the wildcard comes first, GET /auth/logout resolves
+    # as provider="logout" and 404s ("Proveedor no configurado"). Redirect to the
+    # public landing (different origin), not api "/", so it's "back to portada".
+    response = RedirectResponse(url="https://theemmafamily.com")
+    clear_session_cookie(response)
+    return response
+
+
 @router.get("/auth/{provider}")
 async def login(provider: str, request: Request) -> Any:
     if provider not in ("google", "github") or not getattr(oauth, provider, None):
@@ -152,13 +163,6 @@ async def _github_primary_email(client: Any, token: Any) -> str:
         if e.get("primary"):
             return str(e.get("email", ""))
     return ""
-
-
-@router.get("/auth/logout")
-async def logout() -> Any:
-    response = RedirectResponse(url="/")
-    clear_session_cookie(response)
-    return response
 
 
 @router.get("/api/me", response_model=MeResponse)
