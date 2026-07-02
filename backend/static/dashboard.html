@@ -37,7 +37,7 @@
   <div class="panel span" style="margin-top:16px"><h2>Tu suscripción</h2>
     <div class="ink-soft" id="subdesc">…</div>
     <div class="acts">
-      <button class="btn btn-primary" onclick="upgrade('pro');return false">Subir a Pro</button>
+      <button class="btn btn-primary" id="upbtn" onclick="upgrade('pro');return false">Subir a Pro</button>
       <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
     </div>
   </div>
@@ -85,6 +85,9 @@ async function load(){
   document.getElementById("subdesc").textContent= sub.active
     ? ("Plan "+sub.plan+" · activo")
     : ("Plan "+sub.plan+" · sin suscripción activa");
+  var up=document.getElementById("upbtn");
+  if(up){ if(d.user.plan==="power"){ up.hidden=true; }
+          else if(d.user.plan==="pro"){ up.textContent="Subir a Power"; up.onclick=function(){upgrade("power");return false;}; } }
   document.getElementById("dlmac").href=d.downloads.mac||"#";
   document.getElementById("dlwin").href=d.downloads.win||"#";
   const rows=(d.recent||[]).map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
@@ -93,11 +96,11 @@ async function load(){
 }
 async function upgrade(plan){
   const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
-  if(r.ok){ const d=await r.json(); location.href=d.url; } else { alert("Pagos aún no están configurados."); }
+  if(r.ok){ const d=await r.json(); if(d&&d.url){ location.href=d.url; } else { alert("Pagos aún no están configurados."); } } else { alert("Pagos aún no están configurados."); }
 }
 async function portal(){
   const r=await fetch("/api/billing/portal",{method:"POST"});
-  if(r.ok){ const d=await r.json(); location.href=d.url; } else { alert("Aún no tienes suscripción."); }
+  if(r.ok){ const d=await r.json(); if(d&&d.url){ location.href=d.url; } else { alert("Aún no tienes suscripción."); } } else { alert("Aún no tienes suscripción."); }
 }
 async function changePw(ev){ ev.preventDefault();
   const n=document.getElementById("pwnote"); n.className="form-note"; n.textContent="…";
@@ -122,4 +125,5 @@ async function delAccount(){
 }
 load();
 </script>
+<script src="/static/nav.js"></script>
 </body></html>
