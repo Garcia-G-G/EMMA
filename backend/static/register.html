@@ -24,7 +24,7 @@
 <main class="auth"><div class="card">
   <h1>Crea tu cuenta</h1>
   <p class="lede">Para guardar tu uso y suscribirte a un plan.</p>
-  <form id="f" onsubmit="return submit(event)">
+  <form id="f" onsubmit="return doRegister(event)">
     <div class="field"><label for="name">Nombre</label><input id="name" required autocomplete="given-name"></div>
     <div class="field"><label for="email">Email</label><input id="email" type="email" required autocomplete="email" placeholder="tu@email.com"></div>
     <div class="field"><label for="pw">Contraseña</label><input id="pw" type="password" required minlength="8" autocomplete="new-password" placeholder="mínimo 8 caracteres"></div>
@@ -42,7 +42,7 @@
 </div></footer>
 <script>
 const NEXT=(new URLSearchParams(location.search)).get("next")||"/dashboard";
-async function submit(ev){
+async function doRegister(ev){
   ev.preventDefault();
   const err=document.getElementById("err"); err.textContent="";
   const btn=document.getElementById("go"); btn.disabled=true; btn.textContent="Creando…";
