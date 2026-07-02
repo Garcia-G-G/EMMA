@@ -54,6 +54,16 @@ app.add_middleware(
     SessionMiddleware, secret_key=settings.SESSION_SECRET, same_site="lax", https_only=_HTTPS_ONLY
 )
 
+
+@app.middleware("http")
+async def _fresh_static(request: Request, call_next):
+    """Serve /static (tokens.css etc.) with no-cache so CSS/JS fixes land immediately
+    instead of being stuck behind Cloudflare's 4h asset cache."""
+    resp = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
 # 25.0.1-B1: Turnstile is optional. verify_captcha() already allows-all when no
 # secret is configured; log that posture once at startup so it's never a surprise.
 if not settings.CLOUDFLARE_TURNSTILE_SECRET:
