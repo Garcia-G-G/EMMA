@@ -115,8 +115,10 @@ class Settings:
     # ---- misc ----
     DATABASE_URL = os.environ.get("DATABASE_URL", "backend_emma.db")
     PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8000")
-    DOWNLOAD_PKG_URL = os.environ.get("DOWNLOAD_PKG_URL", "https://github.com/garcia/emma/releases/latest")
-    DOWNLOAD_MSI_URL = os.environ.get("DOWNLOAD_MSI_URL", "https://github.com/garcia/emma/releases/latest")
+    # Empty until a real signed installer is hosted; the download UI shows
+    # "not available" rather than a dead link. Set these in /root/emma.env.
+    DOWNLOAD_PKG_URL = os.environ.get("DOWNLOAD_PKG_URL", "")
+    DOWNLOAD_MSI_URL = os.environ.get("DOWNLOAD_MSI_URL", "")
 
     @property
     def captcha_enabled(self) -> bool:
