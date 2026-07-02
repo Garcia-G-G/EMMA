@@ -203,6 +203,45 @@ async def _one_session() -> None:
         structlog.contextvars.unbind_contextvars("turn_id")
 
 
+async def _ensure_paired() -> None:
+    """PAIR-DEVICE-1 (Part G) — gate the daemon on device pairing in managed/client
+    mode. Enabled only when EMMA_REQUIRE_PAIRING is set; a dev/BYOK daemon (own
+    OpenAI key in .env) leaves it unset and is unaffected. On first run it fetches a
+    user_code, speaks + prints it, and blocks until the user authorizes on the web.
+    If pairing can't complete, exits cleanly (SystemExit) so launchd doesn't
+    loop-restart into a broken pairing spin."""
+    import os
+
+    if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() not in ("1", "true", "yes"):
+        return
+    from core import pairing
+
+    if await pairing.is_paired():
+        return
+    try:
+        info = await pairing.start_pairing()
+    except Exception as exc:
+        log.error("pairing_start_failed", error=str(exc))
+        print("No pude conectar con el servidor de Emma. Revisa tu internet y reinicia.", flush=True)
+        raise SystemExit(2) from exc
+
+    code = info["user_code"]
+    spoken = ("Hola. Para empezar, visita tu cuenta en theemmafamily.com slash pair "
+              f"y pon este código: {' '.join(code.replace('-', ' guion '))}")
+    import subprocess
+
+    subprocess.run(["say", "-v", "Paulina", spoken], check=False)  # `say`, not Realtime (unpaired)
+    print(f"\n  Pair code: {code}", flush=True)
+    print(f"  Visit:      {info['verification_uri']}\n", flush=True)
+
+    token = await pairing.poll_until_authorized(
+        info["device_code"], info["interval"], info["expires_in"])
+    if not token:
+        print("La vinculación expiró. Reinicia Emma para intentar de nuevo.", flush=True)
+        raise SystemExit(2)
+    log.info("device_paired_at_boot")
+
+
 async def main_loop() -> None:
     """Entry point called by ``emma.__main__``.
 
