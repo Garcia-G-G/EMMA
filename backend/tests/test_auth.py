@@ -64,6 +64,17 @@ def test_register_sets_cookie_and_creates_local_user(client):
     assert row and row["provider"] == "local" and row["password_hash"]
 
 
+def test_register_persists_name_for_greeting(client):
+    # register.html collects a name; it must be stored so the dashboard greets
+    # "Hola, <name>" instead of falling back to the email.
+    r = client.post(
+        "/api/auth/register",
+        json={"name": "Gilber", "email": "g@b.com", "password": "correcthorse9"},
+    )
+    assert r.status_code == 200 and r.json()["name"] == "Gilber"
+    assert db.get_user_by_email("g@b.com")["name"] == "Gilber"
+
+
 def test_register_rejects_weak_password(client):
     r = client.post("/api/auth/register", json={"email": "a@b.com", "password": "abc"})
     assert r.status_code == 400
