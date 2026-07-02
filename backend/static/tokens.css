@@ -187,3 +187,5 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
   .nav-cta{padding:8px 11px;font-size:10px;letter-spacing:.04em}
   .nav-links{gap:10px!important}
 }
+/* AUDIT fix: footer links wrap on mobile (5 links overflowed ~26px at 375px) */
+@media(max-width:760px){.site-foot .links{flex-wrap:wrap;gap:10px 14px}}
