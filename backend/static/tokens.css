@@ -168,6 +168,10 @@ code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
 .nav-cta{padding:8px 14px;border-radius:7px;text-transform:uppercase;font-size:11px;letter-spacing:.06em;
   box-shadow:none;border-color:transparent}
 .nav-cta:hover{box-shadow:none;transform:none;background:#b85a2a}
+/* The CTA lives inside .nav-links, whose `.nav-links a` rule (specificity 0,1,1)
+   was overriding .btn-primary's cream → dark-on-brown text. Force cream with a
+   higher-specificity selector for both base + hover. */
+.nav-links a.nav-cta,.nav-links a.nav-cta:hover{color:#faf6ef}
 .acct-menu{position:relative}
 .acct-btn{background:none;border:0;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono);
   font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:6px 2px}
