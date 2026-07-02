@@ -13,7 +13,7 @@ from typing import Any
 import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -88,6 +88,19 @@ db.init_db()
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+_FAVICON = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<g fill="none" stroke="#a04a16" stroke-width="1.3">'
+            '<ellipse cx="12" cy="12" rx="10" ry="3.6"/>'
+            '<ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/>'
+            '<ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>')
+
+
+@app.get("/favicon.ico")
+async def favicon() -> Response:
+    return Response(content=_FAVICON, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/plans")
