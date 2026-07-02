@@ -59,9 +59,10 @@ async function init(){
 }
 async function checkout(plan){
   const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
-  if(r.ok){ const d=await r.json(); location.href=d.url; }
+  if(r.ok){ const d=await r.json(); if(d&&d.url){ location.href=d.url; } else { alert("Pagos aún no están configurados. Pronto."); } }
   else{ alert("Pagos aún no están configurados. Pronto."); }
 }
 init();
 </script>
+<script src="/static/nav.js"></script>
 </body></html>

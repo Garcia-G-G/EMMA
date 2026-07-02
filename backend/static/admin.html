@@ -31,10 +31,10 @@ async function load(){
   const r=await fetch("/api/admin/overview");
   if(!r.ok){ document.getElementById("err").hidden=false; return; }
   const d=await r.json();
-  document.getElementById("today").textContent="$"+d.spend_today_usd.toFixed(2);
-  document.getElementById("month").textContent="$"+d.spend_month_usd.toFixed(2);
-  document.getElementById("sessions").textContent=d.sessions_today;
-  document.getElementById("budget").textContent="$"+d.monthly_budget_usd;
+  document.getElementById("today").textContent="$"+(d.spend_today_usd||0).toFixed(2);
+  document.getElementById("month").textContent="$"+(d.spend_month_usd||0).toFixed(2);
+  document.getElementById("sessions").textContent=d.sessions_today||0;
+  document.getElementById("budget").textContent="$"+(d.monthly_budget_usd||0);
 }
 load();
 </script>
