@@ -52,6 +52,12 @@
 // the PUBLIC changelog endpoint (the old code called .json() on a 302 and the
 // buttons stayed dead).
 async function init(){
+  // The .pkg is login-gated (telemetry). Route anon visitors through login so
+  // they don't land on a raw 401 JSON page when they click the macOS tile.
+  try{
+    const w=await fetch("/api/auth/whoami").then(r=>r.ok?r.json():null).catch(()=>null);
+    if(!(w&&w.authenticated)) document.getElementById("dlmac").href="/login?next=/download";
+  }catch(e){}
   try{
     const r=await fetch("/api/downloads/changelog");
     if(r.ok){
