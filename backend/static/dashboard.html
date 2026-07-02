@@ -41,6 +41,12 @@
       <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
     </div>
   </div>
+  <div class="panel span" style="margin-top:16px"><h2>Dispositivos conectados</h2>
+    <table class="cmp" id="devicesTbl">
+      <thead><tr><th>Nombre</th><th>Última actividad</th><th></th></tr></thead>
+      <tbody id="devRows"><tr><td colspan="3" class="ink-soft">…</td></tr></tbody>
+    </table>
+  </div>
   <div class="panel span" style="margin-top:16px"><h2>Descarga Emma</h2>
     <div class="acts">
       <a class="btn btn-primary" id="dlmac" href="#">Para Mac (.pkg)</a>
@@ -93,6 +99,27 @@ async function load(){
   const rows=(d.recent||[]).map(s=>`<tr><td>${new Date(s.started_at*1000).toLocaleString("es")}</td>`+
     `<td>${(s.seconds_used||0).toFixed(0)}s</td><td>$${(s.cost_usd||0).toFixed(3)}</td></tr>`).join("");
   document.getElementById("rows").innerHTML=rows||'<tr><td colspan="3" class="ink-soft">Aún no hay sesiones.</td></tr>';
+  loadDevices();
+}
+async function loadDevices(){
+  const r = await fetch("/api/devices");
+  if (!r.ok) return;
+  const list = await r.json();
+  const tbody = document.getElementById("devRows");
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="ink-soft">No hay Macs conectadas. Instala Emma y dile el código de <a href="/pair" style="color:var(--accent)">/pair</a>.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(d =>
+    `<tr><td>${d.name}</td>`+
+    `<td>${d.last_seen ? new Date(d.last_seen).toLocaleString("es") : "—"}</td>`+
+    `<td><button class="btn btn-ghost" onclick="revokeDev(${d.id});return false">Revocar</button></td></tr>`
+  ).join("");
+}
+async function revokeDev(id){
+  if (!confirm("¿Revocar este dispositivo? Emma dejará de funcionar en esa Mac hasta que la vincules de nuevo.")) return;
+  await fetch("/api/devices/"+id, {method:"DELETE"});
+  loadDevices();
 }
 async function upgrade(plan){
   const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});

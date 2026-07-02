@@ -24,6 +24,7 @@ from backend import (
     auth_local,
     db,
     demo_session,
+    device_pairing,
     realtime_proxy,
     stripe_routes,
 )
@@ -188,6 +189,64 @@ async def admin_page(request: Request) -> Any:
     except HTTPException:
         return RedirectResponse("/login")
     return HTMLResponse((_STATIC / "admin.html").read_text(encoding="utf-8"))
+
+
+# ---- PAIR-DEVICE-1: RFC 8628 device pairing (daemon ↔ web). Kept in one block. ----
+# /code + /token are daemon-facing (no cookie — the daemon has no session yet).
+# /authorize + /devices are web-facing (cookie auth via require_user).
+
+
+@app.post("/api/device/code")
+async def device_code() -> Any:
+    return device_pairing.issue_device_code()
+
+
+@app.post("/api/device/token")
+async def device_token(request: Request) -> Any:
+    body = await request.json()
+    dc = body.get("device_code", "")
+    if not dc:
+        raise HTTPException(400, "device_code required")
+    result = device_pairing.exchange_device_code(dc, request.client.host if request.client else None)
+    status = result.pop("_status", 200)
+    if status != 200:
+        raise HTTPException(status, detail=result)
+    return result
+
+
+@app.post("/api/device/authorize")
+async def device_authorize(request: Request) -> Any:
+    user = await require_user(request)
+    body = await request.json()
+    try:
+        device_pairing.authorize_user_code(
+            body.get("user_code", ""), user["id"], body.get("device_name", "Emma device"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
+
+
+@app.get("/api/devices")
+async def list_devices_route(request: Request) -> Any:
+    user = await require_user(request)
+    return device_pairing.list_devices(user["id"])
+
+
+@app.delete("/api/devices/{device_id}")
+async def delete_device(device_id: int, request: Request) -> Any:
+    user = await require_user(request)
+    if not device_pairing.revoke_token(device_id, user["id"]):
+        raise HTTPException(404, "not found")
+    return {"ok": True}
+
+
+@app.get("/pair", response_class=HTMLResponse)
+async def pair_page(request: Request) -> Any:
+    if await current_user(request) is None:
+        return RedirectResponse("/login?next=/pair")
+    return HTMLResponse((_STATIC / "pair.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/dashboard")

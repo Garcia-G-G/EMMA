@@ -42,6 +42,33 @@ CREATE TABLE IF NOT EXISTS demo_hits (
   ip TEXT NOT NULL,
   ts REAL NOT NULL
 );
+-- PAIR-DEVICE-1: RFC 8628 device authorization grant. device_code + access_token
+-- are stored ONLY as sha256 hashes; the real values live on the daemon (Keychain).
+CREATE TABLE IF NOT EXISTS device_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_code TEXT UNIQUE NOT NULL,
+  device_code_hash TEXT UNIQUE NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  authorized INTEGER NOT NULL DEFAULT 0,
+  device_name TEXT,
+  expires_at REAL NOT NULL,
+  last_polled_at REAL,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_device_codes_user_code ON device_codes(user_code);
+CREATE INDEX IF NOT EXISTS ix_device_codes_hash ON device_codes(device_code_hash);
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT UNIQUE NOT NULL,
+  device_name TEXT NOT NULL,
+  last_seen_at REAL,
+  last_ip TEXT,
+  created_at REAL NOT NULL,
+  revoked_at REAL
+);
+CREATE INDEX IF NOT EXISTS ix_device_tokens_user ON device_tokens(user_id);
+CREATE INDEX IF NOT EXISTS ix_device_tokens_hash ON device_tokens(token_hash);
 """
 
 

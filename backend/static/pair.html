@@ -1,0 +1,107 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma — vincular dispositivo</title>
+<meta name="theme-color" content="#faf6ef">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/static/tokens.css?v=3">
+<style>
+  main{max-width:480px;margin:0 auto;padding:80px 32px}
+  h1{margin:0 0 12px;font-family:var(--font-display);font-weight:600}
+  .lede{color:var(--ink-soft);margin:0 0 32px;font-size:16px;line-height:1.55}
+  .code-field{display:flex;gap:10px;margin-bottom:14px}
+  .code-field input{flex:1;background:var(--bg-elev);border:1px solid var(--rule);
+    border-radius:8px;padding:16px 18px;font-family:var(--font-mono);font-size:22px;
+    letter-spacing:.12em;text-transform:uppercase;text-align:center;outline:none;
+    color:var(--ink);transition:border-color .15s var(--ease)}
+  .code-field input:focus{border-color:var(--accent-q)}
+  .device{display:none;margin-top:18px;padding:14px 16px;background:var(--bg-elev);
+    border:1px solid var(--rule);border-radius:8px}
+  .device label{display:block;font-family:var(--font-mono);font-size:11px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px}
+  .device input{width:100%;background:transparent;border:none;color:var(--ink);
+    font-family:var(--font-body);font-size:15px;outline:none}
+  .msg{margin-top:14px;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;
+    min-height:18px;color:var(--ink-soft)}
+  .msg.ok{color:var(--accent)}.msg.err{color:#c4543a}
+  .ok-card{display:none;margin-top:32px;padding:24px;border:1px solid var(--accent);
+    border-radius:12px;background:rgba(255,140,58,.06)}
+  .ok-card h2{margin:0 0 8px;font-family:var(--font-display);font-size:22px}
+  .ok-card p{margin:0;color:var(--ink-soft);font-size:14px}
+</style></head><body>
+<nav class="site-nav"><div class="row">
+  <a class="brand" href="https://theemmafamily.com">
+    <svg class="mk" viewBox="0 0 24 24" aria-hidden="true">
+      <g fill="none" stroke="var(--accent)" stroke-width="1.3">
+        <ellipse cx="12" cy="12" rx="10" ry="3.6"/>
+        <ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/>
+        <ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/>
+      </g></svg>Emma</a>
+</div></nav>
+<main>
+  <h1>Vincular tu Mac</h1>
+  <p class="lede">Pega el código que Emma te dictó en tu Mac.</p>
+  <form id="f" onsubmit="return go(event)">
+    <div class="code-field">
+      <input id="code" inputmode="text" autocomplete="off" autocapitalize="characters"
+             placeholder="BRDX-7K2P" required maxlength="9"
+             pattern="[A-Z2-9]{4}-?[A-Z2-9]{4}">
+    </div>
+    <div class="device" id="devbox">
+      <label for="devname">Nombre del dispositivo</label>
+      <input id="devname" placeholder="Mi MacBook" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" type="submit" id="go" style="width:100%;justify-content:center">
+      Vincular
+    </button>
+    <div class="msg" id="msg" role="status" aria-live="polite">&nbsp;</div>
+  </form>
+  <div class="ok-card" id="okcard">
+    <h2>Listo</h2>
+    <p>Tu Mac está conectada. Puedes cerrar esta pestaña — Emma seguirá funcionando en tu Mac.</p>
+  </div>
+</main>
+<script>
+async function go(ev){
+  ev.preventDefault();
+  const code = document.getElementById("code").value.trim().toUpperCase();
+  const name = document.getElementById("devname").value.trim() || "Emma device";
+  const msg = document.getElementById("msg");
+  const btn = document.getElementById("go");
+  msg.className="msg"; msg.textContent=""; btn.disabled=true;
+  try {
+    const r = await fetch("/api/device/authorize", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({user_code: code, device_name: name})
+    });
+    if (r.status === 401) { location.href = "/login?next=/pair"; return; }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      msg.className="msg err";
+      msg.textContent = d.detail === "expired" ? "El código expiró. Pídele a Emma uno nuevo."
+                       : d.detail === "already used" ? "Ese código ya se usó."
+                       : d.detail === "user_code not found" ? "No reconozco ese código."
+                       : "No se pudo vincular. Verifica el código.";
+      btn.disabled=false; return;
+    }
+    document.getElementById("f").style.display="none";
+    document.getElementById("okcard").style.display="block";
+  } catch (e) {
+    msg.className="msg err";
+    msg.textContent="Sin conexión.";
+    btn.disabled=false;
+  }
+}
+document.getElementById("code").addEventListener("input", (e) => {
+  let v = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 8);
+  if (v.length > 4) v = v.slice(0,4) + "-" + v.slice(4);
+  e.target.value = v;
+  document.getElementById("devbox").style.display = v.length === 9 ? "block" : "none";
+});
+const u = new URLSearchParams(location.search);
+if (u.get("code")) {
+  document.getElementById("code").value = u.get("code").toUpperCase();
+  document.getElementById("code").dispatchEvent(new Event("input"));
+}
+</script>
+</body></html>

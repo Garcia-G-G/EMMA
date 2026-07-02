@@ -99,6 +99,20 @@ async def require_admin(request: Request) -> dict[str, Any]:
     return user
 
 
+async def require_device(request: Request) -> dict[str, Any]:
+    """PAIR-DEVICE-1 — Bearer auth for daemon-facing endpoints. Separate path from
+    the cookie session (require_user): the daemon presents `Authorization: Bearer
+    <device token>`, resolved against the device_tokens table (hashed)."""
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("bearer "):
+        raise HTTPException(401, "missing bearer token")
+    from backend.device_pairing import resolve_token
+    row = resolve_token(header.split(" ", 1)[1].strip())
+    if not row:
+        raise HTTPException(401, "invalid token")
+    return row
+
+
 # ---- routes -----------------------------------------------------------------
 
 
