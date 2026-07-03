@@ -17,8 +17,9 @@ import time
 import websockets
 from fastapi import APIRouter, WebSocket
 
-from backend import db
-from backend.config import settings
+from backend import db, metering
+from backend.config import PLAN_CAPS, settings
+from backend.device_pairing import resolve_token
 from backend.session import decode_token
 
 router = APIRouter()
@@ -44,6 +45,76 @@ def cost_usd(tokens_in: int, tokens_out: int) -> float:
 
 @router.websocket("/realtime")
 async def realtime(ws: WebSocket) -> None:
+    """Two clients share this endpoint (two clear paths, no branching merge):
+
+    - **Daemon** (managed voice): presents ``Authorization: Bearer <device token>``;
+      routed to :func:`_device_realtime` (resolves the device, enforces the plan
+      cap, meters seconds into ``usage_events``).
+    - **Web demo**: presents ``?token=<JWT>``; routed to :func:`_demo_realtime`
+      (unchanged 60-second flow).
+    """
+    auth = ws.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        await _device_realtime(ws, auth.split(" ", 1)[1].strip())
+    else:
+        await _demo_realtime(ws)
+
+
+async def _device_realtime(ws: WebSocket, token: str) -> None:
+    """Managed voice: daemon → backend → OpenAI. Backend holds OUR key and meters.
+
+    The daemon is a trusted first-party client (unlike the browser demo), so its
+    ``session.*`` frames ARE forwarded — that's how Pipecat configures voice/tools.
+    """
+    device = resolve_token(token)
+    if not device:
+        await ws.close(code=4401, reason="invalid token")
+        return
+    user = db.get_user(device["user_id"])
+    plan = (user or {}).get("plan", "free")
+    cap = PLAN_CAPS.get(plan, PLAN_CAPS["free"])
+    # Managed monthly allowance reuses monthly_seconds (free=0 → no managed minutes).
+    monthly_cap_s = int(cap.get("monthly_seconds", 0) or 0)
+    if metering.seconds_used_this_month(device["user_id"]) >= monthly_cap_s:
+        await ws.close(code=4402, reason="monthly cap exceeded")
+        return
+    session_max = int(cap.get("daemon_session_max_seconds", 1800))
+
+    await ws.accept()
+    started = time.monotonic()
+    oai_url = f"{settings.OPENAI_REALTIME_URL}?model={settings.OPENAI_REALTIME_MODEL}"
+    headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
+    try:
+        async with websockets.connect(oai_url, additional_headers=headers, max_size=None) as oai:
+            async def client_to_openai() -> None:
+                while True:
+                    await oai.send(await ws.receive_text())
+
+            async def openai_to_client() -> None:
+                async for msg in oai:
+                    await ws.send_text(msg if isinstance(msg, str) else msg.decode())
+
+            async def hard_timeout() -> None:
+                await asyncio.sleep(session_max)  # server-side session ceiling
+                with contextlib.suppress(Exception):
+                    await ws.send_text(json.dumps({"type": "emma.session_expired"}))
+
+            tasks = {asyncio.create_task(t())
+                     for t in (client_to_openai, openai_to_client, hard_timeout)}
+            _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+    except Exception:
+        pass
+    finally:
+        seconds = int(min(time.monotonic() - started, float(session_max)))
+        with contextlib.suppress(Exception):
+            metering.record_usage(device["user_id"], device["id"], seconds)
+        with contextlib.suppress(Exception):
+            await ws.close()
+
+
+async def _demo_realtime(ws: WebSocket) -> None:
     token = ws.query_params.get("token", "")
     try:
         claims = decode_token(token)

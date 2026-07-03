@@ -14,13 +14,22 @@ from pathlib import Path
 # session. ``session_seconds`` = per-session length; ``daily_seconds`` = user/day
 # ceiling (0 = none beyond monthly); ``monthly_seconds`` = user/month; ``cost_cap_cents``
 # = hard $/session ceiling. Free is the anonymous 60s/IP discovery path.
+#
+# CLIENT-INSTALL-PIPELINE Phase 1 added two managed-daemon keys (the web demo ignores
+# them): ``daemon_session_max_seconds`` = per managed voice session ceiling (much
+# longer than the demo's ``session_seconds``); ``overage_per_min_usd`` = Stripe overage
+# rate (Phase 5). The managed MONTHLY allowance reuses ``monthly_seconds``.
+# ⚠️ PRICING: free.monthly_seconds is 0 → free gets NO managed daemon minutes (demo
+# only). Bump it if you want free trial minutes on the daemon. pro=3600s (60min) /
+# power=12000s (200min) match /api/plans; the CLIENT-INSTALL prompt's 200/1000 figures
+# are a separate pricing decision — change here + /api/plans together if adopting them.
 PLAN_CAPS: dict[str, dict[str, object]] = {
     "free":  {"session_seconds": 60,   "daily_seconds": 60,    "monthly_seconds": 0,
-              "cost_cap_cents": 40},
+              "cost_cap_cents": 40,   "daemon_session_max_seconds": 900,  "overage_per_min_usd": 0.30},
     "pro":   {"session_seconds": 300,  "daily_seconds": 600,   "monthly_seconds": 3600,
-              "cost_cap_cents": 200},
+              "cost_cap_cents": 200,  "daemon_session_max_seconds": 1800, "overage_per_min_usd": 0.20},
     "power": {"session_seconds": 900,  "daily_seconds": 1800,  "monthly_seconds": 12000,
-              "cost_cap_cents": 1000},
+              "cost_cap_cents": 1000, "daemon_session_max_seconds": 3600, "overage_per_min_usd": 0.15},
 }
 # Back-compat: the old "team" tier maps to "power".
 PLAN_CAPS["team"] = PLAN_CAPS["power"]
