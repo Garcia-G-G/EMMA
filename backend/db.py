@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 );
 CREATE INDEX IF NOT EXISTS ix_device_tokens_user ON device_tokens(user_id);
 CREATE INDEX IF NOT EXISTS ix_device_tokens_hash ON device_tokens(token_hash);
+
+-- CLIENT-INSTALL-PIPELINE Phase 1: per-session metering for managed voice.
+-- One row per proxied realtime session; `seconds` is server-measured wall time.
+CREATE TABLE IF NOT EXISTS usage_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  device_id INTEGER NOT NULL REFERENCES device_tokens(id),
+  seconds INTEGER NOT NULL,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_usage_events_user ON usage_events(user_id);
+CREATE INDEX IF NOT EXISTS ix_usage_events_created ON usage_events(created_at);
 """
 
 
@@ -80,6 +92,7 @@ _MIGRATIONS = (
     "ALTER TABLE users ADD COLUMN reset_token TEXT",
     "ALTER TABLE users ADD COLUMN reset_expires REAL",
     "ALTER TABLE users ADD COLUMN deleted_at REAL",
+    "ALTER TABLE users ADD COLUMN stripe_subscription_item_id TEXT",  # Phase 5 metered billing
 )
 
 

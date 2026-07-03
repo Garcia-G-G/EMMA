@@ -81,7 +81,7 @@ def test_dashboard_page_has_account_settings(client):
     assert "/api/me/password" in body
     assert "/api/me/email" in body
     assert "/api/me" in body            # delete account
-    assert "Tu uso este mes" in body
+    assert "Minutos" in body and "Tu plan" in body   # usage KPIs + plan meter (redesigned dashboard)
     assert "min/sesión" not in body     # managed: no cap framing shown
 
 
