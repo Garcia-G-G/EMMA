@@ -189,7 +189,7 @@ async def _summarize(structured: str, question: str, web_content: bool = False) 
     q = redact(q)  # egress guard: strip secrets/PII (in the screen text AND the spoken
     structured = redact(structured)  # question) before any of it reaches OpenAI
     try:
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
         completion = await asyncio.wait_for(
             client.chat.completions.create(
                 model=settings.MEMORY_REFLECTION_MODEL,

@@ -435,7 +435,7 @@ def _get_client() -> Any:
     if _client is None:
         from openai import AsyncOpenAI
 
-        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        _client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
     return _client
 
 

@@ -16,7 +16,7 @@ log = structlog.get_logger("emma.tools.url_summary")
 
 
 async def _llm_summary(text: str) -> str:
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
     completion = await asyncio.wait_for(
         client.chat.completions.create(
             model=settings.MEMORY_REFLECTION_MODEL,

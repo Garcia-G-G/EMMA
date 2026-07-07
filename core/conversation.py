@@ -120,8 +120,11 @@ _TERMINAL_AUTH_MARKERS = (
 
 
 def _looks_like_openai_key(s: str) -> bool:
-    """Cheap shape check for an OpenAI key: ``sk-`` prefix, ≥40 chars, no spaces."""
-    return bool(s) and s.startswith("sk-") and len(s) >= 40 and " " not in s and "\t" not in s
+    """Shape check for a usable credential: a legacy OpenAI ``sk-`` key OR an Emma
+    device bearer (urlsafe token, ≥40 chars). No spaces either way (Phase 2B)."""
+    if not s or " " in s or "\t" in s:
+        return False
+    return (s.startswith("sk-") and len(s) >= 40) or len(s) >= 40
 
 
 def _is_terminal_auth_error(message: str) -> bool:
@@ -1436,7 +1439,8 @@ async def build_pipeline(
 
     session_props = await _build_session_properties()
     llm = OpenAIRealtimeLLMService(
-        api_key=settings.OPENAI_API_KEY,
+        api_key=settings.openai_api_key(),        # device token (managed) or sk- (dev)
+        base_url=settings.realtime_base_url(),    # our WS proxy (managed) or OpenAI direct
         settings=OpenAIRealtimeLLMService.Settings(
             model=settings.REALTIME_MODEL,
             session_properties=session_props,
@@ -1505,12 +1509,14 @@ async def run_session(immediate_command: bool = False) -> None:
     auth-error watcher inside the pipeline that terminates with SystemExit(2)
     on a terminal auth error instead of reconnecting forever.
     """
-    if not _looks_like_openai_key(settings.OPENAI_API_KEY):
+    _cred = settings.openai_api_key()  # device bearer (managed) or sk- key (dev)
+    if not _looks_like_openai_key(_cred):
         log.error(
             "credentials_invalid",
-            field="OPENAI_API_KEY",
-            present=bool(settings.OPENAI_API_KEY),
-            length=len(settings.OPENAI_API_KEY or ""),
+            field=("device_token" if settings._is_managed() else "OPENAI_API_KEY"),
+            managed=settings._is_managed(),
+            present=bool(_cred),
+            length=len(_cred or ""),
         )
         raise SystemExit(2)  # non-zero exit; launchd KeepAlive treats as real failure
 

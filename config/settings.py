@@ -40,7 +40,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    OPENAI_API_KEY: str
+    # CLIENT-INSTALL Phase 2B: optional now. A managed client daemon has NO sk- key —
+    # it pairs and uses a device bearer via the proxy (see the resolvers below). A
+    # dev/BYOK daemon still sets it in .env.
+    OPENAI_API_KEY: str = ""
+    # Managed HTTP proxy base, used ONLY in managed mode (EMMA_REQUIRE_PAIRING set).
+    OPENAI_BASE_URL: str = "https://api.theemmafamily.com/v1"
     ELEVENLABS_API_KEY: str
     YOUTUBE_API_KEY: str | None = None
     SPOTIFY_CLIENT_ID: str | None = None
@@ -263,6 +268,35 @@ class Settings(BaseSettings):
                 if val:
                     object.__setattr__(self, name, val)
         return self
+
+    # ---- CLIENT-INSTALL Phase 2B: managed vs BYOK credential resolvers -------
+    # Managed mode (client build) is gated on EMMA_REQUIRE_PAIRING — the SAME flag
+    # that gates orchestrator._ensure_paired — so a dev/BYOK daemon (flag unset) is
+    # completely unaffected: it keeps using OPENAI_API_KEY against api.openai.com.
+    def _is_managed(self) -> bool:
+        import os
+        return os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes")
+
+    def openai_api_key(self) -> str:
+        """Bearer for OpenAI calls: the paired device token (managed) or the local
+        sk- key (dev/BYOK). The device token is cached at pairing time."""
+        if self._is_managed():
+            from core import pairing
+            tok = pairing.cached_token()
+            if tok:
+                return tok
+        return self.OPENAI_API_KEY
+
+    def openai_base_url(self) -> str | None:
+        """HTTP base for the OpenAI SDK: the managed proxy (client) or None (dev →
+        the SDK's default api.openai.com)."""
+        return self.OPENAI_BASE_URL if self._is_managed() else None
+
+    def realtime_base_url(self) -> str:
+        """Realtime WS base for Pipecat: the managed proxy or OpenAI direct."""
+        if self._is_managed():
+            return "wss://api.theemmafamily.com/realtime"
+        return "wss://api.openai.com/v1/realtime"
 
     # Long-term memory store. SQLite by default; the EMMA_HOME dir is
     # created on first write. POSTGRES_DSN above remains the optional

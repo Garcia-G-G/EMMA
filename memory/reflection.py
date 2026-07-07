@@ -34,7 +34,7 @@ _client: AsyncOpenAI | None = None
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        _client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
     return _client
 
 

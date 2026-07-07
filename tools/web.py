@@ -38,7 +38,7 @@ _summary_client: AsyncOpenAI | None = None
 def _get_summary_client() -> AsyncOpenAI:
     global _summary_client
     if _summary_client is None:
-        _summary_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        _summary_client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
     return _summary_client
 
 

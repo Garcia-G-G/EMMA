@@ -21,7 +21,7 @@ log = structlog.get_logger("emma.tools.diagnostics")
 
 async def _ping_openai() -> dict[str, Any]:
     try:
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
         await asyncio.wait_for(client.models.retrieve("gpt-4o"), timeout=settings.API_TIMEOUT_S)
         return {"ok": True}
     except Exception as exc:

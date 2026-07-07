@@ -33,6 +33,30 @@ async def stored_token() -> str | None:
     return await kc.retrieve(_TOKEN_LABEL)
 
 
+# Phase 2B: sync accessor for the device bearer. Keychain reads are async, but the
+# OpenAI SDK clients are built synchronously inside running event loops (where a
+# sync Keychain read can't block) — so the token is cached at pairing time and read
+# from memory here. Cold-cache fallback uses the sync Keychain read (works pre-loop).
+_token_cache: str | None = None
+
+
+def cached_token() -> str | None:
+    global _token_cache
+    if _token_cache:
+        return _token_cache
+    tok = kc.retrieve_sync(_TOKEN_LABEL)  # None inside a running loop
+    if tok:
+        _token_cache = tok
+    return _token_cache
+
+
+async def load_token_cache() -> str | None:
+    """Populate the sync token cache from Keychain. Called once at pairing/boot."""
+    global _token_cache
+    _token_cache = await stored_token()
+    return _token_cache
+
+
 async def start_pairing() -> dict[str, Any]:
     """Step 1 — fetch a user_code; returned so the orchestrator can speak it."""
     async with httpx.AsyncClient(timeout=15.0) as c:

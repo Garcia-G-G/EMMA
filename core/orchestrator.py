@@ -217,6 +217,7 @@ async def _ensure_paired() -> None:
     from core import pairing
 
     if await pairing.is_paired():
+        await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
         return
     try:
         info = await pairing.start_pairing()
@@ -239,6 +240,7 @@ async def _ensure_paired() -> None:
     if not token:
         print("La vinculación expiró. Reinicia Emma para intentar de nuevo.", flush=True)
         raise SystemExit(2)
+    await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
     log.info("device_paired_at_boot")
 
 

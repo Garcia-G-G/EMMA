@@ -355,7 +355,7 @@ def _reveal_target(sandbox: _Sandbox, name: str, args: dict[str, Any]) -> tuple[
 
 
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    return AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
 
 
 async def run_agent(
