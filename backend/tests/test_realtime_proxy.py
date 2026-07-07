@@ -85,7 +85,7 @@ def test_valid_session_proxies_both_ways_and_meters(monkeypatch):
     monkeypatch.setattr("backend.realtime_proxy.websockets.connect", lambda *a, **k: _FakeUpstream())
     calls = []
     monkeypatch.setattr("backend.realtime_proxy.metering.record_usage",
-                        lambda uid, did, sec: calls.append((uid, did, sec)))
+                        lambda uid, did, sec=0, **kw: calls.append((uid, did, sec)))
     c = TestClient(app)
     with c.websocket_connect("/realtime", headers={"Authorization": f"Bearer {tok}"}) as ws:
         ws.send_text('{"type":"input_audio_buffer.append"}')  # daemon → backend → (fake) OpenAI
