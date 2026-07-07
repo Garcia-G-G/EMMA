@@ -93,6 +93,13 @@ _MIGRATIONS = (
     "ALTER TABLE users ADD COLUMN reset_expires REAL",
     "ALTER TABLE users ADD COLUMN deleted_at REAL",
     "ALTER TABLE users ADD COLUMN stripe_subscription_item_id TEXT",  # Phase 5 metered billing
+    # CLIENT-INSTALL Phase 2A: token-level metering on usage_events (HTTP + realtime).
+    "ALTER TABLE usage_events ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE usage_events ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE usage_events ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE usage_events ADD COLUMN audio_tokens INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE usage_events ADD COLUMN model TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE usage_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'realtime'",
 )
 
 

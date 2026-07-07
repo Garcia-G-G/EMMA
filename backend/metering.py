@@ -17,28 +17,60 @@ def _month_start_epoch() -> float:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
-def record_usage(user_id: int, device_id: int, seconds: int) -> None:
-    """Persist a metered session and bump the user's monthly counters.
+def record_usage(
+    user_id: int,
+    device_id: int,
+    seconds: int = 0,
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cached_tokens: int = 0,
+    audio_tokens: int = 0,
+    model: str = "",
+    kind: str = "realtime",
+) -> None:
+    """Persist a metered event (one row) and bump the user's monthly counters.
 
-    The dashboard reads ``users.monthly_seconds_used`` / ``monthly_session_count``,
-    so we keep those in sync in the same transaction as the granular usage row.
+    Two callers: the realtime WS (seconds + token usage from response.done, kind
+    'realtime') and the HTTP proxy (tokens only, kind 'http'/'http-stream'). The
+    dashboard reads ``users.monthly_seconds_used`` / ``monthly_session_count``, so we
+    keep those in sync in the same transaction (only when a session had seconds).
     """
-    if seconds <= 0:
+    if seconds <= 0 and input_tokens <= 0 and output_tokens <= 0:
         return
     conn = db.connect()
     try:
         conn.execute(
-            "INSERT INTO usage_events(user_id,device_id,seconds,created_at) VALUES(?,?,?,?)",
-            (user_id, device_id, int(seconds), time.time()),
+            "INSERT INTO usage_events(user_id,device_id,seconds,input_tokens,output_tokens,"
+            "cached_tokens,audio_tokens,model,kind,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (user_id, device_id, int(seconds), int(input_tokens), int(output_tokens),
+             int(cached_tokens), int(audio_tokens), model, kind, time.time()),
         )
-        conn.execute(
-            "UPDATE users SET monthly_seconds_used=COALESCE(monthly_seconds_used,0)+?, "
-            "monthly_session_count=COALESCE(monthly_session_count,0)+1 WHERE id=?",
-            (int(seconds), user_id),
-        )
+        if seconds > 0:
+            conn.execute(
+                "UPDATE users SET monthly_seconds_used=COALESCE(monthly_seconds_used,0)+?, "
+                "monthly_session_count=COALESCE(monthly_session_count,0)+1 WHERE id=?",
+                (int(seconds), user_id),
+            )
         conn.commit()
     finally:
         conn.close()
+
+
+def record_usage_tokens(
+    user_id: int,
+    device_id: int,
+    *,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cached_tokens: int = 0,
+    audio_tokens: int = 0,
+    model: str = "",
+    kind: str = "http",
+) -> None:
+    """Token-only metering for the HTTP proxy (no session seconds)."""
+    record_usage(user_id, device_id, 0, input_tokens=input_tokens, output_tokens=output_tokens,
+                 cached_tokens=cached_tokens, audio_tokens=audio_tokens, model=model, kind=kind)
 
 
 def seconds_used_this_month(user_id: int) -> int:

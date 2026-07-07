@@ -82,6 +82,9 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
 
     await ws.accept()
     started = time.monotonic()
+    # Token usage tallied from OpenAI `response.done` frames (authoritative — audio
+    # seconds are only a sanity check). Recorded once on close.
+    tally = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "audio_tokens": 0}
     oai_url = f"{settings.OPENAI_REALTIME_URL}?model={settings.OPENAI_REALTIME_MODEL}"
     headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
     try:
@@ -92,6 +95,16 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
 
             async def openai_to_client() -> None:
                 async for msg in oai:
+                    if isinstance(msg, str):
+                        with contextlib.suppress(Exception):
+                            ev = json.loads(msg)
+                            if ev.get("type") == "response.done":
+                                u = (ev.get("response") or {}).get("usage") or {}
+                                tally["input_tokens"] += int(u.get("input_tokens", 0))
+                                tally["output_tokens"] += int(u.get("output_tokens", 0))
+                                itd = u.get("input_token_details") or {}
+                                tally["cached_tokens"] += int(itd.get("cached_tokens", 0))
+                                tally["audio_tokens"] += int(itd.get("audio_tokens", 0))
                     await ws.send_text(msg if isinstance(msg, str) else msg.decode())
 
             async def hard_timeout() -> None:
@@ -109,7 +122,10 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
     finally:
         seconds = int(min(time.monotonic() - started, float(session_max)))
         with contextlib.suppress(Exception):
-            metering.record_usage(device["user_id"], device["id"], seconds)
+            metering.record_usage(
+                device["user_id"], device["id"], seconds, kind="realtime", model="gpt-realtime",
+                input_tokens=tally["input_tokens"], output_tokens=tally["output_tokens"],
+                cached_tokens=tally["cached_tokens"], audio_tokens=tally["audio_tokens"])
         with contextlib.suppress(Exception):
             await ws.close()
 

@@ -25,6 +25,7 @@ from backend import (
     db,
     demo_session,
     device_pairing,
+    openai_proxy,
     realtime_proxy,
     stripe_routes,
 )
@@ -72,6 +73,7 @@ if not settings.CLOUDFLARE_TURNSTILE_SECRET:
         "turnstile_not_configured", note="demo gated on IP rate-limit + cost cap only")
 app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
+app.include_router(openai_proxy.router)  # CLIENT-INSTALL Phase 2A: /v1/* managed HTTP proxy
 app.include_router(auth.router)
 app.include_router(auth_local.router)
 app.include_router(account_routes.router)
