@@ -37,7 +37,7 @@ async def speak_unprompted(text: str) -> None:
     text = (text or "").strip()
     if not text:
         return
-    if not settings.OPENAI_API_KEY:
+    if not settings.openai_api_key():
         log.warning("proactive_voice_skipped", reason="no_openai_key")
         return
 

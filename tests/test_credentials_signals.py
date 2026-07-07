@@ -116,10 +116,11 @@ def test_looks_like_openai_key():
     from core.conversation import _looks_like_openai_key as f
 
     assert f("sk-" + "a" * 45) is True
+    assert f("x" * 50) is True  # Phase 2B: Emma device bearer (urlsafe ≥40, no sk-)
     assert f("") is False
     assert f("sk-") is False
-    assert f("sk-12345") is False  # too short
-    assert f("x" * 50) is False  # no sk- prefix
+    assert f("sk-12345") is False  # too short (and not a ≥40 bearer)
+    assert f("x" * 30) is False  # too short for a device bearer
     assert f("sk-" + "a" * 40 + " " + "b" * 5) is False  # contains a space
     assert f("sk-" + "a" * 40 + "\t" + "b" * 5) is False  # contains a tab
 

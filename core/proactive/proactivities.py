@@ -44,12 +44,12 @@ def _today_es() -> str:
 
 async def _synthesize_es(prompt: str, max_tokens: int = 200) -> str:
     """One cheap gpt-4o-mini completion → a Spanish line. '' on failure."""
-    if not settings.OPENAI_API_KEY:
+    if not settings.openai_api_key():
         return ""
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
         rsp = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": redact(prompt)}],  # egress guard

@@ -56,7 +56,7 @@ async def delegate_to_codex(
         )
     if not repo.is_dir():
         return ToolResult(False, None, f"No encontré la carpeta {repo}.", False)
-    if not settings.OPENAI_API_KEY:
+    if not settings.openai_api_key():
         return ToolResult(False, None, "No tengo la API key de OpenAI configurada.", False)
     if branch and not (repo / ".git").exists():
         return ToolResult(False, None, f"{repo} no es un repo git, no puedo crear una rama.", False)
