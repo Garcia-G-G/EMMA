@@ -81,6 +81,35 @@ CREATE TABLE IF NOT EXISTS usage_events (
 );
 CREATE INDEX IF NOT EXISTS ix_usage_events_user ON usage_events(user_id);
 CREATE INDEX IF NOT EXISTS ix_usage_events_created ON usage_events(created_at);
+
+-- ABUSE-PROTECTION-2: per-user flags (kill switch + anomaly state).
+CREATE TABLE IF NOT EXISTS user_flags (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  disabled INTEGER NOT NULL DEFAULT 0,
+  disabled_reason TEXT,
+  disabled_at REAL,
+  anomaly_score REAL NOT NULL DEFAULT 0.0,
+  last_anomaly_at REAL,
+  throttle_until REAL
+);
+
+-- Append-only, hash-chained audit of every disable/enable/throttle. prev_hash +
+-- row_hash form a tamper-evident ledger; a broken chain proves tampering.
+-- NEVER DELETE or UPDATE rows here.
+CREATE TABLE IF NOT EXISTS user_status_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  action TEXT NOT NULL,        -- disable | enable | throttle | untrottle | anomaly_flag
+  actor_id INTEGER,            -- NULL = system/anomaly
+  reason TEXT,
+  ip TEXT,
+  ua TEXT,
+  prev_hash TEXT NOT NULL,
+  row_hash TEXT NOT NULL UNIQUE,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_user_status_events_user ON user_status_events(user_id);
+CREATE INDEX IF NOT EXISTS ix_user_status_events_created ON user_status_events(created_at);
 """
 
 
@@ -443,5 +472,227 @@ def day_session_stats(now: float | None = None) -> dict[str, float]:
             (now - 86400,),
         ).fetchone()
         return {"sessions": int(row[0] or 0), "cost_usd": float(row[1] or 0.0)}
+    finally:
+        conn.close()
+
+
+# ---- ABUSE-PROTECTION-2: user flags (kill switch + anomaly state) -----------
+
+
+def get_user_flags(user_id: int) -> dict[str, Any] | None:
+    """Return the flags row for a user, or None if none exists yet."""
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM user_flags WHERE user_id=?", (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def ensure_user_flags(user_id: int) -> None:
+    """Create an empty flags row if absent. Idempotent."""
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO user_flags(user_id, disabled, anomaly_score) VALUES(?, 0, 0.0)",
+            (user_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_user_disabled(user_id: int, reason: str) -> None:
+    """Mark a user disabled (admin kill switch). Idempotent."""
+    ensure_user_flags(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_flags SET disabled=1, disabled_reason=?, disabled_at=? WHERE user_id=?",
+            (reason, time.time(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_user_disabled(user_id: int) -> None:
+    """Re-enable a disabled user. Idempotent."""
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_flags SET disabled=0, disabled_reason=NULL, disabled_at=NULL WHERE user_id=?",
+            (user_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_user_throttle(user_id: int, until_ts: float) -> None:
+    """Throttle a user until ``until_ts`` (anomaly response)."""
+    ensure_user_flags(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_flags SET throttle_until=?, last_anomaly_at=? WHERE user_id=?",
+            (until_ts, time.time(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_anomaly_score(user_id: int, ema_new: float) -> None:
+    """Persist the rolling EMA anomaly score."""
+    ensure_user_flags(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_flags SET anomaly_score=? WHERE user_id=?",
+            (ema_new, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---- ABUSE-PROTECTION-2: append-only hash-chained audit trail ---------------
+
+
+def append_status_event(
+    user_id: int,
+    action: str,
+    actor_id: int | None = None,
+    reason: str = "",
+    ip: str | None = None,
+    ua: str | None = None,
+) -> str:
+    """Append an audit event with a SHA-256 hash chain. Returns the new row_hash.
+
+    ``BEGIN IMMEDIATE`` takes a write lock so two concurrent appends can't read the
+    same prev_hash and fork the chain.
+    """
+    import hashlib
+    import json
+
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")  # write lock — serializes appends
+        prev_row = conn.execute(
+            "SELECT row_hash FROM user_status_events ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        prev = prev_row["row_hash"] if prev_row else "0" * 64
+        ts = time.time()
+        payload_obj = {
+            "user_id": user_id, "action": action, "actor_id": actor_id,
+            "reason": reason, "ip": ip, "ua": ua, "ts": ts,
+        }
+        payload = json.dumps(payload_obj, sort_keys=True)
+        row_hash = hashlib.sha256((prev + payload).encode()).hexdigest()
+        conn.execute(
+            "INSERT INTO user_status_events "
+            "(user_id, action, actor_id, reason, ip, ua, prev_hash, row_hash, created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (user_id, action, actor_id, reason, ip, ua, prev, row_hash, ts),
+        )
+        conn.commit()
+        return row_hash
+    finally:
+        conn.close()
+
+
+def status_events_for_user(user_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM user_status_events WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def verify_audit_chain() -> tuple[bool, int | None]:
+    """Walk the whole audit chain and verify every hash. Returns (True, None) if
+    intact, else (False, first_broken_id). O(N) — run offline, not on a request."""
+    import hashlib
+    import json
+
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM user_status_events ORDER BY id ASC"
+        ).fetchall()
+        prev = "0" * 64
+        for r in rows:
+            payload_obj = {
+                "user_id": r["user_id"], "action": r["action"],
+                "actor_id": r["actor_id"], "reason": r["reason"],
+                "ip": r["ip"], "ua": r["ua"], "ts": r["created_at"],
+            }
+            payload = json.dumps(payload_obj, sort_keys=True)
+            expected = hashlib.sha256((prev + payload).encode()).hexdigest()
+            if r["prev_hash"] != prev or r["row_hash"] != expected:
+                return False, int(r["id"])
+            prev = r["row_hash"]
+        return True, None
+    finally:
+        conn.close()
+
+
+# ---- ABUSE-PROTECTION-2: usage aggregates for daily cap + anomaly baseline ---
+
+
+def seconds_used_today(user_id: int) -> int:
+    """Sum of usage_events.seconds since midnight UTC (Capa 4 daily cap)."""
+    import datetime
+
+    start_of_day = (
+        datetime.datetime.now(datetime.UTC)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(seconds), 0) AS s FROM usage_events "
+            "WHERE user_id=? AND created_at >= ?",
+            (user_id, start_of_day),
+        ).fetchone()
+        return int(row["s"] or 0)
+    finally:
+        conn.close()
+
+
+def recent_session_seconds(user_id: int, limit: int = 14) -> list[int]:
+    """Last N non-zero session lengths — the anomaly z-score baseline."""
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT seconds FROM usage_events WHERE user_id=? AND seconds > 0 "
+            "ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [int(r["seconds"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def revoke_all_device_tokens_for_user(user_id: int) -> int:
+    """Mark all of a user's active device tokens revoked. Returns the count.
+    (device_tokens is otherwise owned by device_pairing.py; this bulk revoke lives
+    here because the kill switch needs it alongside the other db.py helpers.)"""
+    conn = connect()
+    try:
+        cur = conn.execute(
+            "UPDATE device_tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL",
+            (time.time(), user_id),
+        )
+        conn.commit()
+        return int(cur.rowcount)
     finally:
         conn.close()

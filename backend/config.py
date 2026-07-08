@@ -23,13 +23,19 @@ from pathlib import Path
 # only). Bump it if you want free trial minutes on the daemon. pro=3600s (60min) /
 # power=12000s (200min) match /api/plans; the CLIENT-INSTALL prompt's 200/1000 figures
 # are a separate pricing decision — change here + /api/plans together if adopting them.
+# ABUSE-PROTECTION-2 added `concurrent_sessions` (Capa 2) and `reconnect_min_seconds`
+# (Capa 3, sliding-window floor between reconnects). free's 30s is deliberately
+# aggressive — free gets no managed minutes anyway (monthly_seconds=0).
 PLAN_CAPS: dict[str, dict[str, object]] = {
     "free":  {"session_seconds": 60,   "daily_seconds": 60,    "monthly_seconds": 0,
-              "cost_cap_cents": 40,   "daemon_session_max_seconds": 900,  "overage_per_min_usd": 0.30},
+              "cost_cap_cents": 40,   "daemon_session_max_seconds": 900,  "overage_per_min_usd": 0.30,
+              "concurrent_sessions": 1, "reconnect_min_seconds": 30},
     "pro":   {"session_seconds": 300,  "daily_seconds": 600,   "monthly_seconds": 3600,
-              "cost_cap_cents": 200,  "daemon_session_max_seconds": 1800, "overage_per_min_usd": 0.20},
+              "cost_cap_cents": 200,  "daemon_session_max_seconds": 1800, "overage_per_min_usd": 0.20,
+              "concurrent_sessions": 1, "reconnect_min_seconds": 5},
     "power": {"session_seconds": 900,  "daily_seconds": 1800,  "monthly_seconds": 12000,
-              "cost_cap_cents": 1000, "daemon_session_max_seconds": 3600, "overage_per_min_usd": 0.15},
+              "cost_cap_cents": 1000, "daemon_session_max_seconds": 3600, "overage_per_min_usd": 0.15,
+              "concurrent_sessions": 2, "reconnect_min_seconds": 2},
 }
 # Back-compat: the old "team" tier maps to "power".
 PLAN_CAPS["team"] = PLAN_CAPS["power"]

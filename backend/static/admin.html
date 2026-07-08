@@ -10,6 +10,14 @@
   .panel h2{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin:0 0 8px;font-weight:500}
   .big{font-family:var(--font-display);font-size:32px;font-weight:600}
   .err{color:#c4543a;margin-top:20px}
+  .kill{margin-top:44px;border-top:1px solid var(--rule);padding-top:28px}
+  .kill h2{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin:0 0 10px;font-weight:500}
+  .kill form{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .kill input{flex:1;min-width:200px;background:var(--bg-elev);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;font-family:var(--font-mono);font-size:13px;color:var(--ink)}
+  .kill button{border:none;border-radius:8px;padding:10px 18px;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer}
+  .kill .danger{background:#c4543a;color:#faf6ef}
+  .kill .ghost{background:var(--bg-elev);border:1px solid var(--rule);color:var(--ink)}
+  .form-note{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);min-height:16px;margin:4px 0 0}
   @media(max-width:760px){main{padding:44px 22px}.grid{grid-template-columns:1fr}}
 </style></head><body>
 <nav class="site-nav"><div class="row">
@@ -25,6 +33,23 @@
   </div>
   <p class="ink-soft" style="margin-top:18px">Ingresos y margen llegan en un seguimiento (requiere datos de Stripe).</p>
   <p class="err" id="err" hidden>No autorizado.</p>
+
+  <section class="kill">
+    <h2>Kill switch</h2>
+    <form id="killForm" onsubmit="return killUser(event)">
+      <input id="killEmail" type="email" placeholder="usuario@email.com" required>
+      <input id="killReason" placeholder="Razón (queda en el audit trail)">
+      <button class="danger" type="submit">Desactivar</button>
+    </form>
+    <p class="form-note" id="killMsg"></p>
+
+    <h2 style="margin-top:24px">Reactivar</h2>
+    <form id="reviveForm" onsubmit="return reviveUser(event)">
+      <input id="reviveEmail" type="email" placeholder="usuario@email.com" required>
+      <button class="ghost" type="submit">Reactivar</button>
+    </form>
+    <p class="form-note" id="reviveMsg"></p>
+  </section>
 </main>
 <script>
 async function load(){
@@ -37,5 +62,27 @@ async function load(){
   document.getElementById("budget").textContent="$"+(d.monthly_budget_usd||0);
 }
 load();
+
+async function killUser(ev){
+  ev.preventDefault();
+  const email=document.getElementById("killEmail").value.trim();
+  const reason=document.getElementById("killReason").value.trim();
+  if(!confirm(`¿Desactivar ${email}? Corta sesiones activas y revoca sus tokens.`)) return false;
+  const r=await fetch("/api/admin/disable-user",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({email,reason})});
+  const d=await r.json().catch(()=>({}));
+  document.getElementById("killMsg").textContent=
+    r.ok?`Listo. Cortadas ${d.sessions_cut} sesiones, tokens revocados.`:`Error: ${d.detail||r.status}`;
+  return false;
+}
+async function reviveUser(ev){
+  ev.preventDefault();
+  const email=document.getElementById("reviveEmail").value.trim();
+  const r=await fetch("/api/admin/enable-user",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
+  const d=await r.json().catch(()=>({}));
+  document.getElementById("reviveMsg").textContent=r.ok?"Reactivado.":`Error: ${d.detail||r.status}`;
+  return false;
+}
 </script>
 </body></html>
