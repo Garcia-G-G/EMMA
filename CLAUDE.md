@@ -197,3 +197,24 @@ When adding a new "do thing X" tool:
 - Long-running or potentially blocking: register the work via
   `background.registry().start(...)` and return an "I started it" ToolResult.
 - Destructive long-running: combine `destructive=True` + the background pattern.
+
+## Distribution (mandatory)
+
+Emma is distributed via `curl -fsSL https://theemmafamily.com/install.sh | sh`.
+No .pkg, no notarization, no Apple Developer Program. The installer
+(`_landing/install.sh`, served by nginx):
+- Fetches Emma source from the public GitHub release tarball
+  (`github.com/theemmafamily/emma`, tag or `main`)
+- Uses `uv` standalone for Python 3.12 (no Homebrew forced); pins the venv
+  to `~/.emma/.venv` via `UV_PROJECT_ENVIRONMENT`
+- Downloads the Vosk Spanish wake-word model to `~/.emma/vosk`
+- Pairs interactively via `emma --first-run --pair` (RFC 8628), FOREGROUND
+  and BEFORE the LaunchAgent loads so failures surface in the terminal
+- Registers a LaunchAgent labelled `com.emma.daemon` (generic, public-copy
+  safe), booting out any legacy `com.garcia.emma` agent first
+
+Uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh` — removes
+`~/.emma`, both LaunchAgent labels, the logs, and the Secret-tier Keychain
+entries (`device_token`, `OPENAI_API_KEY` under the `com.garcia.emma` service).
+
+The installer is idempotent — re-running upgrades in place.

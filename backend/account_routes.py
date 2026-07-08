@@ -12,12 +12,11 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from backend import db
 from backend.auth import clear_session_cookie, current_user, require_user
-from backend.config import plan_caps, settings
+from backend.config import plan_caps
 from backend.passwords import hash_password, password_problem, verify_password
 
 log = structlog.get_logger("emma.account")
@@ -33,16 +32,9 @@ _CHANGELOG = [
 
 
 # ---- D2: downloads ----------------------------------------------------------
-
-
-@router.get("/api/downloads/latest")
-async def download_latest(request: Request) -> Any:
-    """Redirect a logged-in user to the current .pkg (login-gated for telemetry)."""
-    await require_user(request)
-    url = settings.DOWNLOAD_PKG_URL
-    if not url:
-        raise HTTPException(503, "La descarga aún no está disponible.")
-    return RedirectResponse(url, status_code=302)
+# CLIENT-INSTALL-PHASE-3: the login-gated .pkg redirect (/api/downloads/latest) is
+# gone — distribution pivoted to `curl … /install.sh | sh`, so there is no .pkg to
+# hand out. The changelog stays public for version display elsewhere.
 
 
 @router.get("/api/downloads/changelog")

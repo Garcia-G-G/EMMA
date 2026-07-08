@@ -24,7 +24,6 @@ from backend.config import settings
 def _fresh_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "DATABASE_URL", str(tmp_path / "t.db"))
     monkeypatch.setattr(settings, "PUBLIC_URL", "http://localhost")
-    monkeypatch.setattr(settings, "DOWNLOAD_PKG_URL", "https://dl.theemmafamily.com/emma.pkg")
     db.init_db()
     yield
 
@@ -41,20 +40,9 @@ def _register(client, email="a@b.com", pw="correcthorse9"):
 # ---- downloads --------------------------------------------------------------
 
 
-def test_download_requires_login(client):
-    assert client.get("/api/downloads/latest").status_code == 401
-
-
-def test_download_redirects_logged_in(client):
-    _register(client)
-    r = client.get("/api/downloads/latest")
-    assert r.status_code == 302 and r.headers["location"] == settings.DOWNLOAD_PKG_URL
-
-
-def test_download_503_when_unconfigured(client, monkeypatch):
-    monkeypatch.setattr(settings, "DOWNLOAD_PKG_URL", "")
-    _register(client)
-    assert client.get("/api/downloads/latest").status_code == 503
+def test_download_latest_route_removed(client):
+    # CLIENT-INSTALL-PHASE-3 dropped the login-gated .pkg redirect (curl|sh pivot).
+    assert client.get("/api/downloads/latest").status_code == 404
 
 
 def test_changelog_is_public(client):
