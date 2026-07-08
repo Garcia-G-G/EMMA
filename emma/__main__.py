@@ -14,6 +14,7 @@ import logging
 import logging.handlers
 import os
 import signal
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -94,7 +95,58 @@ def _parse_args() -> argparse.Namespace:
         help="open the first-run setup wizard (Prompt 29) instead of the daemon. "
         "Emma.app passes this on the post-install launch.",
     )
+    p.add_argument(
+        "--pair",
+        action="store_true",
+        help="with --first-run: run the device-pairing flow (RFC 8628) in the "
+        "foreground instead of the HTML wizard. The install.sh calls "
+        "`emma --first-run --pair` before registering the LaunchAgent.",
+    )
     return p.parse_args()
+
+
+def _run_pairing(log: structlog.BoundLogger) -> int:
+    """Foreground device pairing for install.sh step 7 (CLIENT-INSTALL-PHASE-3).
+
+    Runs with stdin/stdout attached, BEFORE the LaunchAgent is bootstrapped, so a
+    failed pairing surfaces visibly in the installer terminal rather than in
+    ~/Library/Logs. Emma isn't running yet (no Realtime session), so the pair code
+    is spoken via macOS `say`. The device token is Secret-tier — core.pairing
+    persists it to the Keychain, never to disk or logs.
+    """
+    from core import pairing
+
+    async def do_pair() -> int:
+        if await pairing.is_paired():
+            print("  Ya vinculada. Nada que hacer.")
+            return 0
+        info = await pairing.start_pairing()
+        code = info["user_code"]
+        uri = info.get("verification_uri") or "https://theemmafamily.com/pair"
+        print(f"\n  Código de vinculación: {code}")
+        print(f"  Abre:                    {uri}\n")
+        spoken = " ".join(code.replace("-", " guion "))
+        subprocess.run(
+            ["say", "-v", "Paulina",
+             f"Tu código de vinculación es: {spoken}. Ábrelo en tu navegador"],
+            check=False,
+        )
+        subprocess.run(["open", uri], check=False)
+        result = await pairing.poll_until_authorized(
+            info["device_code"], int(info.get("interval", 5)), int(info.get("expires_in", 900))
+        )
+        if result:
+            subprocess.run(
+                ["say", "-v", "Paulina", "Emma vinculada. Ya puedes usarme"],
+                check=False,
+            )
+            print("\n  ✓ Vinculada exitosamente.\n")
+            return 0
+        print("\n  ✗ Vinculación no completada (código expiró o fue rechazado).\n")
+        return 2
+
+    log.info("first_run_pairing")
+    return asyncio.run(do_pair())
 
 
 def _credential_preflight(log: structlog.BoundLogger) -> int | None:
@@ -191,6 +243,8 @@ def main() -> int:
 
     # First-run setup wizard (Prompt 29): the installer launches Emma.app with
     # --first-run; serve the guided wizard instead of starting the daemon.
+    if args.first_run and args.pair:
+        return _run_pairing(log)
     if args.first_run:
         from installer.firstrun import wizard
 

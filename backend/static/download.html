@@ -10,18 +10,27 @@
   main{max-width:620px;margin:0 auto;padding:80px 40px}
   h1{margin:0 0 12px}
   .lede{color:var(--ink-soft);font-size:18px;line-height:1.55;margin:0 0 30px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px 0}
-  a.dl{display:flex;flex-direction:column;gap:6px;background:var(--bg-elev);border:1px solid var(--rule);
-    border-radius:12px;padding:20px;transition:border-color .15s var(--ease),transform .15s var(--ease)}
-  a.dl:hover{border-color:var(--accent-q);transform:translateY(-1px)}
-  a.dl b{font-family:var(--font-display);font-size:18px;font-weight:600}
-  a.dl .sub{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);letter-spacing:.02em}
-  .ver{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);letter-spacing:.04em}
-  .ver a{color:var(--accent)}
+  .install-cmd{margin:30px 0}
+  .cmd-row{display:flex;gap:10px;align-items:stretch;background:var(--bg-elev);
+    border:1px solid var(--rule);border-radius:10px;padding:14px 18px}
+  .cmd-row pre{margin:0;flex:1;overflow-x:auto;font-family:var(--font-mono);
+    font-size:14px;color:var(--ink);white-space:pre;line-height:1.5}
+  .copy-btn{background:var(--accent);color:#faf6ef;border:none;border-radius:7px;
+    padding:0 18px;font-family:var(--font-mono);font-size:12px;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;cursor:pointer;flex:0 0 auto;
+    transition:background .15s var(--ease)}
+  .copy-btn:hover{background:#b85a2a}
+  .copy-btn.done{background:#5aa843}
+  .cmd-status{margin-top:8px;font-family:var(--font-mono);font-size:12px;
+    color:var(--accent);min-height:18px}
   .steps{margin-top:30px;background:var(--bg-elev);border:1px solid var(--rule);border-radius:12px;
     padding:24px;color:var(--ink-soft);font-size:15px;line-height:1.75}
   .steps b{color:var(--ink);font-weight:500}
-  @media(max-width:520px){.row{grid-template-columns:1fr}main{padding:56px 22px}}
+  .tiny{margin-top:32px;font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);
+    letter-spacing:.02em;line-height:1.7}
+  .tiny a{color:var(--accent)}
+  .tiny code{background:var(--bg-elev);padding:1px 6px;border-radius:4px;font-size:.92em}
+  @media(max-width:520px){main{padding:56px 22px}.copy-btn{padding:0 12px}}
 </style></head><body>
 <nav class="site-nav"><div class="row">
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
@@ -29,45 +38,53 @@
 </div></nav>
 <main>
   <h1>Instala Emma</h1>
-  <p class="lede">Llámala con «Hey Emma». Inicia sesión, activa tu plan y empieza — nosotros nos encargamos del cómputo. Tu memoria y tus secretos viven en tu Mac.</p>
-  <div class="row">
-    <a class="dl" id="dlmac" href="/api/downloads/latest" rel="noopener"><b>macOS</b><span class="sub">.pkg · Apple Silicon + Intel</span></a>
-    <a class="dl" id="dlwin" href="#" rel="noopener"><b>Windows</b><span class="sub">.msi · pronto</span></a>
+  <p class="lede">Un comando y en 3 minutos Emma vive en tu Mac. macOS 14+ (Sonoma) en Apple Silicon.</p>
+
+  <section class="install-cmd">
+    <div class="cmd-row">
+      <pre><code id="cmd">curl -fsSL https://theemmafamily.com/install.sh | sh</code></pre>
+      <button class="copy-btn" type="button" onclick="copyCmd()">Copiar</button>
+    </div>
+    <div class="cmd-status" id="cmdStatus" role="status"></div>
+  </section>
+
+  <div class="steps">
+    <p><b>Qué hace el instalador:</b></p>
+    <p>1. Verifica tu Mac (macOS 14+ · Apple Silicon).</p>
+    <p>2. Baja <code>uv</code> (Python portable) — <b>no necesita Homebrew</b>.</p>
+    <p>3. Baja el código de Emma, instala deps, descarga el wake word model.</p>
+    <p>4. Pide permisos macOS (mic, accesibilidad, automatización).</p>
+    <p>5. Te dicta un código para vincularte con tu cuenta.</p>
+    <p>6. Deja Emma corriendo en background.</p>
   </div>
-  <div class="ver">Versión <span id="ver">…</span> · <a href="/api/downloads/changelog">cambios</a></div>
-  <div class="steps" id="changelog">
-    <p><b>Después de instalar:</b></p>
-    <p>1. Concede los permisos cuando Emma los pida (micrófono, accesibilidad, automatización).</p>
-    <p>2. Inicia sesión con tu cuenta de Emma y activa tu plan.</p>
-    <p>3. Di «Hey Emma» y empieza.</p>
-  </div>
+
+  <p class="tiny">
+    Para revisar antes de correr: <a href="https://theemmafamily.com/install.sh">ver el script</a>
+    · <a href="https://github.com/theemmafamily/emma">código fuente</a>
+    · desinstalar: <code>curl -fsSL https://theemmafamily.com/uninstall.sh | sh</code>
+  </p>
 </main>
 <footer class="site-foot"><div class="row">
   <span>© 2026 emma</span>
   <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/plans">precios</a><a href="/dashboard">panel</a><a href="/privacy">privacidad</a><a href="/terms">términos</a></span>
 </div></footer>
 <script>
-// The mac tile links straight to /api/downloads/latest (302 → .pkg for signed-in
-// users; login-gated for telemetry). Only the version string is fetched here, from
-// the PUBLIC changelog endpoint (the old code called .json() on a 302 and the
-// buttons stayed dead).
-async function init(){
-  // The .pkg is login-gated (telemetry). Route anon visitors through login so
-  // they don't land on a raw 401 JSON page when they click the macOS tile.
-  try{
-    const w=await fetch("/api/auth/whoami").then(r=>r.ok?r.json():null).catch(()=>null);
-    if(!(w&&w.authenticated)) document.getElementById("dlmac").href="/login?next=/download";
-  }catch(e){}
-  try{
-    const r=await fetch("/api/downloads/changelog");
-    if(r.ok){
-      const d=await r.json();
-      const v=(d.versions&&d.versions[0]&&d.versions[0].version)||"";
-      if(v)document.getElementById("ver").textContent=v;
-    }
-  }catch(e){}
+// One-command install: copy `curl … | sh` to the clipboard. No .pkg, no login gate
+// (the old page routed anon visitors through /login to a 302 → signed .pkg — that
+// whole flow is gone with the curl|sh distribution pivot).
+async function copyCmd(){
+  const cmd = document.getElementById('cmd').textContent.trim();
+  const btn = document.querySelector('.copy-btn');
+  try {
+    await navigator.clipboard.writeText(cmd);
+    btn.textContent = 'Copiado';
+    btn.classList.add('done');
+    document.getElementById('cmdStatus').textContent = 'Abre Terminal (Cmd+Space, "Terminal"), pega y Enter.';
+    setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('done'); }, 3000);
+  } catch (e) {
+    document.getElementById('cmdStatus').textContent = 'No pude copiar. Selecciona el texto y copia manualmente.';
+  }
 }
-init();
 </script>
 <script src="/static/nav.js"></script>
 </body></html>
