@@ -20,49 +20,31 @@
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
   <div class="nav-right"><div class="nav-links"><a class="nav-link" href="/plans">Precios</a><div class="acct-menu"><button class="acct-btn" aria-haspopup="true">Cuenta ▾</button><ul class="acct-list" role="menu"><li><a href="/login">Entrar</a></li><li><a href="/register">Crear cuenta</a></li></ul></div><a class="btn btn-primary nav-cta" href="/download">Descargar Emma</a></div></div>
 </div></nav>
-<main>
+<main class="plans-main">
   <h1>Planes</h1>
-  <p class="lede">Emma se encarga del cómputo por ti — no necesitas tu propia llave de OpenAI. Pagas una cuota mensual con minutos incluidos y un excedente medido si hablas de más.</p>
-  <table class="cmp" id="tbl">
-    <tbody><tr><td class="ink-soft">Cargando…</td></tr></tbody>
+  <p class="lede">Emma se encarga del cómputo — no necesitas tu propia llave de OpenAI. Pagas una cuota mensual + minutos incluidos. Si hablas más, compras minutos extras en bundles o activas auto-recarga.</p>
+
+  <table class="cmp">
+    <tbody>
+      <tr><td></td><td><b>Pro</b></td><td><b>Power</b></td></tr>
+      <tr><td>Precio del software</td><td>$19/mes</td><td>$49/mes</td></tr>
+      <tr><td>Baseline mensual</td>   <td>60 min</td> <td>200 min</td></tr>
+      <tr><td>Sesión máx</td>         <td>30 min</td> <td>60 min</td></tr>
+      <tr><td>Sesiones simultáneas</td><td>1</td>     <td>2</td></tr>
+      <tr><td>Bundles extras</td>     <td>desde $9.99 (30 min)</td><td>desde $9.99 (30 min)</td></tr>
+      <tr><td>Auto-recarga</td>       <td>opcional</td><td>opcional</td></tr>
+      <tr><td>Soporte</td>            <td>correo · 48h</td><td>chat · 24h</td></tr>
+    </tbody>
   </table>
-  <p class="note">Cancela cuando quieras desde tu panel · <a href="https://theemmafamily.com">← portada</a></p>
+
+  <p class="note">
+    Los minutos extras se compran desde tu <a href="/dashboard">panel</a>. No expiran.
+    Emma te avisa por voz cuando llegas al 80% y al 90% de tu plan.
+  </p>
 </main>
 <footer class="site-foot"><div class="row">
   <span>© 2026 emma</span>
   <span class="links"><a href="https://theemmafamily.com">portada</a><a href="/download">descarga</a><a href="/login">entrar</a><a href="/privacy">privacidad</a><a href="/terms">términos</a></span>
 </div></footer>
-<script>
-async function init(){
-  let data;
-  try{ data=await (await fetch("/api/plans")).json(); }
-  catch(e){ document.getElementById("tbl").innerHTML='<tbody><tr><td>No pude cargar los planes. <a href="https://theemmafamily.com" style="color:var(--accent)">Volver</a></td></tr></tbody>'; return; }
-  const me=await fetch("/api/auth/whoami").then(r=>r.ok?r.json():null).catch(()=>null);
-  const isAuthed=!!(me&&me.user);
-  const P=data.plans;  // [pro, power]
-  const cell=(p,v)=>`<td>${v}</td>`;
-  const cta=(p)=> isAuthed
-    ? `<button class="btn btn-primary buy" onclick="checkout('${p.id}')">Suscribirme</button>`
-    : `<button class="btn btn-primary buy" onclick="location.href='/register?next=/plans'">Crea cuenta</button>`;
-  const rows=[
-    ["",       P.map(p=>`<span style="font-family:var(--font-display);font-size:18px;font-weight:600">${p.name}</span>`)],
-    ["Precio", P.map(p=>`<span class="price">$${p.monthly}</span><span class="per"> / mes</span>`)],
-    ["Cómputo",    P.map(_=>`administrado por Emma`)],
-  ];
-  let html="<tbody>";
-  for(const [k,vals] of rows){
-    html+=`<tr><td>${k}</td>${vals.map(v=>`<td>${v}</td>`).join("")}</tr>`;
-  }
-  html+=`<tr><td></td>${P.map(p=>`<td class="cta">${cta(p)}</td>`).join("")}</tr>`;
-  html+="</tbody>";
-  document.getElementById("tbl").innerHTML=html;
-}
-async function checkout(plan){
-  const r=await fetch("/api/billing/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
-  if(r.ok){ const d=await r.json(); if(d&&d.url){ location.href=d.url; } else { alert("Pagos aún no están configurados. Pronto."); } }
-  else{ alert("Pagos aún no están configurados. Pronto."); }
-}
-init();
-</script>
 <script src="/static/nav.js"></script>
 </body></html>
