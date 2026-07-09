@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from backend import db
 from backend.auth import require_user
-from backend.config import settings
+from backend.config import BUNDLES, settings
 from backend.schemas import CheckoutRequest, CheckoutResponse
 
 router = APIRouter()
@@ -75,6 +75,44 @@ def handle_event(event: dict[str, Any]) -> str:
         return "downgraded:free"
     if etype == "invoice.payment_failed":
         return "payment_failed"
+
+    # DASHBOARD-CREDITS-2: off-session auto-refill completions land here (the
+    # on-session first purchase is credited by /api/bundles/confirm instead).
+    if etype == "payment_intent.succeeded":
+        meta = obj.get("metadata") or {}
+        if meta.get("purpose") == "emma_auto_refill":
+            user_id = int(meta.get("user_id", 0) or 0)
+            b = BUNDLES.get(meta.get("bundle_key", ""))
+            if user_id and b:
+                # Idempotency — trigger_auto_refill usually already credited this pi.
+                conn = db.connect()
+                try:
+                    already = conn.execute(
+                        "SELECT id FROM refill_events WHERE stripe_payment_intent=? AND status='succeeded'",
+                        (obj.get("id"),),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                if not already:
+                    db.add_seconds_to_balance(user_id, int(b["seconds"]))
+                    db.append_refill_event(
+                        user_id, meta["bundle_key"], int(b["seconds"]), b["usd"],
+                        obj.get("id"), "auto", "succeeded",
+                    )
+        return "credited"
+
+    if etype == "payment_intent.payment_failed":
+        meta = obj.get("metadata") or {}
+        if meta.get("purpose") in ("emma_auto_refill", "emma_bundle_purchase"):
+            user_id = int(meta.get("user_id", 0) or 0)
+            b = BUNDLES.get(meta.get("bundle_key", ""))
+            if user_id and b:
+                db.append_refill_event(
+                    user_id, meta.get("bundle_key", ""), 0, b["usd"],
+                    obj.get("id"), meta.get("purpose", "unknown"), "failed",
+                )
+        return "refill_failed"
+
     return "ignored"
 
 

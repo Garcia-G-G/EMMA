@@ -110,6 +110,46 @@ CREATE TABLE IF NOT EXISTS user_status_events (
 );
 CREATE INDEX IF NOT EXISTS ix_user_status_events_user ON user_status_events(user_id);
 CREATE INDEX IF NOT EXISTS ix_user_status_events_created ON user_status_events(created_at);
+
+-- DASHBOARD-CREDITS-2: prepaid extra minutes + auto-refill preference.
+CREATE TABLE IF NOT EXISTS user_balance (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  extra_seconds INTEGER NOT NULL DEFAULT 0,       -- purchased seconds, no expiry
+  extra_held_seconds INTEGER NOT NULL DEFAULT 0,  -- reserved by active sessions
+  auto_refill_enabled INTEGER NOT NULL DEFAULT 0,
+  auto_refill_bundle_key TEXT DEFAULT 'regular',
+  default_payment_method TEXT,                    -- Stripe pm_xxx
+  updated_at REAL NOT NULL
+);
+
+-- Per-purchase audit + Stripe receipts.
+CREATE TABLE IF NOT EXISTS refill_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  bundle_key TEXT NOT NULL,                        -- starter | regular | power
+  seconds_added INTEGER NOT NULL,
+  amount_usd REAL NOT NULL,
+  stripe_payment_intent TEXT,                      -- pi_xxx
+  trigger TEXT NOT NULL,                           -- manual | auto | first_purchase
+  status TEXT NOT NULL DEFAULT 'succeeded',        -- succeeded | requires_action | failed
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_refill_events_user ON refill_events(user_id);
+CREATE INDEX IF NOT EXISTS ix_refill_events_created ON refill_events(created_at);
+
+-- Held-seconds reservation per session (concurrency + idempotency). session_id
+-- is the PK so retries are safe.
+CREATE TABLE IF NOT EXISTS balance_reservations (
+  session_id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  reserved_seconds INTEGER NOT NULL,
+  consumed_seconds INTEGER,                         -- NULL until session closes
+  status TEXT NOT NULL DEFAULT 'held',             -- held | consumed | released
+  created_at REAL NOT NULL,
+  closed_at REAL
+);
+CREATE INDEX IF NOT EXISTS ix_reservations_user ON balance_reservations(user_id);
+CREATE INDEX IF NOT EXISTS ix_reservations_status ON balance_reservations(status);
 """
 
 
@@ -725,5 +765,203 @@ def revoke_all_device_tokens_for_user(user_id: int) -> int:
         )
         conn.commit()
         return int(cur.rowcount)
+    finally:
+        conn.close()
+
+
+# ---- DASHBOARD-CREDITS-2: prepaid balance, reservations, refills -------------
+
+
+def get_user_balance(user_id: int) -> dict[str, Any] | None:
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM user_balance WHERE user_id=?", (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def ensure_user_balance(user_id: int) -> None:
+    """Idempotent — create the balance row with defaults if absent."""
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO user_balance(user_id, extra_seconds, extra_held_seconds, "
+            "auto_refill_enabled, updated_at) VALUES(?, 0, 0, 0, ?)",
+            (user_id, time.time()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_auto_refill(user_id: int, enabled: bool, bundle_key: str = "regular") -> None:
+    ensure_user_balance(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_balance SET auto_refill_enabled=?, auto_refill_bundle_key=?, "
+            "updated_at=? WHERE user_id=?",
+            (1 if enabled else 0, bundle_key, time.time(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_default_payment_method(user_id: int, pm_id: str) -> None:
+    ensure_user_balance(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_balance SET default_payment_method=?, updated_at=? WHERE user_id=?",
+            (pm_id, time.time(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_seconds_to_balance(user_id: int, seconds: int) -> None:
+    """Credit purchased seconds. Called ONLY from the Stripe webhook or the
+    on-session buy handler — never elsewhere."""
+    ensure_user_balance(user_id)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE user_balance SET extra_seconds=extra_seconds+?, updated_at=? WHERE user_id=?",
+            (seconds, time.time(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def try_reserve_seconds(user_id: int, session_id: str, seconds: int) -> tuple[bool, int]:
+    """Atomically hold `seconds` of the user's available extra balance for
+    `session_id`. Returns (ok, held_now). Idempotent — the same session_id returns
+    the existing hold. Single conditional UPDATE under BEGIN IMMEDIATE, so two
+    concurrent sessions can't double-spend the same seconds."""
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT reserved_seconds, status FROM balance_reservations WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if existing:
+            conn.commit()
+            if existing["status"] == "held":
+                return True, int(existing["reserved_seconds"])
+            return False, 0  # already consumed/released → don't re-hold
+
+        conn.execute(
+            "INSERT OR IGNORE INTO user_balance(user_id, extra_seconds, extra_held_seconds, "
+            "auto_refill_enabled, updated_at) VALUES(?, 0, 0, 0, ?)",
+            (user_id, time.time()),
+        )
+        row = conn.execute(
+            "SELECT extra_seconds, extra_held_seconds FROM user_balance WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+        available = int(row["extra_seconds"] or 0) - int(row["extra_held_seconds"] or 0)
+        if available <= 0 or seconds <= 0:
+            conn.commit()
+            return False, 0
+
+        hold = min(seconds, available)
+        cur = conn.execute(
+            "UPDATE user_balance SET extra_held_seconds=extra_held_seconds+?, updated_at=? "
+            "WHERE user_id=? AND (extra_seconds - extra_held_seconds) >= ?",
+            (hold, time.time(), user_id, hold),
+        )
+        if cur.rowcount == 0:  # lost the race between SELECT and UPDATE
+            conn.commit()
+            return False, 0
+        conn.execute(
+            "INSERT INTO balance_reservations(session_id, user_id, reserved_seconds, status, created_at) "
+            "VALUES(?, ?, ?, 'held', ?)",
+            (session_id, user_id, hold, time.time()),
+        )
+        conn.commit()
+        return True, hold
+    finally:
+        conn.close()
+
+
+def finalize_reservation(session_id: str, seconds_actually_used: int) -> None:
+    """Session ended: move held→consumed, refunding the unused portion. Idempotent —
+    a retry after finalization is a silent no-op."""
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        res = conn.execute(
+            "SELECT user_id, reserved_seconds, status FROM balance_reservations WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if not res or res["status"] != "held":
+            conn.commit()
+            return
+        held = int(res["reserved_seconds"])
+        used = max(0, min(seconds_actually_used, held))
+        # extra_seconds drops by `used` only (the refund of held-minus-used is implicit).
+        conn.execute(
+            "UPDATE user_balance SET extra_seconds=extra_seconds-?, "
+            "extra_held_seconds=extra_held_seconds-?, updated_at=? WHERE user_id=?",
+            (used, held, time.time(), res["user_id"]),
+        )
+        conn.execute(
+            "UPDATE balance_reservations SET status='consumed', consumed_seconds=?, closed_at=? "
+            "WHERE session_id=?",
+            (used, time.time(), session_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def append_refill_event(
+    user_id: int, bundle_key: str, seconds_added: int, amount_usd: float,
+    stripe_payment_intent: str | None, trigger: str, status: str = "succeeded",
+) -> int:
+    conn = connect()
+    try:
+        cur = conn.execute(
+            "INSERT INTO refill_events(user_id, bundle_key, seconds_added, amount_usd, "
+            "stripe_payment_intent, trigger, status, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, bundle_key, seconds_added, amount_usd, stripe_payment_intent,
+             trigger, status, time.time()),
+        )
+        conn.commit()
+        return int(cur.lastrowid or 0)
+    finally:
+        conn.close()
+
+
+def refill_history_for_user(user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM refill_events WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def seconds_used_last_n_days(user_id: int, days: int = 7) -> int:
+    """Usage over the last N days — the runway estimate's denominator."""
+    cutoff = time.time() - days * 86400
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(seconds), 0) AS s FROM usage_events "
+            "WHERE user_id=? AND created_at >= ?",
+            (user_id, cutoff),
+        ).fetchone()
+        return int(row["s"] or 0)
     finally:
         conn.close()

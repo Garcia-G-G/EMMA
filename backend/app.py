@@ -22,6 +22,7 @@ from backend import (
     admin_routes,
     auth,
     auth_local,
+    credits_routes,
     db,
     demo_session,
     device_pairing,
@@ -78,6 +79,7 @@ app.include_router(auth.router)
 app.include_router(auth_local.router)
 app.include_router(account_routes.router)
 app.include_router(stripe_routes.router)
+app.include_router(credits_routes.router)  # DASHBOARD-CREDITS-2: balance/bundles/auto-refill
 # app.include_router(wake_routes.router)  # disabled in Fly deploy
 app.include_router(demo_session.router)
 app.include_router(admin_routes.router)
@@ -181,7 +183,11 @@ async def terms_page() -> str:
 async def dashboard(request: Request) -> Any:
     if await current_user(request) is None:
         return RedirectResponse("/login")
-    return HTMLResponse((_STATIC / "dashboard.html").read_text(encoding="utf-8"))
+    # The page is served static (no Jinja), so inject the Stripe *publishable* key
+    # (safe to expose) by substituting the placeholder. Bundle purchases need it.
+    html = (_STATIC / "dashboard.html").read_text(encoding="utf-8")
+    html = html.replace("{{ stripe_pk }}", settings.STRIPE_PUBLISHABLE_KEY)
+    return HTMLResponse(html)
 
 
 @app.get("/admin", response_class=HTMLResponse)

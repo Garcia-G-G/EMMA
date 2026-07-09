@@ -6,6 +6,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/tokens.css?v=5">
+<script src="https://js.stripe.com/v3/"></script>
+<script>window.STRIPE_PK = "{{ stripe_pk }}";</script>
 <style>
   main{max-width:1080px;margin:0 auto;padding:48px 40px 80px}
   /* hero */
@@ -58,6 +60,49 @@
   .logout-row a{color:var(--ink-soft)}.logout-row a:hover{color:var(--accent)}
   @media(max-width:860px){.dash-grid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr}.acct-grid{grid-template-columns:1fr}}
   @media(max-width:760px){main{padding:36px 20px 60px}.dash-hero{flex-direction:column;align-items:flex-start}}
+  /* DASHBOARD-CREDITS-2 */
+  .balance-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;
+    background:var(--bg-elev);border:1px solid var(--rule);margin:14px 0 8px}
+  .bar-baseline{background:var(--accent);height:100%;transition:width .3s var(--ease)}
+  .bar-extra{background:var(--accent-q);height:100%;transition:width .3s var(--ease)}
+  .balance-detail{color:var(--ink-soft);font-size:13px;margin-top:6px}
+  .runway{color:var(--ink-soft);font-size:13px;margin-left:8px}
+  .calc summary{cursor:pointer;font-family:var(--font-mono);font-size:12px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);
+    padding:12px 0;border-top:1px solid var(--rule)}
+  .calc-body{padding:14px 0;display:flex;flex-direction:column;gap:16px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--bg-elev);border:1px solid var(--rule);border-radius:20px;
+    padding:6px 14px;font-family:var(--font-mono);font-size:12px;cursor:pointer;
+    color:var(--ink);transition:border-color .15s var(--ease),background .15s var(--ease)}
+  .chip:hover,.chip.on{border-color:var(--accent-q);background:rgba(255,140,58,.08);color:var(--accent)}
+  .calc-body label{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--ink-soft)}
+  .calc-body input[type=number]{background:var(--bg-elev);border:1px solid var(--rule);
+    border-radius:6px;padding:8px 12px;color:var(--ink);width:120px;font-size:14px}
+  .calc-result{padding:14px 18px;background:var(--bg-elev);border:1px solid var(--accent-q);
+    border-radius:8px;font-size:15px}
+  .calc-result b{color:var(--accent)}
+  .bundles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+  .bundle{background:var(--bg-elev);border:1px solid var(--rule);border-radius:12px;
+    padding:22px 18px;text-align:center;position:relative;
+    transition:border-color .15s var(--ease),transform .15s var(--ease)}
+  .bundle:hover{border-color:var(--accent-q);transform:translateY(-2px)}
+  .bundle .m{font-family:var(--font-display);font-size:26px;font-weight:600;color:var(--ink)}
+  .bundle .p{font-family:var(--font-mono);font-size:12px;color:var(--accent);letter-spacing:.06em;margin-top:4px}
+  .bundle .u{color:var(--ink-soft);font-size:11px;margin-top:4px}
+  .bundle button{width:100%;margin-top:14px;padding:10px;background:var(--accent);
+    color:#faf6ef;border:none;border-radius:8px;font-family:var(--font-mono);
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
+    font-weight:600;transition:background .15s var(--ease)}
+  .bundle button:hover{background:#b85a2a}
+  .bundle.hot{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,140,58,.15)}
+  .bundle.hot::before{content:"Recomendado";display:block;position:absolute;top:-11px;left:50%;
+    transform:translateX(-50%);background:var(--accent);color:#faf6ef;font-family:var(--font-mono);
+    font-size:10px;padding:3px 10px;border-radius:10px;letter-spacing:.08em;white-space:nowrap}
+  .bundle-note{margin-top:14px;color:var(--ink-soft);font-size:12px}
+  .toggle{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-size:14px}
+  .autorefill-sel{background:var(--bg-elev);border:1px solid var(--rule);border-radius:6px;
+    padding:4px 8px;color:var(--ink);font-size:13px}
 </style></head><body>
 <nav class="site-nav"><div class="row">
   <a class="brand" href="https://theemmafamily.com"><svg class="mk" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="var(--accent)" stroke-width="1.3"><ellipse cx="12" cy="12" rx="10" ry="3.6"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="3.6" transform="rotate(120 12 12)"/></g></svg>Emma</a>
@@ -97,6 +142,56 @@
           <button class="btn btn-ghost" onclick="portal();return false">Gestionar facturación</button>
         </div>
       </div>
+      <div class="card">
+        <div class="card-h">
+          <h2>Saldo</h2>
+          <span class="aside"><b id="totalLeft">…</b> min disponibles<span id="runway" class="runway"></span></span>
+        </div>
+        <div class="balance-bar" aria-hidden="true">
+          <div class="bar-baseline" id="barBaseline" style="width:0%"></div>
+          <div class="bar-extra" id="barExtra" style="width:0%"></div>
+        </div>
+        <div class="balance-detail" id="balanceDetail">…</div>
+
+        <details class="calc" style="margin-top:22px">
+          <summary>¿Cuántos minutos necesito?</summary>
+          <div class="calc-body">
+            <div class="chips">
+              <button type="button" class="chip" data-preset="30">Ligero · 30 min/día</button>
+              <button type="button" class="chip" data-preset="60">Regular · 1 h/día</button>
+              <button type="button" class="chip" data-preset="180">Intenso · 3 h/día</button>
+            </div>
+            <label>Minutos por día <input type="number" id="calcMin" min="1" max="1440" value="60"></label>
+            <div class="calc-result" id="calcResult">…</div>
+          </div>
+        </details>
+
+        <h3 style="margin-top:24px;font-size:16px">Comprar minutos</h3>
+        <div class="bundles" id="bundleGrid">…</div>
+        <div class="bundle-note">
+          Los minutos extras no expiran. Se consumen después de tu baseline mensual.
+          Rate transparente por minuto en cada bundle — <a href="/plans" style="color:var(--accent)">ver planes</a>.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h2>Auto-recarga</h2></div>
+        <label class="toggle"><input type="checkbox" id="autoRefillToggle"><span>Activar</span></label>
+        <p class="aside" style="margin-top:8px">
+          Cuando llegues al 100%, recargo el bundle
+          <select id="autoRefillBundle" class="autorefill-sel">
+            <option value="starter">Starter · 30 min · $9.99</option>
+            <option value="regular" selected>Regular · 100 min · $19.99</option>
+            <option value="power">Power · 300 min · $49.99</option>
+          </select>
+          con tu método de pago guardado. Emma te avisa por voz antes de cada recarga.
+        </p>
+        <div class="form-note" id="autoRefillMsg"></div>
+        <p class="aside" style="margin-top:14px;font-size:12px">
+          Historial: <a href="#" onclick="showRefills();return false" style="color:var(--accent)">ver recargas</a>
+        </p>
+      </div>
+
       <div class="card">
         <div class="card-h"><h2>Sesiones recientes</h2></div>
         <table class="cmp"><thead><tr><th>Inicio</th><th>Duración</th><th>Costo</th></tr></thead>
@@ -237,6 +332,92 @@ async function delAccount(){
   const r=await fetch("/api/me",{method:"DELETE"});
   if(r.ok){ location.href="https://theemmafamily.com"; } else { alert("No se pudo borrar la cuenta."); }
 }
+
+// ---- DASHBOARD-CREDITS-2 ----
+const STRIPE_PK = window.STRIPE_PK || "";
+let stripe = (STRIPE_PK && window.Stripe) ? Stripe(STRIPE_PK) : null;
+// Calculator rate = what the user actually pays via the recommended bundle (honest),
+// set from /api/bundles below. Falls back to Regular's $0.20/min.
+let RATE_PER_MIN_USD = 0.20;
+
+async function loadBalance(){
+  const r = await fetch("/api/balance"); if(!r.ok) return;
+  const d = await r.json();
+  document.getElementById("totalLeft").textContent = d.total_left_min;
+  const pctB = d.baseline_total_min>0 ? (d.baseline_left_min/d.baseline_total_min*100) : 0;
+  const pctE = d.baseline_total_min>0 ? (d.extra_min/d.baseline_total_min*100) : (d.extra_min>0?100:0);
+  document.getElementById("barBaseline").style.width = Math.max(0,Math.min(100,pctB))+"%";
+  document.getElementById("barExtra").style.width    = Math.max(0,Math.min(100,pctE))+"%";
+  document.getElementById("balanceDetail").textContent =
+    `Baseline: ${d.baseline_left_min}/${d.baseline_total_min} min este mes · Extra: ${d.extra_min} min · Usado: ${d.used_this_month_min} min`;
+  document.getElementById("runway").textContent =
+    d.runway_days_est ? ` · te alcanza para ~${d.runway_days_est} días` : "";
+  document.getElementById("autoRefillToggle").checked = d.auto_refill_enabled;
+  document.getElementById("autoRefillBundle").value = d.auto_refill_bundle;
+}
+
+async function loadBundles(){
+  const rB = await fetch("/api/bundles").then(r=>r.json()).catch(()=>null);
+  if(!rB) return;
+  const reg = rB.bundles.find(b=>b.key==="regular");
+  if(reg) { RATE_PER_MIN_USD = reg.per_min_usd; updateCalculator(); }
+  document.getElementById("bundleGrid").innerHTML = rB.bundles.map(b=>`
+    <div class="bundle${b.recommended?" hot":""}">
+      <div class="m">${b.minutes} min</div>
+      <div class="p">$${b.usd.toFixed(2)}</div>
+      <div class="u">$${b.per_min_usd.toFixed(3)}/min · ${b.label_es}</div>
+      <button onclick="buyBundle('${b.key}')">Comprar</button>
+    </div>`).join("");
+}
+
+async function buyBundle(key){
+  if(!stripe){ alert("Stripe.js no cargó. Recarga la página."); return; }
+  const r = await fetch("/api/bundles/buy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({bundle_key:key})});
+  if(!r.ok){ const e=await r.json().catch(()=>({})); alert(e.detail||"No se pudo iniciar el cobro."); return; }
+  const d = await r.json();
+  const result = await stripe.confirmPayment({clientSecret:d.client_secret,confirmParams:{return_url:window.location.href},redirect:"if_required"});
+  if(result.error){ alert(result.error.message); return; }
+  const rc = await fetch("/api/bundles/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({payment_intent_id:d.payment_intent_id})});
+  if(rc.ok){ const cd=await rc.json(); alert(`Listo — ${Math.round(cd.seconds_added/60)} minutos añadidos.`); loadBalance(); loadBundles(); }
+}
+
+async function toggleAutoRefill(){
+  const enabled = document.getElementById("autoRefillToggle").checked;
+  const bundle_key = document.getElementById("autoRefillBundle").value;
+  const r = await fetch("/api/autorefill",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled,bundle_key})});
+  const d = await r.json().catch(()=>({}));
+  document.getElementById("autoRefillMsg").textContent =
+    r.ok ? (enabled?"Auto-recarga activa.":"Auto-recarga desactivada.") : (d.detail||"Error");
+  if(!r.ok) document.getElementById("autoRefillToggle").checked = !enabled;  // revert on failure
+  loadBalance();
+}
+document.getElementById("autoRefillToggle").addEventListener("change", toggleAutoRefill);
+document.getElementById("autoRefillBundle").addEventListener("change", ()=>{ if(document.getElementById("autoRefillToggle").checked) toggleAutoRefill(); });
+
+async function showRefills(){
+  const r = await fetch("/api/refills"); if(!r.ok){ alert("No pude cargar el historial."); return; }
+  const d = await r.json();
+  if(!d.refills.length){ alert("Aún no hay recargas."); return; }
+  alert(d.refills.map(x=>`${new Date(x.created_at*1000).toLocaleDateString("es")} · ${x.bundle_key} · ${Math.round(x.seconds_added/60)} min · $${x.amount_usd} · ${x.status}`).join("\n"));
+}
+
+function updateCalculator(){
+  const minPerDay = +document.getElementById("calcMin").value || 0;
+  const monthlyMin = Math.round(minPerDay*30);
+  const monthlyUsd = (monthlyMin*RATE_PER_MIN_USD).toFixed(2);
+  document.getElementById("calcResult").innerHTML = `≈ <b>${monthlyMin}</b> min/mes · <b>$${monthlyUsd}</b> USD`;
+}
+document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));
+  c.classList.add("on");
+  document.getElementById("calcMin").value = c.dataset.preset;
+  updateCalculator();
+}));
+document.getElementById("calcMin").addEventListener("input", updateCalculator);
+updateCalculator();
+
+loadBalance();
+loadBundles();
 load();
 </script>
 <script src="/static/nav.js"></script>

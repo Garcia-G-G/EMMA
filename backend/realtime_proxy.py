@@ -123,6 +123,10 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
         session_max = min(session_max, available_month)
     session_max = max(1, session_max)
 
+    # Baseline the user still has this month (free-flow within the monthly cap). Only
+    # the overflow beyond this consumes prepaid EXTRA seconds (reserved below).
+    baseline_left_s = max(0, monthly_cap_s - used_month)
+
     # Accept first, then atomically reserve the slot. try_register does the Capa 2/3
     # (concurrent + rate) AND kill-switch check under ONE lock together with the
     # registration, so two simultaneous connects can't both pass a cap of 1, and a
@@ -137,6 +141,11 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
         await ws.close(code=code, reason=why or "rate_limit")
         return
     started = time.monotonic()
+    # DASHBOARD-CREDITS-2: hold the prepaid EXTRA seconds this session might use
+    # beyond its baseline, so concurrent sessions can't double-spend the balance.
+    # Guarded + lazy — a balance error must never break a session; released/consumed
+    # in the finally.
+    _reserve_extra(user_id, ws_id, session_max, baseline_left_s)
     # Token usage tallied from OpenAI `response.done` frames (authoritative — audio
     # seconds are only a sanity check). Recorded once on close.
     tally = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "audio_tokens": 0}
@@ -206,6 +215,9 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
                 device["user_id"], device["id"], seconds, kind="realtime", model="gpt-realtime",
                 input_tokens=tally["input_tokens"], output_tokens=tally["output_tokens"],
                 cached_tokens=tally["cached_tokens"], audio_tokens=tally["audio_tokens"])
+        # DASHBOARD-CREDITS-2: consume the EXTRA seconds spent beyond baseline (and
+        # release the rest of the hold). No-op if no reservation was made.
+        _finalize_extra(ws_id, seconds, baseline_left_s)
         with contextlib.suppress(Exception):
             await ws.close()
 
@@ -312,6 +324,27 @@ def _is_auto_refill_enabled(user_id: int) -> bool:
         return bool(is_auto_refill_enabled(user_id))
     except ImportError:
         return False
+
+
+def _reserve_extra(user_id: int, session_id: str, session_max_s: int, baseline_left_s: int) -> None:
+    """Hold prepaid EXTRA seconds for this session (DASHBOARD-CREDITS-2). Lazy-import
+    + suppress so a missing module or balance error never breaks a session."""
+    try:
+        from backend.dashboard_credits import reserve_for_session
+    except ImportError:
+        return
+    with contextlib.suppress(Exception):
+        reserve_for_session(user_id, session_id, session_max_s, baseline_left_s)
+
+
+def _finalize_extra(session_id: str, seconds_used: int, baseline_left_s: int) -> None:
+    """Consume/release the session's EXTRA reservation on close. Idempotent + guarded."""
+    try:
+        from backend.dashboard_credits import finalize_session
+    except ImportError:
+        return
+    with contextlib.suppress(Exception):
+        finalize_session(session_id, seconds_used, baseline_left_s)
 
 
 async def _inject_assistant_message(upstream_ws, text: str) -> None:

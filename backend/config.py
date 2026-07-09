@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 # Per-plan caps (LANDING-27). One source of truth the demo bridge reads to size a
 # session. ``session_seconds`` = per-session length; ``daily_seconds`` = user/day
@@ -43,6 +44,29 @@ PLAN_CAPS["team"] = PLAN_CAPS["power"]
 
 def plan_caps(plan: str | None) -> dict[str, object]:
     return PLAN_CAPS.get(plan or "free", PLAN_CAPS["free"])
+
+
+# DASHBOARD-CREDITS-2: prepaid bundles. `seconds` is what the user actually gets.
+# Charm pricing under $50; volume discount (~40% Regular vs Starter, ~15% Power vs
+# Regular). "regular" is the recommended default. This is the SERVER-SIDE source of
+# truth — the client never posts an amount, only a bundle_key.
+BUNDLES: dict[str, dict[str, Any]] = {
+    "starter": {"seconds": 1800,  "usd": 9.99,  "label_es": "Prueba corta", "label_en": "Try it"},
+    "regular": {"seconds": 6000,  "usd": 19.99, "label_es": "Uso regular",  "label_en": "Regular use",
+                "recommended": True},
+    "power":   {"seconds": 18000, "usd": 49.99, "label_es": "Uso intenso",  "label_en": "Heavy use"},
+}
+
+
+def bundle(key: str) -> dict[str, Any] | None:
+    return BUNDLES.get(key)
+
+
+def bundle_per_min_usd(key: str) -> float:
+    b = BUNDLES.get(key)
+    if not b:
+        return 0.0
+    return round(b["usd"] / (b["seconds"] / 60), 3)
 
 
 class Settings:
@@ -105,6 +129,7 @@ class Settings:
     STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "")
     STRIPE_PRICE_POWER = os.environ.get("STRIPE_PRICE_POWER", "")
     STRIPE_PRICE_TEAM = os.environ.get("STRIPE_PRICE_TEAM", "")  # legacy alias for power
+    STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")  # client-side (safe to expose)
 
     # ---- Wake Word Studio (Prompt 16.3) ----
     # Auth-gate the Studio by default; flip to false only for local dev.
