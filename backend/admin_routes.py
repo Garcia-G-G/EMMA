@@ -33,12 +33,23 @@ async def admin_overview(request: Request) -> dict[str, Any]:
 # ---- ABUSE-PROTECTION-2 Capa 7: admin kill switch ---------------------------
 
 
+async def _json_body(request: Request) -> dict[str, Any]:
+    """Parse a JSON body, returning a clean 400 (not a 500 stack trace) on garbage."""
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(400, "invalid JSON body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(400, "JSON object expected")
+    return body
+
+
 @router.post("/api/admin/disable-user")
 async def admin_disable_user(request: Request) -> dict[str, Any]:
     """Disable a user: flag them, revoke every device token, cut live sessions, and
     append a hash-chained audit row. Idempotent."""
     admin_user = await require_admin(request)
-    body = await request.json()
+    body = await _json_body(request)
     email = (body.get("email") or "").strip().lower()
     reason = (body.get("reason") or "").strip()
     if not email:
@@ -48,22 +59,25 @@ async def admin_disable_user(request: Request) -> dict[str, Any]:
     if not user:
         raise HTTPException(404, "user not found")
 
+    # In-memory kill FIRST (populates disabled_users + cuts live WS), then persist —
+    # so a connect racing this can't slip past the in-memory gate before it's set.
+    cut = await conn_mgr.disable_and_cut(user["id"])
     db.set_user_disabled(user["id"], reason)
-    db.revoke_all_device_tokens_for_user(user["id"])
+    devices_revoked = db.revoke_all_device_tokens_for_user(user["id"])
     db.append_status_event(
         user["id"], "disable", actor_id=admin_user["id"], reason=reason,
         ip=request.client.host if request.client else None,
         ua=request.headers.get("user-agent", "")[:200],
     )
-    cut = await conn_mgr.disable_and_cut(user["id"])
-    return {"ok": True, "sessions_cut": cut, "user_id": user["id"]}
+    return {"ok": True, "sessions_cut": cut, "devices_revoked": devices_revoked,
+            "user_id": user["id"]}
 
 
 @router.post("/api/admin/enable-user")
 async def admin_enable_user(request: Request) -> dict[str, Any]:
     """Re-enable a previously disabled user + append an audit row. Idempotent."""
     admin_user = await require_admin(request)
-    body = await request.json()
+    body = await _json_body(request)
     email = (body.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(400, "email required")
