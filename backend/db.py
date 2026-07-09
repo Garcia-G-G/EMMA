@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS user_flags (
 CREATE TABLE IF NOT EXISTS user_status_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
-  action TEXT NOT NULL,        -- disable | enable | throttle | untrottle | anomaly_flag
+  action TEXT NOT NULL,        -- disable | enable | throttle | unthrottle | anomaly_flag
   actor_id INTEGER,            -- NULL = system/anomaly
   reason TEXT,
   ip TEXT,
@@ -505,13 +505,16 @@ def ensure_user_flags(user_id: int) -> None:
 
 
 def set_user_disabled(user_id: int, reason: str) -> None:
-    """Mark a user disabled (admin kill switch). Idempotent."""
-    ensure_user_flags(user_id)
+    """Mark a user disabled (admin kill switch). Idempotent + atomic — a single
+    upsert, so there's no ensure-then-update window where the flag could be lost."""
     conn = connect()
     try:
         conn.execute(
-            "UPDATE user_flags SET disabled=1, disabled_reason=?, disabled_at=? WHERE user_id=?",
-            (reason, time.time(), user_id),
+            "INSERT INTO user_flags(user_id, disabled, disabled_reason, disabled_at, anomaly_score) "
+            "VALUES(?, 1, ?, ?, 0.0) "
+            "ON CONFLICT(user_id) DO UPDATE SET disabled=1, "
+            "disabled_reason=excluded.disabled_reason, disabled_at=excluded.disabled_at",
+            (user_id, reason, time.time()),
         )
         conn.commit()
     finally:
@@ -532,13 +535,15 @@ def clear_user_disabled(user_id: int) -> None:
 
 
 def set_user_throttle(user_id: int, until_ts: float) -> None:
-    """Throttle a user until ``until_ts`` (anomaly response)."""
-    ensure_user_flags(user_id)
+    """Throttle a user until ``until_ts`` (anomaly response). Atomic upsert."""
     conn = connect()
     try:
         conn.execute(
-            "UPDATE user_flags SET throttle_until=?, last_anomaly_at=? WHERE user_id=?",
-            (until_ts, time.time(), user_id),
+            "INSERT INTO user_flags(user_id, disabled, anomaly_score, throttle_until, last_anomaly_at) "
+            "VALUES(?, 0, 0.0, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "throttle_until=excluded.throttle_until, last_anomaly_at=excluded.last_anomaly_at",
+            (user_id, until_ts, time.time()),
         )
         conn.commit()
     finally:
@@ -546,15 +551,41 @@ def set_user_throttle(user_id: int, until_ts: float) -> None:
 
 
 def update_anomaly_score(user_id: int, ema_new: float) -> None:
-    """Persist the rolling EMA anomaly score."""
-    ensure_user_flags(user_id)
+    """Persist an absolute anomaly score. Atomic upsert. (For the rolling fold used
+    on the hot path, prefer :func:`bump_anomaly_score`, which is race-free.)"""
     conn = connect()
     try:
         conn.execute(
-            "UPDATE user_flags SET anomaly_score=? WHERE user_id=?",
-            (ema_new, user_id),
+            "INSERT INTO user_flags(user_id, disabled, anomaly_score) VALUES(?, 0, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET anomaly_score=excluded.anomaly_score",
+            (user_id, ema_new),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def bump_anomaly_score(user_id: int, z: float, alpha: float = 0.4) -> float:
+    """Atomically fold ``z`` into the rolling EMA (``(1-alpha)*old + alpha*z``) and
+    return the NEW score. ``BEGIN IMMEDIATE`` serializes concurrent session-closes for
+    the same user, so no contribution is lost to a last-writer-wins race — which is
+    exactly the many-sessions-at-once pattern the anomaly detector must catch."""
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT OR IGNORE INTO user_flags(user_id, disabled, anomaly_score) VALUES(?, 0, 0.0)",
+            (user_id,),
+        )
+        conn.execute(
+            "UPDATE user_flags SET anomaly_score = (1 - ?) * anomaly_score + ? * ? WHERE user_id=?",
+            (alpha, alpha, z, user_id),
+        )
+        row = conn.execute(
+            "SELECT anomaly_score FROM user_flags WHERE user_id=?", (user_id,)
+        ).fetchone()
+        conn.commit()
+        return float(row["anomaly_score"])
     finally:
         conn.close()
 

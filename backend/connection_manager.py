@@ -39,26 +39,52 @@ class ConnectionManager:
         self._ws_refs: dict[str, WebSocket] = {}
         self._lock = asyncio.Lock()
 
+    def _can_connect_locked(self, user_id: int, plan_cap: dict) -> tuple[bool, str | None]:
+        """The Capa 2/3/7 predicate. Caller MUST hold ``self._lock`` — this is the
+        shared core of ``can_connect`` and the atomic ``try_register``."""
+        if user_id in self.disabled_users:
+            return False, "disabled"
+        # Capa 2 — concurrent sessions
+        if len(self.active_ws[user_id]) >= int(plan_cap.get("concurrent_sessions", 1)):
+            return False, "concurrent_limit"
+        # Capa 3 — sliding-window rate limit
+        history = self.connect_history[user_id]
+        now = time.monotonic()
+        while history and history[0] < now - self._CONNECT_WINDOW_S:
+            history.popleft()
+        reconnect_min_s = float(plan_cap.get("reconnect_min_seconds", 5))
+        if history and (now - history[-1]) < reconnect_min_s:
+            return False, "rate_limit"
+        if len(history) >= 3:
+            return False, "rate_limit_window"
+        return True, None
+
     async def can_connect(self, user_id: int, plan_cap: dict) -> tuple[bool, str | None]:
+        """Read-only predicate. NOTE: for gating a real connection use
+        ``try_register`` — checking here and registering later is a TOCTOU race
+        (two simultaneous connects both pass, then both register, busting the cap)."""
         async with self._lock:
-            if user_id in self.disabled_users:
-                return False, "disabled"
-            # Capa 2 — concurrent sessions
-            if len(self.active_ws[user_id]) >= int(plan_cap.get("concurrent_sessions", 1)):
-                return False, "concurrent_limit"
-            # Capa 3 — sliding-window rate limit
-            history = self.connect_history[user_id]
-            now = time.monotonic()
-            while history and history[0] < now - self._CONNECT_WINDOW_S:
-                history.popleft()
-            reconnect_min_s = float(plan_cap.get("reconnect_min_seconds", 5))
-            if history and (now - history[-1]) < reconnect_min_s:
-                return False, "rate_limit"
-            if len(history) >= 3:
-                return False, "rate_limit_window"
+            return self._can_connect_locked(user_id, plan_cap)
+
+    async def try_register(
+        self, user_id: int, ws_id: str, ws: WebSocket, plan_cap: dict
+    ) -> tuple[bool, str | None]:
+        """Atomically check the cap/rate/kill-switch AND reserve the slot under one
+        lock acquisition. This is the ONLY safe admission gate: because the predicate
+        and the mutation share the lock, no two connects can both pass a cap of 1, and
+        no connect can slip in between a concurrent ``disable_and_cut`` and its cut."""
+        async with self._lock:
+            ok, why = self._can_connect_locked(user_id, plan_cap)
+            if not ok:
+                return False, why
+            self.active_ws[user_id].add(ws_id)
+            self.connect_history[user_id].append(time.monotonic())
+            self._ws_refs[ws_id] = ws
             return True, None
 
     async def register(self, user_id: int, ws_id: str, ws: WebSocket) -> None:
+        """Unconditional register (test helper / non-gated paths). Prefer
+        ``try_register`` on the live admission path."""
         async with self._lock:
             self.active_ws[user_id].add(ws_id)
             self.connect_history[user_id].append(time.monotonic())

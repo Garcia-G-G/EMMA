@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import secrets
 import time
 
@@ -24,6 +25,7 @@ from backend.connection_manager import manager as conn_mgr
 from backend.device_pairing import resolve_token
 from backend.session import decode_token
 
+log = logging.getLogger("emma.realtime_proxy")
 router = APIRouter()
 
 
@@ -90,17 +92,11 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
         await ws.close(code=4429, reason="anomaly_throttle")
         return
 
-    # CAPA 2 + 3 — concurrent sessions + reconnection rate limit (in-memory).
-    ok, why = await conn_mgr.can_connect(user_id, cap)
-    if not ok:
-        code = {"disabled": 4403, "concurrent_limit": 4409,
-                "rate_limit": 4429, "rate_limit_window": 4429}.get(why or "", 4429)
-        await ws.close(code=code, reason=why or "rate_limit")
-        return
-
-    # CAPA 4 — daily cap (config existed; enforced here for the first time).
+    # CAPA 4 — daily cap (config existed; enforced here for the first time). Only
+    # binds pro/power — free's monthly=0 gate below cuts first.
     daily_cap_s = int(cap.get("daily_seconds", 0) or 0)
-    if daily_cap_s > 0 and db.seconds_used_today(user_id) >= daily_cap_s:
+    used_today = db.seconds_used_today(user_id) if daily_cap_s > 0 else 0
+    if daily_cap_s > 0 and used_today >= daily_cap_s:
         await ws.close(code=4402, reason="daily_cap")
         return
 
@@ -108,15 +104,38 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
     # ships; until then falls back to the raw monthly cap (free=0 → cut here).
     monthly_cap_s = int(cap.get("monthly_seconds", 0) or 0)
     used_month = metering.seconds_used_this_month(user_id)
-    if _total_available_seconds(user_id, plan, monthly_cap_s, used_month) <= 0 and not await _try_auto_refill(user_id, plan):
-        await ws.close(code=4402, reason="balance_zero")
-        return
+    available_month = _total_available_seconds(user_id, plan, monthly_cap_s, used_month)
+    if available_month <= 0:
+        if not await _try_auto_refill(user_id, plan):
+            await ws.close(code=4402, reason="balance_zero")
+            return
+        # Refill topped up the balance — recompute what's now available.
+        available_month = _total_available_seconds(
+            user_id, plan, monthly_cap_s, metering.seconds_used_this_month(user_id))
 
+    # Bound the per-session ceiling to the budget ACTUALLY remaining. Usage is only
+    # billed on close, so without this a single session (or a burst of reconnects)
+    # could run a full daemon_session_max past an almost-exhausted daily/monthly cap.
     session_max = int(cap.get("daemon_session_max_seconds", 1800))
+    if daily_cap_s > 0:
+        session_max = min(session_max, daily_cap_s - used_today)
+    if monthly_cap_s > 0:
+        session_max = min(session_max, available_month)
+    session_max = max(1, session_max)
 
+    # Accept first, then atomically reserve the slot. try_register does the Capa 2/3
+    # (concurrent + rate) AND kill-switch check under ONE lock together with the
+    # registration, so two simultaneous connects can't both pass a cap of 1, and a
+    # connect can't slip past a concurrent disable_and_cut. (A plain check-then-
+    # register would be a TOCTOU race across the await points above.)
     await ws.accept()
     ws_id = secrets.token_hex(12)
-    await conn_mgr.register(user_id, ws_id, ws)
+    ok, why = await conn_mgr.try_register(user_id, ws_id, ws, cap)
+    if not ok:
+        code = {"disabled": 4403, "concurrent_limit": 4409,
+                "rate_limit": 4429, "rate_limit_window": 4429}.get(why or "", 4429)
+        await ws.close(code=code, reason=why or "rate_limit")
+        return
     started = time.monotonic()
     # Token usage tallied from OpenAI `response.done` frames (authoritative — audio
     # seconds are only a sanity check). Recorded once on close.
@@ -155,12 +174,19 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
             tasks = {asyncio.create_task(t())
                      for t in (client_to_openai, openai_to_client, hard_timeout)}
             try:
-                _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 for t in pending:
                     t.cancel()
+                # Drive cancellations to completion before the `async with` closes
+                # `oai` out from under a suspended pump, and retrieve the finished
+                # task's exception (e.g. the client's WebSocketDisconnect) so it isn't
+                # logged as "exception never retrieved".
+                await asyncio.gather(*done, *pending, return_exceptions=True)
             finally:
                 ticker.cancel()
-                with contextlib.suppress(Exception):
+                # CancelledError is a BaseException, so suppress(Exception) would NOT
+                # catch it — the ticker sleeps most of its life, so cancel raises here.
+                with contextlib.suppress(asyncio.CancelledError):
                     await ticker
     except Exception:
         pass
@@ -168,8 +194,11 @@ async def _device_realtime(ws: WebSocket, token: str) -> None:
         seconds = int(min(time.monotonic() - started, float(session_max)))
         with contextlib.suppress(Exception):
             await conn_mgr.unregister(user_id, ws_id)
-        # Anomaly score BEFORE recording usage, so the just-ended session is scored
-        # against its PRIOR baseline rather than against itself.
+        # Anomaly scoring reads the PRIOR baseline (before record_usage below adds
+        # this session). Kept synchronous: bump_anomaly_score folds the EMA in one
+        # atomic statement, so this is now ~2-4 fast local sqlite ops, not the ~7 it
+        # was. It logs its own failures rather than being swallowed here. (If the
+        # backend ever goes multi-worker / higher-QPS, move to run_in_executor.)
         with contextlib.suppress(Exception):
             _update_anomaly_score(user_id, seconds)
         with contextlib.suppress(Exception):
@@ -310,7 +339,7 @@ async def _warning_ticker(upstream_ws, user_id: int, cap: dict) -> None:
         await asyncio.sleep(30)
         if daily_soft_s and "day80" not in given:
             u_day = db.seconds_used_today(user_id)
-            if u_day > daily_soft_s:
+            if u_day >= daily_soft_s:
                 remaining_min = max(0, int((daily_cap - u_day) / 60))
                 await _inject_assistant_message(
                     upstream_ws,
@@ -318,7 +347,7 @@ async def _warning_ticker(upstream_ws, user_id: int, cap: dict) -> None:
                 given.add("day80")
         if monthly_soft_s and "mnth90" not in given:
             u_mnth = metering.seconds_used_this_month(user_id)
-            if u_mnth > monthly_soft_s:
+            if u_mnth >= monthly_soft_s:
                 if _is_auto_refill_enabled(user_id):
                     msg = ("Estás cerca de tu límite mensual. Cuando llegue, "
                            "recargo automáticamente 50 minutos por 9.99 dólares.")
@@ -331,20 +360,25 @@ async def _warning_ticker(upstream_ws, user_id: int, cap: dict) -> None:
 
 def _update_anomaly_score(user_id: int, session_seconds: int) -> None:
     """EMA z-score of this session's length vs the last 14. Auto-throttle at 4-sigma
-    EMA. Needs >=4 prior sessions to have a baseline (else no-op)."""
+    EMA. Needs >=4 prior sessions to have a baseline (else no-op). Runs in a thread
+    executor (blocking sqlite); logs its own failures so a detector error can't be
+    silently swallowed by the caller's suppress()."""
     from statistics import mean, stdev
 
-    baseline = db.recent_session_seconds(user_id, limit=14)
-    if len(baseline) < 4:
-        return
-    m = mean(baseline)
-    s = max(stdev(baseline) if len(baseline) > 1 else 1.0, 1.0)
-    z = (session_seconds - m) / s
-    flags = db.get_user_flags(user_id) or {"anomaly_score": 0.0}
-    ema_new = 0.6 * float(flags.get("anomaly_score", 0.0) or 0.0) + 0.4 * z
-    db.update_anomaly_score(user_id, ema_new)
-    if ema_new > 4.0:
-        db.set_user_throttle(user_id, time.time() + 3600)  # 1h
-        db.append_status_event(
-            user_id, "throttle", actor_id=None,
-            reason=f"anomaly z={z:.2f} ema={ema_new:.2f}")
+    try:
+        baseline = db.recent_session_seconds(user_id, limit=14)
+        if len(baseline) < 4:
+            return
+        m = mean(baseline)
+        s = max(stdev(baseline), 1.0)  # >=2 samples guaranteed by the <4 guard above
+        z = (session_seconds - m) / s
+        # Atomic fold — no read-modify-write race when many sessions close at once.
+        ema_new = db.bump_anomaly_score(user_id, z)
+        if ema_new > 4.0:
+            db.set_user_throttle(user_id, time.time() + 3600)  # 1h
+            db.append_status_event(
+                user_id, "throttle", actor_id=None,
+                reason=f"anomaly z={z:.2f} ema={ema_new:.2f}")
+            log.warning("anomaly_throttle user_id=%s z=%.2f ema=%.2f", user_id, z, ema_new)
+    except Exception as exc:  # never let scoring break session teardown
+        log.warning("anomaly_score_failed user_id=%s error=%s", user_id, exc)
