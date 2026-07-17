@@ -25,7 +25,31 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.lifecycle")
 
-_LAUNCHD_LABEL = "com.garcia.emma"
+# Both labels exist in the wild: legacy dev installs registered com.garcia.emma;
+# install.sh (CLIENT-INSTALL-PHASE-3) registers the public-copy-safe com.emma.daemon.
+# Resolve at runtime rather than hardcoding — a hardcoded com.garcia.emma made
+# restart_emma a no-op on every web-installed Mac.
+_LAUNCHD_LABELS = ("com.emma.daemon", "com.garcia.emma")
+
+
+def _launchd_label() -> str | None:
+    """The label this daemon is actually registered under, or None if not under launchd.
+
+    Ask launchd rather than guessing: ``python -m emma --debug`` in a terminal is
+    under no label at all, and a restart there should fail honestly.
+    """
+    uid = os.getuid()
+    for label in _LAUNCHD_LABELS:
+        try:
+            r = subprocess.run(
+                ["launchctl", "print", f"gui/{uid}/{label}"],
+                capture_output=True, timeout=5,
+            )
+            if r.returncode == 0:
+                return label
+        except Exception:
+            continue
+    return None
 
 
 @tool(destructive=True)
@@ -66,9 +90,20 @@ async def restart_emma(confirmed: bool = False) -> ToolResult:
             user_message="¿Te reinicio ahora?",
             requires_confirmation=True,
         )
-    log.info("voice_restart_requested")
+    label = _launchd_label()
+    if not label:
+        log.info("voice_restart_no_launchd")
+        return ToolResult(
+            success=False, data={"action": "restart"},
+            user_message=(
+                "No estoy corriendo como servicio, así que no puedo reiniciarme sola. "
+                "Reiníciame desde donde me lanzaste."
+            ),
+            requires_confirmation=False,
+        )
+    log.info("voice_restart_requested", label=label)
     # Detached so it outlives the kickstart -k that kills this very process.
-    cmd = f"sleep 1; launchctl kickstart -k gui/{os.getuid()}/{_LAUNCHD_LABEL}"
+    cmd = f"sleep 1; launchctl kickstart -k gui/{os.getuid()}/{label}"
     try:
         subprocess.Popen(["/bin/sh", "-c", cmd], start_new_session=True)
     except Exception as exc:
