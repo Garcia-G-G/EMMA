@@ -89,6 +89,11 @@ from core import (
 )
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
+from core.realtime_playback import (
+    PlaybackClock,
+    PlaybackTrackingLocalAudioTransport,
+    TruncateAccurateRealtimeLLMService,
+)
 from memory import episodic
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
@@ -1466,7 +1471,11 @@ async def build_pipeline(
         echo_corr_lag_stride_ms=settings.ECHO_CORR_LAG_STRIDE_MS,
     )
 
-    transport = LocalAudioTransport(
+    # Shared played-audio clock: the output transport feeds it, the LLM service
+    # reads it to truncate a barged-in turn at the position the speaker actually
+    # reached (not pipecat's wall-clock upper bound). See core/realtime_playback.
+    playback_clock = PlaybackClock(rate=SAMPLE_RATE_HZ)
+    transport = PlaybackTrackingLocalAudioTransport(
         LocalAudioTransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
@@ -1477,19 +1486,21 @@ async def build_pipeline(
             # None in production (system default). The voice acceptance
             # harness points this at a virtual cable (19.7-VAH2).
             input_device_index=audio_devices.test_input_device_index(),
-        )
+        ),
+        playback_clock,
     )
 
     gate_proc = EchoGateProcessor(echo_gate, speech_phase)
 
     session_props = await _build_session_properties()
-    llm = OpenAIRealtimeLLMService(
+    llm = TruncateAccurateRealtimeLLMService(
         api_key=settings.openai_api_key(),        # device token (managed) or sk- (dev)
         base_url=settings.realtime_base_url(),    # our WS proxy (managed) or OpenAI direct
         settings=OpenAIRealtimeLLMService.Settings(
             model=settings.REALTIME_MODEL,
             session_properties=session_props,
         ),
+        playback_clock=playback_clock,
     )
 
     session_control = SessionControl()
