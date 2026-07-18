@@ -46,3 +46,20 @@ async def recall_last_action() -> ToolResult:
         f"Lo último que hice fue {_describe(last)}.",
         False,
     )
+
+
+@tool()
+async def repeat_last() -> ToolResult:
+    """Repite, TAL CUAL, lo último que Emma dijo (sin volver a generarlo).
+
+    Para "repite eso", "¿qué dijiste?", "otra vez pero repítelo", "no te
+    escuché, repite", "say that again". Habla de nuevo la MISMA respuesta,
+    palabra por palabra — no la reformules ni la regeneres.
+    """
+    text = session_memory.last_assistant_speech_text()
+    if not text:
+        return ToolResult(
+            True, {"repeated": None}, "Todavía no he dicho nada que pueda repetir.", False
+        )
+    # Return the exact text as the spoken message so Emma says it verbatim.
+    return ToolResult(True, {"repeated": text}, text, False)

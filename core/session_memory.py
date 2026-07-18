@@ -143,6 +143,15 @@ def last_assistant_speech_ts() -> float | None:
     return None
 
 
+def last_assistant_speech_text() -> str:
+    """The text of Emma's most recent spoken turn ("" if none). Backs "repite eso"."""
+    with _lock:
+        for ev in reversed(_events):
+            if ev.role == "assistant" and ev.kind == "speech" and ev.content:
+                return ev.content
+    return ""
+
+
 def recent_messages_for_llm(k: int = 20) -> list[dict[str, str]]:
     """The conversational tail in OpenAI chat shape, oldest first (22-B31).
 

@@ -565,6 +565,28 @@ async def forget(content_or_id: str | int) -> int:
     return await asyncio.to_thread(_forget_semantic_sync, _serialize(vec))
 
 
+def _forget_recent_sync(cutoff: float) -> int:
+    with _connect() as conn:
+        rows = conn.execute("SELECT id FROM facts WHERE created_at >= ?", (cutoff,)).fetchall()
+        ids = [int(r["id"]) for r in rows]
+        for i in ids:
+            conn.execute("DELETE FROM facts WHERE id = ?", (i,))
+            conn.execute("DELETE FROM facts_vec WHERE rowid = ?", (i,))
+        return len(ids)
+
+
+async def forget_recent(within_s: float) -> int:
+    """Delete every fact created within the last ``within_s`` seconds.
+
+    Backs "borra lo que acabo de decir": purge whatever Emma just learned in the
+    recent turn(s). Deletes ALL tiers created in the window (a secret placeholder
+    row too — its orphaned Keychain ``fact_*`` entry is unreferenced and harmless).
+    Returns the number of facts removed.
+    """
+    cutoff = time.time() - max(0.0, float(within_s))
+    return await asyncio.to_thread(_forget_recent_sync, cutoff)
+
+
 async def count() -> int:
     return await asyncio.to_thread(_count_sync)
 
