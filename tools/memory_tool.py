@@ -119,3 +119,41 @@ async def forget_fact(content: str) -> ToolResult:
         f"Listo, olvidé {removed} entrada{'s' if removed != 1 else ''}.",
         False,
     )
+
+
+# "lo que acabo de decir" refers to the PREVIOUS utterance, not this command, so a
+# fixed recent window is the right anchor (facts from that turn were written
+# seconds ago by reflection). Capped so it never nukes older memory.
+_LAST_TURN_WINDOW_S = 120.0
+_REFLECTION_BLACKOUT_S = 45.0
+
+
+@tool()
+async def forget_last_turn() -> ToolResult:
+    """Borra lo que Emma acaba de aprender de ti en este ratito.
+
+    Para "borra lo que acabo de decir", "olvida lo que te acabo de decir",
+    "borra lo último que aprendiste de mí", "eso no lo guardes". Quita los datos
+    recién anotados de la conversación reciente (no toca lo de días anteriores).
+    """
+    from memory import reflection
+
+    # Blackout auto-reflection FIRST, so the in-flight extraction from the turn
+    # being purged can't rewrite the facts right after we delete them.
+    reflection.suppress(_REFLECTION_BLACKOUT_S)
+    try:
+        removed = await long_term.forget_recent(_LAST_TURN_WINDOW_S)
+    except Exception as exc:
+        log.error("forget_last_turn_failed", error=str(exc))
+        return ToolResult(False, None, f"No pude borrar eso: {exc}", False)
+    if removed == 0:
+        return ToolResult(
+            True, {"removed": 0}, "No había apuntado nada nuevo de este ratito; nada que borrar.", False
+        )
+    return ToolResult(
+        True,
+        {"removed": removed},
+        f"Listo, borré lo que acababa de aprender de ti ({removed} "
+        f"cosa{'s' if removed != 1 else ''}).",
+        False,
+    )

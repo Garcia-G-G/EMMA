@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from typing import Any, Literal
 
@@ -164,6 +165,24 @@ async def _classify_sensitivity(fact: str) -> Literal["personal", "secret"]:
         return "personal"
 
 
+_suppress_until: float = 0.0
+
+
+def suppress(seconds: float) -> None:
+    """Blackout auto-reflection for ``seconds`` (wall clock).
+
+    Used by "borra lo que acabo de decir": the reflection extracted from the
+    just-purged turn is fire-and-forget and may commit AFTER the delete, which
+    would rewrite the facts we just removed. A short forward blackout swallows it.
+    """
+    global _suppress_until
+    _suppress_until = max(_suppress_until, time.time() + max(0.0, float(seconds)))
+
+
+def _is_suppressed() -> bool:
+    return time.time() < _suppress_until
+
+
 async def reflect_async(window: list[short_term.Turn]) -> None:
     """Fire-and-forget entrypoint: extract facts, classify, route, persist.
 
@@ -171,8 +190,16 @@ async def reflect_async(window: list[short_term.Turn]) -> None:
     value stored in Keychain and only a placeholder + vault_ref written to the
     DB. Fact content is never logged (it may be a secret).
     """
+    if _is_suppressed():
+        log.info("reflection_suppressed")
+        return
     facts = await reflect_once(window)
     if not facts:
+        return
+    # Re-check after the LLM round-trip: "borra lo que acabo de decir" may have
+    # fired the blackout while reflect_once was in flight.
+    if _is_suppressed():
+        log.info("reflection_suppressed_post_extract")
         return
     personal = 0
     secret = 0

@@ -73,6 +73,39 @@ class TestLongTerm:
         assert len(facts) == 1
         assert facts[0].content == "Garcia likes tacos"
 
+    def test_forget_recent_removes_only_recent(self) -> None:
+        import time
+
+        from memory import long_term
+        from memory.long_term import _connect, _count_sync, _remember_sync
+
+        _remember_sync("just learned this", "general", 0.8, "reflection")
+        # an old fact, well outside the recent window, must survive
+        with _connect() as conn:
+            conn.execute(
+                "INSERT INTO facts (content, kind, confidence, source, created_at, last_seen_at) "
+                "VALUES (?,?,?,?,?,?)",
+                ("old fact", "general", 0.8, "reflection", time.time() - 10_000, time.time() - 10_000),
+            )
+        assert _count_sync() == 2
+        removed = asyncio.get_event_loop().run_until_complete(long_term.forget_recent(120))
+        assert removed == 1  # only the fresh one
+        assert _count_sync() == 1
+
+    def test_forget_last_turn_purges_and_blacks_out_reflection(self) -> None:
+        from memory import long_term, reflection
+        from memory.long_term import _remember_sync
+        from tools.memory_tool import forget_last_turn
+
+        reflection._suppress_until = 0.0
+        _remember_sync("Garcia just said something private", "general", 0.7, "reflection")
+        res = asyncio.get_event_loop().run_until_complete(forget_last_turn())
+        assert res.success and res.data["removed"] >= 1
+        # the in-flight reflection from the purged turn will be swallowed
+        assert reflection._is_suppressed() is True
+        assert asyncio.get_event_loop().run_until_complete(long_term.count()) == 0
+        reflection._suppress_until = 0.0
+
     def test_dedup_on_same_content(self) -> None:
         from memory.long_term import _count_sync, _remember_sync
 
