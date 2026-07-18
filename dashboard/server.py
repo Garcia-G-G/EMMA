@@ -7,6 +7,7 @@ Open: http://localhost:3200
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import sqlite3
@@ -359,12 +360,80 @@ async def events_handler(ws):
         events_bus.unsubscribe(q)
 
 
+def _control_status() -> dict:
+    """Current daemon listening state, for the menubar UI to reflect."""
+    from core import orchestrator
+
+    return {
+        "muted": orchestrator.is_muted(),
+        "snooze_remaining_s": int(orchestrator.snooze_remaining_s()),
+    }
+
+
+async def dispatch_control(msg: dict) -> dict:
+    """Execute one UI control command against the live daemon (EMMA-APP Part 3).
+
+    Runs only in the in-daemon dashboard (EMMA_DASHBOARD=1), where these calls hit
+    the SAME orchestrator module the wake loop reads — so a menubar "unmute" click
+    is the way back that voice can't provide once the mic is off. Commands arrive
+    over a loopback-only socket, so a local click is trusted-because-local (it is
+    not content Emma read); destructive intent (shutdown) is confirmed UI-side.
+    """
+    from core import orchestrator
+
+    cmd = str(msg.get("cmd", "")).strip()
+    try:
+        if cmd == "unmute":
+            orchestrator.unmute_mic()
+        elif cmd == "mute":
+            orchestrator.mute_mic()
+        elif cmd == "snooze":
+            orchestrator.snooze_listening(int(msg.get("minutes", 15)))
+        elif cmd == "stop":
+            from core import conversation
+
+            await conversation.stop_active_speech()
+        elif cmd == "shutdown":
+            from core import dev_state
+
+            dev_state.shutdown_requested.set()
+        elif cmd == "status":
+            pass  # just report state below
+        else:
+            return {"type": "control_result", "ok": False, "error": f"unknown cmd: {cmd}"}
+    except Exception as exc:  # never let a bad command kill the socket
+        return {"type": "control_result", "ok": False, "cmd": cmd, "error": str(exc)}
+    return {"type": "control_result", "ok": True, "cmd": cmd, **_control_status()}
+
+
+async def control_handler(ws):
+    """UI -> daemon control socket (/control). Bidirectional; loopback-only.
+
+    The events bus is one-way (daemon -> UI); this is the missing reverse path
+    that EMMA-OBVIOUS flagged. Only reachable on 127.0.0.1 (see start()).
+    """
+    with contextlib.suppress(Exception):
+        await ws.send(json.dumps({"type": "control_hello", **_control_status()}))
+    try:
+        async for raw in ws:
+            try:
+                msg = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            result = await dispatch_control(msg)
+            await ws.send(json.dumps(result))
+    except websockets.ConnectionClosed:
+        pass
+
+
 async def ws_router(ws):
-    """Route the WebSocket by path: /events -> visualizer bus, else -> legacy dashboard."""
+    """Route the WebSocket by path: /events -> bus, /control -> UI commands, else legacy."""
     request = getattr(ws, "request", None)
     path = (getattr(request, "path", None) or "/").split("?")[0].rstrip("/")
     if path == "/events":
         await events_handler(ws)
+    elif path == "/control":
+        await control_handler(ws)
     else:
         await handler(ws)
 
@@ -398,10 +467,13 @@ async def start():
             self._rewrite()
             return super().do_HEAD()
 
-    httpd = http.server.HTTPServer(("0.0.0.0", PORT), DashHandler)
+    # Loopback-only (EMMA-APP Part 3): the control socket accepts trusted-because-
+    # local commands (unmute, shutdown), so it must never be reachable off-box.
+    # The local UI + browser reach it fine over 127.0.0.1/localhost.
+    httpd = http.server.HTTPServer(("127.0.0.1", PORT), DashHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
-    async with serve(ws_router, "0.0.0.0", PORT + 1):
+    async with serve(ws_router, "127.0.0.1", PORT + 1):
         print(f"  Dashboard:   http://localhost:{PORT}")
         print(f"  Visualizer:  http://localhost:{PORT}/visualizer")
         print(f"  WebSocket:   ws://localhost:{PORT + 1} (/events)")

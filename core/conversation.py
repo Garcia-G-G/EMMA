@@ -44,6 +44,7 @@ from pipecat.frames.frames import (
     BotStoppedSpeakingFrame,
     ErrorFrame,
     Frame,
+    InterruptionFrame,
     LLMContextFrame,
     LLMTextFrame,
     OutputAudioRawFrame,
@@ -1573,6 +1574,33 @@ async def build_pipeline(
     return pipeline, task, transport, context, auth_watcher, llm
 
 
+# The live session's PipelineTask, so an out-of-band control (the menubar "Parar")
+# can interrupt Emma mid-sentence via the SAME path as a voice barge-in. Set while
+# a session runs, None otherwise. Read only from the daemon loop.
+_active_task: PipelineTask | None = None
+
+
+async def stop_active_speech() -> bool:
+    """Cut Emma's current speech now (menubar "Parar"), if a session is live.
+
+    Queues a Pipecat InterruptionFrame onto the active task — the same interruption
+    the pipeline runs on a voice barge-in (llm `_handle_interruption` → truncate),
+    so there's one cut-speech path, not two. Returns True if a session was live.
+    On-device verify: the frame class/behavior is pipecat-internal; confirm it
+    actually stops audio mid-sentence on Garcia's Mac.
+    """
+    task = _active_task
+    if task is None:
+        return False
+    try:
+        await task.queue_frame(InterruptionFrame())
+        log.info("stop_active_speech")
+        return True
+    except Exception as exc:
+        log.warning("stop_active_speech_failed", error=str(exc))
+        return False
+
+
 async def run_session(immediate_command: bool = False) -> None:
     """Run one Pipecat session until idle, cancellation, or error.
 
@@ -1609,6 +1637,8 @@ async def run_session(immediate_command: bool = False) -> None:
     _pipeline, task, _transport, context, auth_watcher, llm = await build_pipeline(
         immediate_command=immediate_command
     )
+    global _active_task
+    _active_task = task  # expose for the menubar "Parar" control
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
     log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
     try:
@@ -1624,6 +1654,7 @@ async def run_session(immediate_command: bool = False) -> None:
             # _disconnect is Pipecat-internal (untyped) but the public surface
             # (reset_conversation) reconnects, which we don't want on teardown.
             await asyncio.wait_for(llm._disconnect(), timeout=3.0)  # type: ignore[no-untyped-call]
+        _active_task = None  # session over; nothing to interrupt
         log.info("conversation_end")
 
     if auth_watcher.terminal_error is not None:
