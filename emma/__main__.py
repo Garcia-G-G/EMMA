@@ -171,6 +171,36 @@ def _credential_preflight(log: structlog.BoundLogger) -> int | None:
     return None
 
 
+async def _supervise_ui(log: structlog.BoundLogger) -> None:
+    """Spawn the menubar UI (`python -m emma.ui`) and respawn it if it dies.
+
+    Killing the UI never kills the daemon — it's a child we own and simply relaunch
+    (DoD item 8). Killing the daemon cancels this task, which terminates the child.
+    Gated on EMMA_DASHBOARD because the UI needs the in-daemon control channel.
+    """
+    while True:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, "-m", "emma.ui",
+                env={**os.environ, "EMMA_DASHBOARD_PORT": str(settings.DASHBOARD_PORT)},
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except Exception as exc:  # e.g. no GUI session — back off, don't spin
+            log.warning("emma_ui_spawn_failed", error=str(exc))
+            await asyncio.sleep(10.0)
+            continue
+        log.info("emma_ui_spawned", pid=proc.pid)
+        try:
+            await proc.wait()
+        except asyncio.CancelledError:
+            with contextlib.suppress(Exception):
+                proc.terminate()
+            raise
+        log.info("emma_ui_exited", code=proc.returncode)
+        await asyncio.sleep(2.0)  # brief backoff before respawn
+
+
 async def _run_orchestrator(log: structlog.BoundLogger) -> int:
     """Run the orchestrator with cooperative SIGINT/SIGTERM shutdown.
 
@@ -189,6 +219,11 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         # Keep a reference so the task isn't garbage-collected mid-run.
         _bg_tasks.append(asyncio.create_task(dashboard.start()))  # type: ignore[no-untyped-call]
         log.info("dashboard_started", port=settings.DASHBOARD_PORT)
+
+        # Spawn + supervise the menubar UI (EMMA-APP). It needs the control channel
+        # the dashboard just opened, so it rides the same opt-in flag.
+        _bg_tasks.append(asyncio.create_task(_supervise_ui(log), name="emma-ui-supervisor"))
+        log.info("emma_ui_supervisor_spawned")
 
     # Proactive engine (Prompt 17): scheduled briefings + event triggers. Runs
     # as a sibling task in this process so it shares the events_bus + memory.
