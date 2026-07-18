@@ -140,3 +140,42 @@ async def snooze_listening(minutes: int = 15, confirmed: bool = False) -> ToolRe
         user_message=f"Me duermo {minutes} {unit}. No te escucho hasta entonces.",
         ends_session=True,
     )
+
+
+@tool()
+async def mute_mic() -> ToolResult:
+    """Apaga el micrófono del todo: deja de CAPTURAR audio (privacidad).
+
+    Para "mute", "apaga el micrófono", "no me escuches", "silencia el micro".
+    Es distinto de dormir: no es por unos minutos, es indefinido, y suelta el
+    micrófono de verdad (el indicador naranja de la Mac se apaga). Como el micro
+    queda apagado, "Emma" ya no me despierta — para reactivarme, dime desde el
+    dashboard o reiníciame. Instantáneo, sin confirmación: cuando pides silencio
+    lo quieres YA.
+    """
+    orchestrator.mute_mic()
+    return ToolResult(
+        success=True,
+        data={"action": "mute_mic"},
+        user_message=(
+            "Apago el micrófono. Dejo de escucharte por completo — ni 'Emma' me "
+            "despierta. Para reactivarme, reiníciame o hazlo desde el dashboard."
+        ),
+        ends_session=True,
+    )
+
+
+@tool()
+async def unmute_mic() -> ToolResult:
+    """Vuelve a escuchar tras un mute (reactiva el micrófono).
+
+    Para "unmute", "vuelve a escucharme", "prende el micrófono". Nota: si el
+    micrófono ya está apagado no puedo oír esta orden por voz — llega desde el
+    dashboard o al reiniciarme.
+    """
+    orchestrator.unmute_mic()
+    return ToolResult(
+        success=True,
+        data={"action": "unmute_mic"},
+        user_message="Listo, vuelvo a escucharte.",
+    )

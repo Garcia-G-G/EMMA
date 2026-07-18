@@ -12,9 +12,11 @@ from tools import lifecycle_tool as lc
 def _reset():
     dev_state.shutdown_requested.clear()
     orchestrator._snooze_until = 0.0
+    orchestrator._muted = False
     yield
     dev_state.shutdown_requested.clear()
     orchestrator._snooze_until = 0.0
+    orchestrator._muted = False
 
 
 @pytest.mark.asyncio
@@ -150,6 +152,25 @@ async def test_snooze_listening_pauses_when_confirmed() -> None:
 async def test_snooze_listening_clamps_floor() -> None:
     await lc.snooze_listening(0, confirmed=True)  # floored to 1 minute, never 0/negative
     assert orchestrator.snooze_remaining_s() > 0
+
+
+@pytest.mark.asyncio
+async def test_mute_mic_stops_capture_indefinitely() -> None:
+    # mute is instant (no confirmation) and indefinite — sets the mute flag so the
+    # wake loop never opens the stream (mic released), and ends the current session.
+    assert orchestrator.is_muted() is False
+    res = await lc.mute_mic()
+    assert res.success and res.ends_session and not res.requires_confirmation
+    assert orchestrator.is_muted() is True
+    assert orchestrator.snooze_remaining_s() == 0  # mute is not a timed snooze
+
+
+@pytest.mark.asyncio
+async def test_unmute_mic_resumes_listening() -> None:
+    orchestrator.mute_mic()
+    res = await lc.unmute_mic()
+    assert res.success
+    assert orchestrator.is_muted() is False
 
 
 def test_orchestrator_snooze_remaining_decays(monkeypatch) -> None:

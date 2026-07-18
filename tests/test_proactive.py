@@ -58,6 +58,26 @@ class TestEngineDispatch:
         monkeypatch.setattr(engine, "_snoozed_until", None)
         assert engine.is_snoozed() is False
 
+    def test_resume_clears_snooze(self, monkeypatch):
+        engine.snooze(30)
+        assert engine.is_snoozed() is True
+        engine.resume()
+        assert engine.is_snoozed() is False
+
+    @pytest.mark.asyncio
+    async def test_do_not_disturb_snoozes_proactive(self, monkeypatch):
+        from tools.proactive_tool import do_not_disturb, end_do_not_disturb
+
+        monkeypatch.setattr(engine, "_snoozed_until", None)
+        res = await do_not_disturb(45)
+        assert res.success and res.data["mode"] == "dnd" and res.data["minutes"] == 45
+        assert engine.is_snoozed() is True  # proactive output is silenced
+        # ...but DND does not require confirmation (instant, reversible mode)
+        assert res.requires_confirmation is False
+        res2 = await end_do_not_disturb()
+        assert res2.success and res2.data["mode"] == "off"
+        assert engine.is_snoozed() is False  # back to normal
+
     @pytest.mark.asyncio
     async def test_run_one_demotes_then_delivers(self, monkeypatch):
         delivered = {}

@@ -80,6 +80,43 @@ async def snooze_proactivities(minutes: int = 60, confirmed: bool = False) -> To
 
 
 @tool()
+async def do_not_disturb(minutes: int = 60) -> ToolResult:
+    """Modo No Molestar: sigo respondiendo si me llamas, pero no hablo sola.
+
+    Para "no molestar", "modo no molestar", "ponte en silencio", "no me
+    interrumpas", "DND". Silencia TODA la salida proactiva (avisos, briefings,
+    recordatorios que te iba a soltar sin que preguntes) por N minutos, pero
+    "Emma" me sigue despertando y te contesto normal. Las alarmas y timers que ya
+    programaste SÍ suenan — No Molestar no los calla. Instantáneo, sin
+    confirmación (es un modo reversible).
+    """
+    minutes = max(1, int(minutes))
+    from core.proactive import engine
+
+    until = engine.snooze(minutes)
+    return ToolResult(
+        True,
+        {"mode": "dnd", "minutes": minutes, "until": until.isoformat()},
+        f"Modo no molestar hasta las {until.strftime('%H:%M')}. Te sigo "
+        "contestando si me llamas; solo no te interrumpo.",
+        False,
+    )
+
+
+@tool()
+async def end_do_not_disturb() -> ToolResult:
+    """Sal del modo No Molestar (vuelvo a avisarte de cosas sin que preguntes).
+
+    Para "quita el no molestar", "ya puedes interrumpirme", "desactiva no
+    molestar", "vuelve a avisarme".
+    """
+    from core.proactive import engine
+
+    engine.resume()
+    return ToolResult(True, {"mode": "off"}, "Listo, ya vuelvo a avisarte de las cosas.", False)
+
+
+@tool()
 async def list_proactivities() -> ToolResult:
     """Lista las proactividades, si cada una está encendida, y su próximo disparo."""
     from croniter import croniter
