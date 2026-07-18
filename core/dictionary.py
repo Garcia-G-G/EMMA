@@ -65,6 +65,7 @@ _facts: dict[str, Fact] = {}
 _user_apps: dict[str, dict[str, Any]] = {}
 _user: dict[str, str] = {}
 _connections: dict[str, dict[str, Any]] = {}
+_personality: dict[str, int] = {}
 
 # The identity fields Emma recognises. Single source of truth for "yo/mi/mis".
 _USER_FIELDS = (
@@ -75,6 +76,11 @@ _USER_FIELDS = (
     "website",
     "preferred_lang",
 )
+
+# Personality axes (EMMA-APP Part 4). Each is an int 1-5; 3 is the default.
+# Stored in the [personality] TOML block; consumed by core/personality.py.
+_PERSONALITY_FIELDS = ("calidez", "formalidad", "humor", "verbosidad", "proactividad")
+_PERSONALITY_DEFAULT = 3
 
 
 def _parse() -> None:
@@ -96,11 +102,19 @@ def _parse() -> None:
         _user_apps.clear()
         _user.clear()
         _connections.clear()
+        _personality.clear()
         user_tbl = data.get("user") or {}
         if isinstance(user_tbl, dict):
             for fld in _USER_FIELDS:
                 val = user_tbl.get(fld, "")
                 _user[fld] = str(val) if val is not None else ""
+        pers_tbl = data.get("personality") or {}
+        if isinstance(pers_tbl, dict):
+            for fld in _PERSONALITY_FIELDS:
+                try:
+                    _personality[fld] = max(1, min(5, int(pers_tbl.get(fld, _PERSONALITY_DEFAULT))))
+                except (TypeError, ValueError):
+                    _personality[fld] = _PERSONALITY_DEFAULT
         for k, v in (data.get("pages") or {}).items():
             _pages[k] = Page(
                 key=k, url=v.get("url", ""), title=v.get("title", ""), open_in=v.get("open_in", "")
@@ -205,24 +219,28 @@ def set_user_field(field: str, value: str) -> bool:
 
 
 def _rewrite_user_block(values: dict[str, str]) -> None:
-    """Replace the ``[user]`` table in the TOML file with ``values`` (or append
-    it if absent). Only the ``[user]`` block is touched; everything else is kept
-    byte-for-byte. Values flow through :func:`_toml_escape`."""
+    """Replace the ``[user]`` table (or append if absent). Only that block is
+    touched; everything else stays byte-for-byte. Values flow through escape."""
     block_lines = ["[user]"]
     for fld in _USER_FIELDS:
         block_lines.append(f'{fld} = "{_toml_escape(values.get(fld, ""))}"')
-    block = "\n".join(block_lines)
+    _rewrite_named_block("[user]", "\n".join(block_lines))
 
+
+def _rewrite_named_block(header: str, block: str) -> None:
+    """Replace the ``header`` table's lines with ``block`` (or append it if absent).
+
+    Generic over table name so [user] and [personality] share one code path. Stops
+    at the first blank line, comment, or next section header, so it never eats the
+    following section's comments — everything outside the table stays byte-for-byte.
+    """
     text = _DICT_PATH.read_text(encoding="utf-8")
     lines = text.splitlines()
     out: list[str] = []
     i = 0
     replaced = False
     while i < len(lines):
-        if lines[i].strip() == "[user]":
-            # Replace the old block: its header + its ``key = "…"`` lines. Stop at
-            # the first blank line, comment, or next section header so we never
-            # eat the following section's comments.
+        if lines[i].strip() == header:
             out.append(block)
             replaced = True
             i += 1
@@ -238,6 +256,33 @@ def _rewrite_user_block(values: dict[str, str]) -> None:
         out.append("")
         out.append(block)
     _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def personality_profile() -> dict[str, int]:
+    """The five personality axes (1-5), each defaulting to 3 when unset."""
+    return {fld: _personality.get(fld, _PERSONALITY_DEFAULT) for fld in _PERSONALITY_FIELDS}
+
+
+def set_personality_field(field: str, value: int) -> bool:
+    """Set one personality axis (clamped 1-5) in the ``[personality]`` block.
+
+    Written by the app's Personality panel; read at the next session start by
+    ``_build_instructions``. Returns False for an unknown axis.
+    """
+    field = field.strip().lower()
+    if field not in _PERSONALITY_FIELDS:
+        return False
+    try:
+        v = max(1, min(5, int(value)))
+    except (TypeError, ValueError):
+        return False
+    with _LOCK:
+        current = {fld: _personality.get(fld, _PERSONALITY_DEFAULT) for fld in _PERSONALITY_FIELDS}
+        current[field] = v
+        block = "[personality]\n" + "\n".join(f"{f} = {current[f]}" for f in _PERSONALITY_FIELDS)
+        _rewrite_named_block("[personality]", block)
+        reload()
+    return True
 
 
 def set_app_preference(category: str, app: str) -> bool:
