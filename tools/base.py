@@ -58,6 +58,11 @@ class RegisteredTool:
     parameters: dict[str, Any]
     destructive: bool = False
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    # True for tools whose result carries text Emma did NOT hear from Garcia's own
+    # microphone — email, web pages, on-screen text, notes, filenames, browser
+    # tabs. That text is attacker-reachable, so the function handler fences it in
+    # <untrusted_content> before it reaches the model (see core/conversation.py).
+    returns_untrusted_content: bool = False
 
 
 _REGISTRY: dict[str, RegisteredTool] = {}
@@ -130,6 +135,7 @@ def tool(
     *,
     destructive: bool = False,
     aliases: tuple[str, ...] = (),
+    returns_untrusted_content: bool = False,
 ) -> Callable[[F], F]:
     """Register ``fn`` in the tool registry."""
 
@@ -142,6 +148,7 @@ def tool(
             parameters=_function_to_parameters(fn),
             destructive=destructive,
             aliases=aliases,
+            returns_untrusted_content=returns_untrusted_content,
         )
         _REGISTRY[key] = entry
         for alias in aliases:

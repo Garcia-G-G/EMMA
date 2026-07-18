@@ -151,7 +151,7 @@ async def _most_recent_note(scan_cap: int = 500) -> Match | None:
     return max(matches, key=lambda m: m.when)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def resolve_recent_note() -> ToolResult:
     """Devuelve el título y un vistazo de la nota MÁS RECIENTE (última modificada).
 
@@ -177,7 +177,7 @@ async def resolve_recent_note() -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def list_notes(query: str = "", limit: int = 10) -> ToolResult:
     """Lista tus notas de Apple Notes (título, fecha de modificación y un fragmento).
 
@@ -198,7 +198,7 @@ async def list_notes(query: str = "", limit: int = 10) -> ToolResult:
     return ToolResult(True, {"notes": notes}, f"Tus notas: {spoken}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def search_notes(query: str, limit: int = 10) -> ToolResult:
     """Busca notas cuyo título contiene `query`."""
     f = macos.esc_applescript(query)
@@ -389,7 +389,7 @@ async def _read_body(note_id: str) -> str:
     return await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def read_note(title: str, index: int | None = None, recent: bool = False) -> ToolResult:
     """Lee el contenido de la nota cuyo título es `title`.
 

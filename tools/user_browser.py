@@ -55,7 +55,7 @@ async def open_url(url: str, new_window: bool = False) -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def web_search_in_browser(query: str) -> ToolResult:
     """Abre una búsqueda de Google para `query` en el navegador preferido.
 
@@ -205,7 +205,7 @@ def _close_script(app: str, tabs: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def list_browser_tabs(browser: str = "") -> ToolResult:
     """Lista todas las pestañas abiertas del navegador (todas las ventanas).
 
@@ -342,7 +342,7 @@ async def close_tabs_matching(
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def current_tab_url(browser: str = "") -> ToolResult:
     """Devuelve la URL de la pestaña activa del navegador preferido.
 

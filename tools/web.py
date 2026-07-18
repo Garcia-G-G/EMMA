@@ -103,7 +103,7 @@ async def search_results(query: str, count: int = 5) -> list[dict[str, str]]:
     return []
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def search_web(query: str) -> ToolResult:
     """Search the web for `query` and return a short spoken synthesis plus the top results."""
     async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
@@ -194,7 +194,7 @@ def open_url(url: str) -> ToolResult:
     return ToolResult(True, {"url": url}, f"Abriendo {url}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def summarize_page(url: str) -> ToolResult:
     """Fetch a web page and return a three-sentence spoken summary."""
     try:

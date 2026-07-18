@@ -46,8 +46,14 @@ def test_tool_result_data_and_message_redacted_at_seam() -> None:
     blob = str(captured)
     assert _CARD not in blob  # neither data nor user_message leaked the card
     assert "REDACTED" in captured["user_message"]
-    assert "REDACTED" in captured["data"]["text"]
-    assert captured["data"]["scope"] == "window"  # non-secret data preserved
+    # 24.6-B3: look_at_screen is untrusted → redaction runs at the seam, THEN the
+    # (already-redacted) content is folded into the <untrusted_content> fence, so
+    # data is nulled and everything — redacted secret + non-secret scope — lives
+    # inside the fence. Redaction still guards egress; fencing marks it as data.
+    assert '<untrusted_content source="look_at_screen">' in captured["user_message"]
+    assert captured["data"] is None  # nothing untrusted left outside the fence
+    assert "REDACTED" in captured["user_message"]  # secret stripped inside the fence
+    assert "window" in captured["user_message"]  # non-secret data preserved (fenced)
 
 
 class _FakeCompletion:
