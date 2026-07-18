@@ -92,7 +92,7 @@ def _short_summary(r: sv.ScreenRead) -> str:
 # ---- read-only --------------------------------------------------------------
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def describe_screen() -> ToolResult:
     """Describe lo que hay en la ventana de adelante: botones, campos y texto.
 
@@ -113,7 +113,7 @@ async def describe_screen() -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def read_window_text() -> ToolResult:
     """Lee el texto visible de la ventana enfocada ("léeme lo que dice esa ventana")."""
     r = await sv.current_screen()
@@ -130,7 +130,7 @@ async def read_window_text() -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def find_button(name: str, scope: str = "window") -> ToolResult:
     """Dice si existe un botón con ese nombre en la ventana de adelante.
 
@@ -158,7 +158,7 @@ async def find_button(name: str, scope: str = "window") -> ToolResult:
     return ToolResult(False, {"buttons": labels}, f"No encontré un botón «{name}» en esta ventana.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def summarize_screen(question: str = "") -> ToolResult:
     """Resume la pantalla, enfocándose en lo que responde la pregunta de Garcia.
 
@@ -334,7 +334,7 @@ def _pane_phrase(p: sv.PaneInfo) -> str:
     return f"No logro distinguir el panel exacto en {p.app}; te puedo leer la ventana completa."
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def where_am_i() -> ToolResult:
     """Dice en qué panel o región de la ventana está puesta la atención de Garcia.
 
@@ -352,7 +352,7 @@ async def where_am_i() -> ToolResult:
     return ToolResult(True, {"pane": _pane_data(pane)}, _pane_phrase(pane), False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def window_layout() -> ToolResult:
     """Lista los paneles/regiones de la ventana de adelante y dónde están.
 
@@ -366,7 +366,7 @@ async def window_layout() -> ToolResult:
     return ToolResult(True, {"panes": panes}, msg, False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def read_pane_text() -> ToolResult:
     """Lee solo el texto del panel donde está la atención (no toda la ventana).
 
@@ -386,7 +386,7 @@ async def read_pane_text() -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def summarize_pane(question: str = "") -> ToolResult:
     """Resume SOLO el panel enfocado (no toda la ventana). Respuesta más corta y precisa.
 

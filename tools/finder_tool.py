@@ -19,7 +19,7 @@ def _expand(path: str) -> str:
     return os.path.expanduser(path)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def list_folder(path: str) -> ToolResult:
     """Lista el contenido de una carpeta (nombre y fecha de modificación)."""
     p = macos.esc_applescript(_expand(path))
@@ -46,7 +46,7 @@ async def list_folder(path: str) -> ToolResult:
     return ToolResult(True, {"entries": entries}, f"{len(entries)} elementos en {path}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def find_recent(query: str = "", days: int = 7, limit: int = 10) -> ToolResult:
     """Busca archivos modificados en los últimos `days` días, opcionalmente con `query` en el nombre."""
     q = query.replace('"', "").strip()

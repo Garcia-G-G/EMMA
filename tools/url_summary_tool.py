@@ -34,7 +34,7 @@ async def _llm_summary(text: str) -> str:
     return (completion.choices[0].message.content or "").strip()
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def summarize_url(url: str) -> ToolResult:
     """Resume de qué trata una página web ("¿de qué va esta URL?", "resúmeme este link").
 

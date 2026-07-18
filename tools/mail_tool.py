@@ -25,7 +25,7 @@ def _parse_pairs(raw: str) -> list[dict[str, Any]]:
     return out
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def list_unread(limit: int = 10) -> ToolResult:
     """Lista los correos sin leer más recientes (remitente y asunto)."""
     script = (
@@ -52,7 +52,7 @@ async def list_unread(limit: int = 10) -> ToolResult:
     return ToolResult(True, {"messages": msgs}, f"Sin leer: {spoken}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def search_mail(query: str, limit: int = 10) -> ToolResult:
     """Busca correos en la bandeja de entrada cuyo asunto contiene `query`."""
     q = macos.esc_applescript(query)
@@ -78,7 +78,7 @@ async def search_mail(query: str, limit: int = 10) -> ToolResult:
     return ToolResult(True, {"messages": msgs}, f"Encontré: {spoken}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def recent_from(sender: str, limit: int = 10) -> ToolResult:
     """Busca correos recientes de un remitente (incluye un fragmento del cuerpo).
 

@@ -21,7 +21,7 @@ _FAILED = ("No pude leer la pantalla con visión. Revisa el permiso de Grabació
            "pantalla en Ajustes → Privacidad y seguridad.")
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def look_at_screen(question: str = "") -> ToolResult:
     """Lee la pantalla con visión (captura + OCR local) — texto en imágenes, PDFs,
     apps sin árbol de accesibilidad, etc.

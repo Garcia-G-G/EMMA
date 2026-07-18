@@ -30,7 +30,7 @@ async def current_url() -> ToolResult:
     return ToolResult(True, {"url": url}, f"La pestaña actual es {url}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def current_page_text() -> ToolResult:
     """Devuelve el texto legible de la pestaña activa de Safari.
 
