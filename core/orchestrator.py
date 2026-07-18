@@ -39,6 +39,13 @@ _LOOPBACK_WATCHDOG_S = 30.0
 # 0 = listening normally. Set by the snooze_listening tool; honored in _one_session.
 _snooze_until: float = 0.0
 
+# Voice "mute" / "apaga el micrófono": an INDEFINITE privacy stop. Unlike snooze
+# (timed, auto-resumes), mute has no deadline — while set, _one_session never
+# opens the wake stream, so the mic is genuinely released (the macOS mic
+# indicator turns off). Recovery is non-voice by design (the mic is off): the
+# unmute_mic tool, or a daemon restart, which resets this in-memory flag.
+_muted: bool = False
+
 
 def snooze_listening(minutes: int) -> float:
     """Pause wake detection for ``minutes`` (then auto-resume). Returns the deadline."""
@@ -50,6 +57,24 @@ def snooze_listening(minutes: int) -> float:
 
 def snooze_remaining_s() -> float:
     return max(0.0, _snooze_until - time.monotonic())
+
+
+def mute_mic() -> None:
+    """Stop capturing audio entirely (indefinite). The wake stream stays closed."""
+    global _muted
+    _muted = True
+    log.info("mic_muted")
+
+
+def unmute_mic() -> None:
+    """Resume listening after a mute."""
+    global _muted
+    _muted = False
+    log.info("mic_unmuted")
+
+
+def is_muted() -> bool:
+    return _muted
 
 
 def _now_iso() -> str:
@@ -150,10 +175,13 @@ async def _one_session() -> None:
             if gap > _LOOPBACK_WATCHDOG_S:
                 log.error("daemon_stuck", reason="slow_loopback_to_wake", gap_s=round(gap, 1))
         events_bus.publish("state", state="waiting_for_wake")
-        # Voice "duérmete N min": pause wake detection until the snooze expires.
-        while snooze_remaining_s() > 0:
-            events_bus.publish("state", state="snoozing")
-            await asyncio.sleep(min(5.0, snooze_remaining_s()))
+        # Park before opening the wake stream while muted (indefinite, mic off) or
+        # snoozed (timed). Both keep the RawInputStream closed, so the mic is
+        # genuinely released — the macOS mic indicator stays off during either.
+        while _muted or snooze_remaining_s() > 0:
+            events_bus.publish("state", state="muted" if _muted else "snoozing")
+            nap = 1.0 if _muted else min(5.0, snooze_remaining_s())
+            await asyncio.sleep(max(0.5, nap))
         t_start = time.monotonic()
         await listen_for_wake_word()
         t_wake = time.monotonic()

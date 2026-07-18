@@ -46,6 +46,13 @@ def snooze(minutes: int) -> dt.datetime:
     return _snoozed_until
 
 
+def resume() -> None:
+    """Cancel any active proactive snooze / Do Not Disturb (resume proactive output)."""
+    global _snoozed_until
+    _snoozed_until = None
+    log.info("proactive_resumed")
+
+
 def is_snoozed(now: dt.datetime | None = None) -> bool:
     now = now or dt.datetime.now()
     return bool(_snoozed_until is not None and now < _snoozed_until)
