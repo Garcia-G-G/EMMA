@@ -45,5 +45,7 @@ def test_build_instructions_has_sections() -> None:
     assert "# Language" in instructions
     assert "# Response Length" in instructions
     assert "# Forbidden" in instructions
-    assert "Garcia" in instructions
+    # EMMA-APP Part 1: the prompt no longer hardcodes the maker's name; it names
+    # the paired user (or a generic stand-in when unpaired), never "Garcia".
+    assert "Garcia" not in instructions
     assert "Emma" in instructions

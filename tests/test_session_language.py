@@ -56,7 +56,9 @@ class TestSessionLanguagePin:
         monkeypatch.setattr(conv.dictionary, "user_profile", lambda: _profile("es"))
         text = await conv._build_instructions()
         assert "If unsure, default to Spanish" in text
-        assert "SAME language Garcia just spoke" in text
+        # the mirroring rule survives; the user's name is now parameterized (Part 1)
+        assert "SAME language" in text and "just spoke" in text
+        assert "Garcia" not in text
 
 
 class TestContextSeed:
