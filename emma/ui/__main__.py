@@ -17,6 +17,7 @@ idle/listening/speaking/snoozing/muted as the daemon publishes state.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import threading
@@ -24,6 +25,8 @@ import threading
 import objc
 import structlog
 from AppKit import (
+    NSAlert,
+    NSAlertFirstButtonReturn,
     NSApplication,
     NSApplicationActivationPolicyAccessory,
     NSBackingStoreBuffered,
@@ -49,6 +52,30 @@ log = structlog.get_logger("emma.ui")
 _PORT = int(os.environ.get("EMMA_DASHBOARD_PORT", "3200"))
 _HTTP_URL = f"http://127.0.0.1:{_PORT}/"
 _WS_URL = f"ws://127.0.0.1:{_PORT + 1}/events"
+_CONTROL_URL = f"ws://127.0.0.1:{_PORT + 1}/control"
+
+
+def send_control(payload: dict) -> None:
+    """Fire a UI control command at the daemon over the loopback /control socket.
+
+    Runs on a short-lived background thread so the click returns instantly; the
+    daemon's reply (state) also arrives on the /events stream, which repaints the
+    icon. This is the reverse channel that lets the menubar UNMUTE a mic that voice
+    can't reach (EMMA-APP Part 3 closes the EMMA-OBVIOUS hole).
+    """
+
+    async def _run() -> None:
+        import websockets
+
+        try:
+            async with websockets.connect(_CONTROL_URL) as ws:
+                await ws.send(json.dumps(payload))
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(ws.recv(), timeout=2.0)  # ack, best-effort
+        except Exception as exc:
+            log.warning("ui_control_failed", cmd=payload.get("cmd"), error=str(exc))
+
+    threading.Thread(target=lambda: asyncio.run(_run()), daemon=True).start()
 
 # state (from events_bus) -> SF Symbol name. setTemplate makes it adapt to
 # light/dark automatically (mandatory — without it the glyph breaks in dark mode).
@@ -109,8 +136,13 @@ class EmmaBar(NSObject):
     def setState_(self, state: str) -> None:  # noqa: N802 (called via callAfter)
         self._state = state
         self._apply_icon(state)
+        # Reflect mute state in the toggle label so one item mutes AND unmutes.
+        if getattr(self, "_mute_item", None) is not None:
+            self._mute_item.setTitle_(
+                "Reactivar micrófono" if state == "muted" else "Silenciar micrófono"
+            )
 
-    # ---- menu (Part 3 fills in the actionable items) ----------------------
+    # ---- menu -------------------------------------------------------------
     @objc.python_method
     def _build_menu(self) -> None:
         menu = NSMenu.alloc().init()
@@ -121,10 +153,36 @@ class EmmaBar(NSObject):
         menu.addItem_(self._estado_item)
         menu.addItem_(NSMenuItem.separatorItem())
         self._add_item(menu, "Abrir Emma", "openWindow:", "o")
+        self._add_item(menu, "Parar", "stopSpeaking:", ".")  # cut Emma mid-sentence
+        self._mute_item = self._add_item(menu, "Silenciar micrófono", "toggleMute:", "")
+        self._add_item(menu, "Dormir 15 min", "sleep15:", "")
         menu.addItem_(NSMenuItem.separatorItem())
+        self._add_item(menu, "Apagar Emma", "shutdownEmma:", "")
         self._add_item(menu, "Salir de esta ventana", "quitUI:", "q")
         self.item.setMenu_(menu)
         self._menu = menu
+
+    # ---- actions (a physical click is trusted input; it is the confirmation) ---
+    def stopSpeaking_(self, _sender) -> None:  # noqa: N802
+        send_control({"cmd": "stop"})
+
+    def toggleMute_(self, _sender) -> None:  # noqa: N802
+        # If the mic is off, this is the way back voice can't give (DoD item 9).
+        send_control({"cmd": "unmute" if self._state == "muted" else "mute"})
+
+    def sleep15_(self, _sender) -> None:
+        send_control({"cmd": "snooze", "minutes": 15})
+
+    def shutdownEmma_(self, _sender) -> None:  # noqa: N802
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("¿Apagar Emma?")
+        alert.setInformativeText_(
+            "Dejará de escuchar hasta que la reinicies a mano."
+        )
+        alert.addButtonWithTitle_("Apagar")
+        alert.addButtonWithTitle_("Cancelar")
+        if alert.runModal() == NSAlertFirstButtonReturn:
+            send_control({"cmd": "shutdown"})
 
     @objc.python_method
     def _add_item(self, menu, title: str, selector: str, key: str = ""):
