@@ -8,6 +8,7 @@ the fixed com.garcia.emma service) — not the sync service+account shape.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import platform
 import socket
 import time
@@ -16,6 +17,7 @@ from typing import Any
 import httpx
 import structlog
 
+from core import dictionary
 from core import secrets as kc
 
 log = structlog.get_logger("emma.pairing")
@@ -83,7 +85,15 @@ async def poll_until_authorized(device_code: str, interval: int, expires_in: int
                 data: dict[str, Any] = r.json()
                 # Persist to Keychain BEFORE returning so a crash here can't lose it.
                 await kc.store(_TOKEN_LABEL, data["access_token"], kind="device_token")
-                log.info("device_paired", user=(data.get("user") or {}).get("email"))
+                # Persist the paired account's name so the system prompt can address
+                # the real user by name instead of the shipped default. This is why
+                # a fresh install no longer calls every stranger "Garcia".
+                user = data.get("user") or {}
+                name = (user.get("name") or "").strip()
+                if name:
+                    with contextlib.suppress(Exception):
+                        dictionary.set_user_field("display_name", name)
+                log.info("device_paired", user=user.get("email"))
                 return data
             try:
                 err = (r.json().get("detail") or {}).get("error")

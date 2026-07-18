@@ -483,26 +483,33 @@ async def _build_instructions() -> str:
     and injected at the very top: the model must NOT pick the greeting
     language itself; mirroring starts on turn 2.
     """
-    preferred_lang = dictionary.user_profile().get("preferred_lang", "es") or "es"
+    _profile = dictionary.user_profile()
+    preferred_lang = _profile.get("preferred_lang", "es") or "es"
     lang_name = "English" if preferred_lang == "en" else "Spanish"
+    # The user's name comes from the paired account (persisted at pairing time to
+    # the profile's display_name). NEVER hardcode a maker name here — a daemon
+    # shipped to strangers is as public as the landing (CLAUDE.md public-copy
+    # rule). The whole prompt below writes "Garcia" as a stand-in for the user and
+    # is rewritten to the real name at the end of this function.
+    user_name = _profile.get("display_name") or _profile.get("full_name") or "tu usuario"
     base = (
         "# Session language\n"
         f"Your first sentence MUST be in {lang_name}. Do NOT decide the "
         "language from any future user turn until you have spoken the "
         "greeting. After the greeting, mirror Garcia's language per turn.\n\n"
         "# Role\n"
-        "You are Emma, Garcia's personal AI assistant on his Mac. "
-        "You are like Jarvis — sharp, warm, capable. You control his "
+        "You are Emma, Garcia's personal AI assistant on their Mac. "
+        "You are like Jarvis — sharp, warm, capable. You control their "
         "apps, music, browser, files, and system through tools.\n\n"
         "# Personality\n"
         "- Confident, calm, slightly witty. Never flustered.\n"
         "- Talk to Garcia like a trusted colleague, not a customer.\n"
         "- Be direct. No filler, no hedging, no apologies.\n\n"
         "# Language\n"
-        "- Garcia speaks Mexican Spanish (Monterrey) and English.\n"
+        "- Garcia speaks Spanish and English (mirror whichever they use).\n"
         "- ALWAYS reply in the SAME language Garcia just spoke.\n"
         "- NEVER switch mid-response. NEVER use any other language.\n"
-        "- Spanish: use 'tú', Mexican colloquialisms are fine.\n"
+        "- Spanish: use 'tú'; a natural, colloquial register is fine.\n"
         "- If unsure, default to Spanish.\n\n"
         "# Language mirror (strict)\n"
         "- The language of the most recent USER turn governs your next reply "
@@ -974,6 +981,11 @@ async def _build_instructions() -> str:
     hint = runtime.get_style_hint()
     if hint:
         base += f"- Tono para esta conversación: {hint}\n"
+    # Rewrite the stand-in name to the paired user's real name (or the generic
+    # default). Every "Garcia" in this prompt refers to the user, so a single
+    # replace is exhaustive and keeps possessives intact ("Garcia's" -> "<name>'s").
+    if user_name != "Garcia":
+        base = base.replace("Garcia", user_name)
     return base
 
 
@@ -1282,10 +1294,11 @@ def _make_function_handler(
         ):
             log.info("speaker_gate_refused", tool=name)
             events_bus.publish("speaker_gate_refused", name=name)
+            _owner = dictionary.user_profile().get("display_name") or "el dueño"
             await params.result_callback(
                 {
                     "success": False,
-                    "user_message": "No te reconozco bien la voz. Que Garcia confirme "
+                    "user_message": f"No te reconozco bien la voz. Que {_owner} confirme "
                     "primero, o enrolla la tuya con 'Emma, esta es mi voz'.",
                     "data": None,
                     "requires_confirmation": False,
