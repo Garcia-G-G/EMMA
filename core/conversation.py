@@ -80,6 +80,7 @@ from core import (
     capability_gaps,
     dictionary,
     events_bus,
+    personality,
     redaction,
     runtime,
     runtime_state,
@@ -475,6 +476,17 @@ def _adapt_tool_specs_for_realtime(chat_specs: list[dict[str, Any]]) -> list[dic
     return out
 
 
+def _personality_section() -> str:
+    """The # Personality bullets, generated from the saved axes (EMMA-APP Part 4).
+
+    At default axes this is byte-for-byte today's three bullets; off-default axes
+    append guidance. Returns the block with a trailing newline so the surrounding
+    f-string reproduces the original blank line before # Language.
+    """
+    lines = personality.personality_lines(dictionary.personality_profile())
+    return "\n".join(lines) + "\n"
+
+
 async def _build_instructions() -> str:
     """System prompt for the Realtime session, with memory priming.
 
@@ -502,9 +514,7 @@ async def _build_instructions() -> str:
         "You are like Jarvis — sharp, warm, capable. You control their "
         "apps, music, browser, files, and system through tools.\n\n"
         "# Personality\n"
-        "- Confident, calm, slightly witty. Never flustered.\n"
-        "- Talk to Garcia like a trusted colleague, not a customer.\n"
-        "- Be direct. No filler, no hedging, no apologies.\n\n"
+        f"{_personality_section()}\n"
         "# Language\n"
         "- Garcia speaks Spanish and English (mirror whichever they use).\n"
         "- ALWAYS reply in the SAME language Garcia just spoke.\n"
