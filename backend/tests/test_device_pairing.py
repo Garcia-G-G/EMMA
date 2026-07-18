@@ -6,7 +6,8 @@ import time
 
 import pytest
 
-from backend import db, device_pairing as dp
+from backend import db
+from backend import device_pairing as dp
 from backend.config import settings
 
 _USER_CODE_RE = re.compile(r"^[A-Z2-9]{4}-[A-Z2-9]{4}$")
@@ -118,6 +119,7 @@ def test_revoke_then_resolve_none():
 
 # ---- route-level round trip (FastAPI TestClient) ----
 from fastapi.testclient import TestClient  # noqa: E402
+
 from backend.app import app  # noqa: E402
 
 
