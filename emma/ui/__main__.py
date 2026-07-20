@@ -83,6 +83,7 @@ def send_control(payload: dict[str, object]) -> None:
 _ICON_FOR_STATE = {
     "idle": "circle",
     "listening": "waveform",
+    "thinking": "ellipsis",
     "speaking": "waveform.circle.fill",
     "snoozing": "moon",
     "muted": "mic.slash",
@@ -91,6 +92,7 @@ _ICON_FOR_STATE = {
 _STATE_BUCKET = {
     "waiting_for_wake": "idle",
     "listening": "listening",
+    "thinking": "thinking",
     "speaking": "speaking",
     "responding": "speaking",
     "snoozing": "snoozing",
@@ -99,6 +101,7 @@ _STATE_BUCKET = {
 _ESTADO_LABEL = {
     "idle": "En espera",
     "listening": "Escuchando",
+    "thinking": "Pensando",
     "speaking": "Hablando",
     "snoozing": "Durmiendo",
     "muted": "Micrófono apagado",
@@ -262,7 +265,9 @@ class _StateListener(threading.Thread):
             msg = json.loads(raw)
         except Exception:
             return
-        if msg.get("type") != "state":
+        # A valid-but-non-object frame (123, "x", []) from a buggy/hostile stream
+        # must not raise here — that would tear down the socket and loop-reconnect.
+        if not isinstance(msg, dict) or msg.get("type") != "state":
             return
         bucket = _STATE_BUCKET.get(msg.get("state", ""), "idle")
         # AppKit is main-thread only.

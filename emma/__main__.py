@@ -16,6 +16,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -177,7 +178,13 @@ async def _supervise_ui(log: structlog.BoundLogger) -> None:
     Killing the UI never kills the daemon — it's a child we own and simply relaunch
     (DoD item 8). Killing the daemon cancels this task, which terminates the child.
     Gated on EMMA_DASHBOARD because the UI needs the in-daemon control channel.
+
+    Escalating backoff on RAPID exits so a UI that can't start (no GUI/WindowServer
+    session over SSH, a deterministic crash) doesn't respawn ~30x/min forever; a
+    healthy run resets it to the fast cadence.
     """
+    min_backoff, max_backoff, healthy_s = 2.0, 60.0, 30.0
+    backoff = min_backoff
     while True:
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -187,18 +194,23 @@ async def _supervise_ui(log: structlog.BoundLogger) -> None:
                 stderr=asyncio.subprocess.DEVNULL,
             )
         except Exception as exc:  # e.g. no GUI session — back off, don't spin
-            log.warning("emma_ui_spawn_failed", error=str(exc))
-            await asyncio.sleep(10.0)
+            log.warning("emma_ui_spawn_failed", error=str(exc), respawn_in_s=round(backoff, 1))
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff)
             continue
         log.info("emma_ui_spawned", pid=proc.pid)
+        started = time.monotonic()
         try:
             await proc.wait()
         except asyncio.CancelledError:
             with contextlib.suppress(Exception):
                 proc.terminate()
             raise
-        log.info("emma_ui_exited", code=proc.returncode)
-        await asyncio.sleep(2.0)  # brief backoff before respawn
+        # A UI that ran a healthy while → reset to fast respawn; a rapid exit
+        # (crash loop) → escalate the wait up to the cap.
+        backoff = min_backoff if (time.monotonic() - started) >= healthy_s else min(backoff * 2, max_backoff)
+        log.info("emma_ui_exited", code=proc.returncode, respawn_in_s=round(backoff, 1))
+        await asyncio.sleep(backoff)
 
 
 async def _run_orchestrator(log: structlog.BoundLogger) -> int:

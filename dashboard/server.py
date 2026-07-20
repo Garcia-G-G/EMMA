@@ -23,6 +23,7 @@ from websockets.asyncio.server import serve
 # Ensure the repo root is importable when this is run standalone
 # (`python dashboard/server.py` only puts dashboard/ on sys.path).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config.settings import settings
 from core import events_bus
 
 log = structlog.get_logger("emma.dashboard")
@@ -33,7 +34,9 @@ MEMORY_DB = EMMA_HOME / "memory.db"
 CRASH_DIR = Path.home() / "Library/Logs/Emma/crashes"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_DIR = Path(__file__).resolve().parent
-PORT = 3200
+# Honor a DASHBOARD_PORT override: the daemon passes EMMA_DASHBOARD_PORT to the
+# UI from this same setting, so a hardcoded 3200 would split the UI from the server.
+PORT = settings.DASHBOARD_PORT
 
 # OpenAI Realtime pricing (per million tokens, May 2026)
 PRICE_AUDIO_IN = 40.00  # cached input
