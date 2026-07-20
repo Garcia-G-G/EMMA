@@ -106,7 +106,7 @@ def _headers() -> dict[str, str]:
     return h
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def search_github(query: str, limit: int = 5) -> ToolResult:
     """Search GitHub public repositories by name or keyword.
 
@@ -207,7 +207,7 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
     return ToolResult(True, {"matches": []}, f"No encontré repos para '{q}'.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all") -> ToolResult:
     """Lista los repos de Garcia (los suyos, no search). Para 'mis repos',
     'los repos que tengo', 'el repo que hice de X'.
@@ -263,7 +263,7 @@ async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all
     return _matches_result(matches, f"Tienes {len(matches)} repos:")
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def get_repo_url(query: str) -> ToolResult:
     """Resolve a repo query to its top clone URL. Used when Garcia chains
     'busca X y clónalo' in one breath."""

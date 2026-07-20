@@ -17,7 +17,7 @@ log = structlog.get_logger("emma.tools.messages")
 _MSG_TIMEOUT_S = 12.0
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def recent_threads(limit: int = 5) -> ToolResult:
     """Lista los identificadores de las conversaciones recientes de Mensajes."""
     script = (

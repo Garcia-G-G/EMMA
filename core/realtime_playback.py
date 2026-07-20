@@ -95,19 +95,23 @@ class _PlaybackTrackingOutput(LocalAudioOutputTransport):
 
     def __init__(self, py_audio: Any, params: LocalAudioTransportParams, clock: PlaybackClock) -> None:
         super().__init__(py_audio, params)
-        self._clock = clock
+        # NOT self._clock — pipecat's BaseOutputTransport already owns self._clock
+        # (a BaseClock it uses for frame timing); clobbering it breaks the pipeline.
+        self._playback_clock = clock
         self._latency_read = False
 
     async def write_audio_frame(self, frame: OutputAudioRawFrame) -> bool:
         ok = await super().write_audio_frame(frame)
         if ok:
-            if not self._latency_read:
+            if not self._latency_read and self._out_stream is not None:
                 # Read the device's output latency once the stream exists, so
                 # played_ms can subtract the DAC buffer that hasn't sounded yet.
                 with contextlib.suppress(Exception):
-                    self._clock.set_device_latency_s(float(self._out_stream.get_output_latency()))
+                    self._playback_clock.set_device_latency_s(
+                        float(self._out_stream.get_output_latency())
+                    )
                 self._latency_read = True
-            self._clock.add_played(len(frame.audio))
+            self._playback_clock.add_played(len(frame.audio))
         return ok
 
 
@@ -116,11 +120,11 @@ class PlaybackTrackingLocalAudioTransport(LocalAudioTransport):
 
     def __init__(self, params: LocalAudioTransportParams, clock: PlaybackClock) -> None:
         super().__init__(params)
-        self._clock = clock
+        self._playback_clock = clock
 
     def output(self) -> Any:
         if not self._output:
-            self._output = _PlaybackTrackingOutput(self._pyaudio, self._params, self._clock)
+            self._output = _PlaybackTrackingOutput(self._pyaudio, self._params, self._playback_clock)
         return self._output
 
 
@@ -135,7 +139,8 @@ class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
 
     def __init__(self, *args: Any, playback_clock: PlaybackClock, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._clock = playback_clock
+        # NOT self._clock — the base service already owns a BaseClock by that name.
+        self._playback_clock = playback_clock
         self._truncated_items: set[str] = set()
 
     async def _handle_evt_audio_delta(self, evt: Any) -> None:
@@ -146,8 +151,8 @@ class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
         # First delta of a new assistant turn → reset the played clock so its
         # counter is aligned with this item, matching pipecat's per-turn start_time.
         if getattr(self, "_current_audio_response", None) is None:
-            self._clock.reset()
-        await super()._handle_evt_audio_delta(evt)
+            self._playback_clock.reset()
+        await super()._handle_evt_audio_delta(evt)  # type: ignore[no-untyped-call]
 
     async def _truncate_current_audio_response(self) -> None:
         current = getattr(self, "_current_audio_response", None)
@@ -155,9 +160,9 @@ class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
             return
         # If pipecat's internal shape drifted, fail safe to stock behavior.
         if not (hasattr(current, "item_id") and hasattr(current, "total_size")):
-            await super()._truncate_current_audio_response()
+            await super()._truncate_current_audio_response()  # type: ignore[no-untyped-call]
             return
-        played_ms = self._clock.played_ms()
+        played_ms = self._playback_clock.played_ms()
         self._truncated_items.add(current.item_id)
         if len(self._truncated_items) > 256:  # bound the set over a long session
             self._truncated_items = set(list(self._truncated_items)[-128:])

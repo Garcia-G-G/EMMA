@@ -24,6 +24,26 @@ def _reset():
     conversation._active_task = None
 
 
+class _FakeReq:
+    def __init__(self, origin: str | None) -> None:
+        self.headers = {"Origin": origin} if origin else {}
+
+
+class _FakeWS:
+    def __init__(self, origin: str | None) -> None:
+        self.request = _FakeReq(origin)
+
+
+def test_origin_check_blocks_cross_site_hijack() -> None:
+    # A malicious page opening ws://127.0.0.1/control must NOT be able to unmute
+    # or shut down Emma. WS ignores same-origin policy, so we check Origin ourselves.
+    assert server._origin_ok(_FakeWS(None)) is True  # native app (no Origin)
+    assert server._origin_ok(_FakeWS("http://127.0.0.1:3200")) is True  # own dashboard
+    assert server._origin_ok(_FakeWS("http://localhost:3200")) is True
+    assert server._origin_ok(_FakeWS("https://evil.example")) is False  # foreign page
+    assert server._origin_ok(_FakeWS("http://127.0.0.1:9999")) is False  # wrong port
+
+
 @pytest.mark.asyncio
 async def test_unmute_reaches_orchestrator() -> None:
     orchestrator.mute_mic()

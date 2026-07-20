@@ -106,7 +106,7 @@ async def _synthesize(query: str, triplets: list[tuple[int, dict[str, str], str]
     return (completion.choices[0].message.content or "").strip()
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def deep_research(query: str, depth: int = 3) -> ToolResult:
     """Investiga a fondo: busca, lee las mejores fuentes y sintetiza con citas.
 

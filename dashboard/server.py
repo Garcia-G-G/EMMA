@@ -16,6 +16,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import structlog
 import websockets
 from websockets.asyncio.server import serve
 
@@ -23,6 +24,8 @@ from websockets.asyncio.server import serve
 # (`python dashboard/server.py` only puts dashboard/ on sys.path).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core import events_bus
+
+log = structlog.get_logger("emma.dashboard")
 
 EMMA_LOG = Path("/tmp/emma_session.log")
 EMMA_HOME = Path.home() / ".emma"
@@ -426,10 +429,33 @@ async def control_handler(ws):
         pass
 
 
+def _origin_ok(ws) -> bool:
+    """Block cross-site WebSocket hijacking (CSWSH).
+
+    A WebSocket handshake is NOT subject to the same-origin policy, so any web page
+    the user visits could open ws://127.0.0.1:{PORT+1}/control and send
+    unmute/shutdown — silently re-enabling a mic the user muted, or DoSing Emma.
+    The native UI client (python-websockets) sends NO Origin header; browsers ALWAYS
+    do. Accept only a missing Origin or our own loopback dashboard origin.
+    """
+    request = getattr(ws, "request", None)
+    headers = getattr(request, "headers", None)
+    origin = headers.get("Origin") if headers is not None else None
+    if not origin:
+        return True  # native app / non-browser client
+    return origin in {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"}
+
+
 async def ws_router(ws):
     """Route the WebSocket by path: /events -> bus, /control -> UI commands, else legacy."""
     request = getattr(ws, "request", None)
     path = (getattr(request, "path", None) or "/").split("?")[0].rstrip("/")
+    # Guard the actionable + live-state sockets against foreign browser origins.
+    if path in ("/events", "/control") and not _origin_ok(ws):
+        log.warning("ws_forbidden_origin", path=path)
+        with contextlib.suppress(Exception):
+            await ws.close(code=1008, reason="forbidden origin")
+        return
     if path == "/events":
         await events_handler(ws)
     elif path == "/control":
