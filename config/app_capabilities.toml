@@ -1,6 +1,6 @@
 # Emma app-capabilities registry.
 #
-# Maps each app Garcia uses to its automation mechanisms so a single set of
+# Maps each app the user drives to its automation mechanisms so a single set of
 # tools can drive many apps — adding an app is a TOML block, not new code.
 #
 # Fields (all optional):
@@ -33,7 +33,7 @@ resource_url.dm = "discord://-/channels/@me/{user_id}"
 [whatsapp]
 url_scheme = "whatsapp"
 category = "chat"
-notes = "wa.me opens the desktop app (or web) with the message prefilled; Garcia taps Send. Phone = digits only, no +/spaces."
+notes = "wa.me opens the desktop app (or web) with the message prefilled; the user taps Send. Phone = digits only, no +/spaces."
 resource_url.message = "whatsapp://send?phone={phone}&text={text}"
 web_fallback.message = "https://wa.me/{phone}?text={text}"
 
@@ -42,12 +42,12 @@ web_fallback.message = "https://wa.me/{phone}?text={text}"
 [x]
 url_scheme = ""
 category = "social"
-notes = "Web intent composer (browser, prefilled); Garcia taps Post. API posting needs an OAuth2 user-context token (paid/approved acct)."
+notes = "Web intent composer (browser, prefilled); the user taps Post. API posting needs an OAuth2 user-context token (paid/approved acct)."
 web_fallback.post = "https://twitter.com/intent/tweet?text={text}"
 
 # LinkedIn cannot reliably prefill arbitrary post TEXT via URL (verified 2026):
 # share-offsite only attaches a link via Open Graph. We open the feed composer
-# (best-effort text) AND copy the text to the clipboard so Garcia can paste.
+# (best-effort text) AND copy the text to the clipboard so the user can paste.
 [linkedin]
 url_scheme = "linkedin"
 category = "social"

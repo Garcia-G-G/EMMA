@@ -1,21 +1,25 @@
 # Emma knowledge dictionary.
 #
-# Five sections, each a different kind of durable knowledge Garcia uses
-# daily. Entries are public-tier — no passwords, no full addresses, no
+# Five sections, each a different kind of durable knowledge the user relies
+# on daily. Entries are public-tier — no passwords, no full addresses, no
 # phone numbers. Secrets live in the macOS Keychain via
 # `tools/secrets_tool.remember_secret`.
+#
+# This file ships with generic placeholders. A fresh user teaches Emma their
+# own facts by voice (the `remember_*` tools write back here); nothing personal
+# is pre-seeded.
 #
 # Hot-reload: `python -m emma.dictionary reload`.
 
 # -----------------------------------------------------------------------
-# [user] — who "yo / mi / mío / mis" refers to. Garcia teaches Emma these
+# [user] — who "yo / mi / mío / mis" refers to. The user teaches Emma these
 # by voice (remember_user_profile); empty defaults are intentional — Emma
 # must not guess. Public-tier only; secrets stay in the Keychain.
 # -----------------------------------------------------------------------
 [user]
 display_name = ""
 full_name = ""
-github_username = "Garcia-G-G"
+github_username = ""
 linkedin = ""
 website = ""
 preferred_lang = "es"
@@ -41,15 +45,18 @@ url = "https://calendar.google.com/"
 title = "Google Calendar"
 
 # -----------------------------------------------------------------------
-# [contacts] — people Garcia mentions by relation or first name.
+# [contacts] — people the user mentions by relation or first name.
 # Used by mail/messages tools to resolve "manda mensaje a mi mamá".
 # Public fields only: name, email, relation. NOT phone numbers.
+# Added by voice via remember_contact.
+#
+# Example (delete or replace by voice with remember_contact):
+# [contacts.mom]
+# name = "Nombre Apellido"
+# email = "correo@example.com"
+# relation = "madre"
+# aliases = ["mami", "mamá", "mom"]
 # -----------------------------------------------------------------------
-[contacts.mom]
-name = "Ana García"
-email = "ana@example.com"
-relation = "madre"
-aliases = ["mami", "mamá", "mom"]
 
 # -----------------------------------------------------------------------
 # [terms] — glossary. Acronyms, project codenames, jargon.
@@ -57,7 +64,7 @@ aliases = ["mami", "mamá", "mom"]
 # -----------------------------------------------------------------------
 [terms.OWASP]
 expansion = "Open Web Application Security Project"
-context = "Seguridad web. Garcia usa el OWASP Top 10 como referencia."
+context = "Seguridad web. Referencia estándar Top 10."
 
 [terms.MCP]
 expansion = "Model Context Protocol"
@@ -68,14 +75,13 @@ expansion = "Minimum Viable Product"
 context = "Producto mínimo viable — versión más pequeña que entrega valor."
 
 # -----------------------------------------------------------------------
-# [apps] — Garcia's preferred app per category (when detect_preferred
-# can't pick). Routes voice intents directly without asking.
+# [apps] — the user's preferred app per category (auto-detected; these are
+# fallbacks for when detect_preferred can't pick). Routes voice intents
+# directly without asking.
 # -----------------------------------------------------------------------
 [apps.editor]
 default = "Cursor"
 
-# 19.6 smoke fix: "Arc" was a scaffold placeholder — Garcia's detected
-# browser is Brave (environment_cache.json); Arc isn't even installed.
 [apps.browser]
 default = "Brave Browser"
 
@@ -86,42 +92,21 @@ default = "iTerm"
 default = "Spotify"
 
 # -----------------------------------------------------------------------
-# [facts] — durable personal facts. Get seeded into memory so the LLM
-# has them in every priming block.
-# Each entry has `text` (Spanish) and optional `kind` and `confidence`.
+# [facts] — durable personal facts. Get seeded into memory so the LLM has
+# them in every priming block. A fresh install has none — Emma learns them
+# by voice (remember_fact / reflection) and appends them here.
+# Each entry has `text` and optional `kind` and `confidence`.
 # -----------------------------------------------------------------------
-[facts.001]
-text = "Garcia vive en Monterrey, Nuevo León, México."
-kind = "profile"
-confidence = 0.99
-
-[facts.002]
-text = "Garcia trabaja como desarrollador de software."
-kind = "profile"
-confidence = 0.95
-
-[facts.003]
-text = "Garcia habla español mexicano de Monterrey y inglés."
-kind = "profile"
-confidence = 0.99
-
-[facts.004]
-text = "Garcia prefiere clonar repos a ~/Documents/repos."
-kind = "preference"
-confidence = 0.9
+[facts]
 
 # -----------------------------------------------------------------------
-# [connections] — Garcia's in-app resources (19.6-B17): TablePlus
+# [connections] — the user's in-app resources (19.6-B17): TablePlus
 # connections, Slack channels, Obsidian notes. Each entry names the app,
 # the resource kind (matches a resource_url template in
 # app_capabilities.toml) and the fields the template needs. Added by
 # voice via remember_connection. NO credentials here — TablePlus etc.
 # keep those in their own Keychain entries.
 # -----------------------------------------------------------------------
-[connections.learning-rots-local]
-app = "tableplus"
-kind = "connection"
-name = "learning-rots-local"
 
 # -----------------------------------------------------------------------
 # [user_apps] — per-user app config the capabilities registry can't know
@@ -140,4 +125,4 @@ default_vault = "Notas"
 
 [terms.ELIMINAR]
 expansion = "delete"
-context = "Cuando Garcia diga 'eliminar' se interpreta como 'delete' (acción de borrar)."
+context = "Cuando el usuario diga 'eliminar' se interpreta como 'delete' (acción de borrar)."

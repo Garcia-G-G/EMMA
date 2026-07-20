@@ -108,21 +108,9 @@ say_en = "JAR-vis"
 
 [Emma]
 canonical = "Emma"
-description = "Garcia's assistant — this project."
+description = "The user's assistant — this project."
 stt_aliases = ["ema", "hema"]
 say_es = "ema"
-
-[Garcia]
-canonical = "Garcia"
-description = "The user."
-stt_aliases = ["garcía", "garsia"]
-say_es = "garsía"
-say_en = "GAR-see-uh"
-
-[Monterrey]
-canonical = "Monterrey"
-description = "Garcia's city, Nuevo León, Mexico."
-stt_aliases = ["monterey"]
 
 [Pydantic]
 canonical = "Pydantic"
@@ -162,23 +150,3 @@ stt_aliases = ["espotify", "espotifai"]
 canonical = "YouTube"
 description = "Video platform."
 stt_aliases = ["yutub", "yutu"]
-
-[limitacinterminalCursor]
-canonical = "limitación terminal Cursor"
-stt_aliases = ["limitación: terminal Cursor"]
-
-[NillOjeda]
-canonical = "Nill Ojeda"
-stt_aliases = ["Nil Ojeda"]
-
-[ObservacincierrepestaafallidoenChrome]
-canonical = "Observación cierre pestaña fallido en Chrome"
-stt_aliases = ["Observación cierre pestaña fallo en Chrome"]
-
-[cloud]
-canonical = "cloud"
-stt_aliases = ["clod"]
-
-[reachy]
-canonical = "reachy"
-stt_aliases = ["riichi"]
