@@ -47,7 +47,7 @@ def _svc_no_init(clock: PlaybackClock) -> TruncateAccurateRealtimeLLMService:
     """Build the service without pipecat's heavy __init__ (no network/config)."""
     svc = TruncateAccurateRealtimeLLMService.__new__(TruncateAccurateRealtimeLLMService)
     svc._playback_clock = clock
-    svc._truncated_items = set()
+    svc._truncated_items = {}
     return svc
 
 
@@ -94,10 +94,35 @@ def test_truncate_noop_without_current_response() -> None:
 def test_delta_for_truncated_item_is_dropped() -> None:
     svc = _svc_no_init(PlaybackClock())
     svc._current_audio_response = None
-    svc._truncated_items.add("gone")
+    svc._truncated_items["gone"] = None
     with patch.object(rp.OpenAIRealtimeLLMService, "_handle_evt_audio_delta", new=AsyncMock()) as sup:
         asyncio.run(svc._handle_evt_audio_delta(SimpleNamespace(item_id="gone", delta="x")))
         sup.assert_not_awaited()  # trailing audio for a cut item never reaches the pipeline
+
+
+def test_item_advance_resets_clock_mid_turn() -> None:
+    # A turn spans items A then B (gpt-realtime-2 long reply). When B's first delta
+    # arrives, the clock must reset so played_ms tracks B, not A+B cumulatively.
+    clock = PlaybackClock(rate=24000)
+    clock.add_played(48000)  # item A already played (1000 ms)
+    svc = _svc_no_init(clock)
+    svc._current_audio_response = SimpleNamespace(item_id="A", content_index=0, total_size=48000)
+    with patch.object(rp.OpenAIRealtimeLLMService, "_handle_evt_audio_delta", new=AsyncMock()):
+        asyncio.run(svc._handle_evt_audio_delta(SimpleNamespace(item_id="B", delta="x")))
+    assert clock.played_ms() == 0  # reset at the item boundary, not left cumulative
+
+
+def test_truncated_items_trim_keeps_just_added() -> None:
+    # After the set/dict crosses its bound, the id we JUST truncated must survive so
+    # its trailing deltas stay filtered (unordered set() could evict it).
+    clock = PlaybackClock(rate=24000)
+    svc = _svc_no_init(clock)
+    svc._truncated_items = {f"old-{i}": None for i in range(256)}
+    svc._current_audio_response = SimpleNamespace(item_id="JUST", content_index=0, total_size=24000)
+    svc.send_client_event = AsyncMock()  # type: ignore[method-assign]
+    asyncio.run(svc._truncate_current_audio_response())
+    assert "JUST" in svc._truncated_items  # never evicted by the trim
+    assert len(svc._truncated_items) <= 256
 
 
 def test_first_delta_resets_clock_and_forwards() -> None:
