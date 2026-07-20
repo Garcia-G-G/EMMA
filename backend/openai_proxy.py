@@ -24,7 +24,8 @@ router = APIRouter(prefix="/v1", tags=["openai-proxy"])
 _UPSTREAM = "https://api.openai.com/v1"
 _CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=15.0))
 # Hop-by-hop / rewritten headers we never forward in either direction.
-_STRIP = {"authorization", "host", "content-length", "content-encoding", "transfer-encoding"}
+_STRIP = {"authorization", "host", "content-length", "content-encoding", "transfer-encoding",
+          "accept-encoding"}
 
 
 def _authorize(req: Request) -> dict[str, Any]:
@@ -41,6 +42,7 @@ def _upstream_headers(req: Request) -> dict[str, str]:
     """Client headers minus Authorization/Host, plus Emma's real key."""
     h = {k: v for k, v in req.headers.items() if k.lower() not in _STRIP}
     h["Authorization"] = f"Bearer {settings.OPENAI_API_KEY}"
+    h["Accept-Encoding"] = "identity"  # forward plain bytes (no br/gzip to decode)
     return h
 
 

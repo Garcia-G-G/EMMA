@@ -106,6 +106,29 @@ class _DoneUpstream:
         return await self._q.get()
 
 
+def _req(headers):
+    from starlette.requests import Request
+    scope = {"type": "http", "method": "POST", "path": "/v1/chat/completions",
+             "headers": [(k.encode(), v.encode()) for k, v in headers.items()]}
+    return Request(scope)
+
+
+def test_upstream_headers_force_identity_encoding():
+    # Client asks for compressed; proxy must forward a single Accept-Encoding: identity
+    # so aiter_raw() yields plain SSE (metering can parse it, client can read it).
+    h = openai_proxy._upstream_headers(_req({
+        "authorization": "Bearer devtoken",
+        "accept-encoding": "gzip, br",
+        "content-type": "application/json",
+        "host": "api.theemmafamily.com",
+    }))
+    ae = {k: v for k, v in h.items() if k.lower() == "accept-encoding"}
+    assert ae == {"Accept-Encoding": "identity"}, ae
+    assert h["Authorization"] == f"Bearer {settings.OPENAI_API_KEY}"
+    assert not any(k.lower() == "host" for k in h)
+    assert h["content-type"] == "application/json"
+
+
 def test_missing_bearer_401():
     c = TestClient(app)
     r = c.post("/v1/chat/completions", json={"model": "gpt-4o-mini", "messages": []})
