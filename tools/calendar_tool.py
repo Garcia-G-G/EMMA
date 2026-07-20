@@ -75,7 +75,7 @@ async def _fetch_between(start: dt.datetime, end: dt.datetime) -> list[dict[str,
     return [_to_tool_event(e) for e in raw]
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def today_events() -> ToolResult:
     """Lista los eventos del calendario de hoy (hora, título, lugar)."""
     now = dt.datetime.now()
@@ -93,7 +93,7 @@ async def today_events() -> ToolResult:
     return ToolResult(True, {"events": events}, f"Hoy tienes: {spoken}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def next_event() -> ToolResult:
     """Dice cuál es tu próximo evento del calendario."""
     now = dt.datetime.now()
@@ -110,7 +110,7 @@ async def next_event() -> ToolResult:
     return ToolResult(True, {"event": nxt}, f"Tu próximo evento: {nxt['label']}.", False)
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def events_in_range(start_iso: str, end_iso: str) -> ToolResult:
     """Lista los eventos del calendario entre dos fechas ISO (start_iso, end_iso)."""
     try:

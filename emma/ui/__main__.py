@@ -21,6 +21,7 @@ import contextlib
 import json
 import os
 import threading
+from typing import Any
 
 import objc
 import structlog
@@ -55,7 +56,7 @@ _WS_URL = f"ws://127.0.0.1:{_PORT + 1}/events"
 _CONTROL_URL = f"ws://127.0.0.1:{_PORT + 1}/control"
 
 
-def send_control(payload: dict) -> None:
+def send_control(payload: dict[str, object]) -> None:
     """Fire a UI control command at the daemon over the loopback /control socket.
 
     Runs on a short-lived background thread so the click returns instantly; the
@@ -104,7 +105,7 @@ _ESTADO_LABEL = {
 }
 
 
-class EmmaBar(NSObject):
+class EmmaBar(NSObject):  # type: ignore[misc]
     """The menubar status item + its window. Main-thread only."""
 
     def initWithPort_(self, port: int) -> EmmaBar:  # noqa: N802
@@ -123,7 +124,7 @@ class EmmaBar(NSObject):
         return self
 
     # ---- icon -------------------------------------------------------------
-    @objc.python_method
+    @objc.python_method  # type: ignore[untyped-decorator]
     def _apply_icon(self, state: str) -> None:
         symbol = _ICON_FOR_STATE.get(state, "circle")
         img = NSImage.imageWithSystemSymbolName_accessibilityDescription_(symbol, "Emma")
@@ -143,7 +144,7 @@ class EmmaBar(NSObject):
             )
 
     # ---- menu -------------------------------------------------------------
-    @objc.python_method
+    @objc.python_method  # type: ignore[untyped-decorator]
     def _build_menu(self) -> None:
         menu = NSMenu.alloc().init()
         self._estado_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
@@ -163,17 +164,17 @@ class EmmaBar(NSObject):
         self._menu = menu
 
     # ---- actions (a physical click is trusted input; it is the confirmation) ---
-    def stopSpeaking_(self, _sender) -> None:  # noqa: N802
+    def stopSpeaking_(self, _sender: Any) -> None:  # noqa: N802
         send_control({"cmd": "stop"})
 
-    def toggleMute_(self, _sender) -> None:  # noqa: N802
+    def toggleMute_(self, _sender: Any) -> None:  # noqa: N802
         # If the mic is off, this is the way back voice can't give (DoD item 9).
         send_control({"cmd": "unmute" if self._state == "muted" else "mute"})
 
-    def sleep15_(self, _sender) -> None:
+    def sleep15_(self, _sender: Any) -> None:
         send_control({"cmd": "snooze", "minutes": 15})
 
-    def shutdownEmma_(self, _sender) -> None:  # noqa: N802
+    def shutdownEmma_(self, _sender: Any) -> None:  # noqa: N802
         alert = NSAlert.alloc().init()
         alert.setMessageText_("¿Apagar Emma?")
         alert.setInformativeText_(
@@ -184,15 +185,15 @@ class EmmaBar(NSObject):
         if alert.runModal() == NSAlertFirstButtonReturn:
             send_control({"cmd": "shutdown"})
 
-    @objc.python_method
-    def _add_item(self, menu, title: str, selector: str, key: str = ""):
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _add_item(self, menu: Any, title: str, selector: str, key: str = "") -> Any:
         it = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, selector, key)
         it.setTarget_(self)
         menu.addItem_(it)
         return it
 
     # ---- window -----------------------------------------------------------
-    def openWindow_(self, _sender) -> None:  # noqa: N802
+    def openWindow_(self, _sender: Any) -> None:  # noqa: N802
         if self._window is not None:
             self._window.makeKeyAndOrderFront_(None)
             NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
@@ -220,7 +221,7 @@ class EmmaBar(NSObject):
         self._window = win
         self._webview = webview
 
-    def quitUI_(self, _sender) -> None:  # noqa: N802
+    def quitUI_(self, _sender: Any) -> None:  # noqa: N802
         # Closes the UI process only — the daemon (launchd) keeps running.
         NSApplication.sharedApplication().terminate_(None)
 
@@ -256,7 +257,7 @@ class _StateListener(threading.Thread):
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 16.0)
 
-    def _on_message(self, raw: str) -> None:
+    def _on_message(self, raw: str | bytes) -> None:
         try:
             msg = json.loads(raw)
         except Exception:

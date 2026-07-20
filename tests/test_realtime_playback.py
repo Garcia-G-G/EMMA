@@ -46,7 +46,7 @@ def test_playback_clock_reset_zeros_the_turn() -> None:
 def _svc_no_init(clock: PlaybackClock) -> TruncateAccurateRealtimeLLMService:
     """Build the service without pipecat's heavy __init__ (no network/config)."""
     svc = TruncateAccurateRealtimeLLMService.__new__(TruncateAccurateRealtimeLLMService)
-    svc._clock = clock
+    svc._playback_clock = clock
     svc._truncated_items = set()
     return svc
 
