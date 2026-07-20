@@ -95,7 +95,7 @@ async def _run(args: list[str], timeout: float = 30.0) -> tuple[int, str]:
 # ---- A: find_file -----------------------------------------------------------
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def find_file(query: str, kind: str = "", since: str = "", under_dir: str = "") -> ToolResult:
     """Busca archivos con Spotlight ("¿dónde está el PDF del contrato de diciembre?").
 

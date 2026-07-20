@@ -680,7 +680,9 @@ async def priming_block(top_n: int | None = None, context: str | None = None) ->
     if not facts:
         return ""
     lines = [f"- {f.content}" for f in facts]
-    return "WHAT YOU ALREADY KNOW ABOUT GARCIA (long-term memory):\n" + "\n".join(lines)
+    # Title-case "Garcia" (not GARCIA) so _build_instructions' name substitution
+    # catches it — an uppercase leak would ship the maker's name to every user.
+    return "WHAT YOU ALREADY KNOW ABOUT Garcia (long-term memory):\n" + "\n".join(lines)
 
 
 # ---------- embedding backfill ------------------------------------------

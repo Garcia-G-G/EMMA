@@ -89,7 +89,7 @@ def _summarize(run: dict[str, Any]) -> dict[str, Any]:
     return {"passed": total - failed, "failed": failed, "total": total, "failures": fails}
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def postman_run(collection: str, environment: str = "") -> ToolResult:
     """Corre un collection de Postman con newman ("corre el collection de health en Postman").
 

@@ -28,7 +28,7 @@ def _date_setter(var: str, d: dt.datetime) -> str:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def list_today() -> ToolResult:
     """Lista los recordatorios pendientes que vencen hoy."""
     script = (

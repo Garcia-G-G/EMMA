@@ -450,8 +450,11 @@ async def ws_router(ws):
     """Route the WebSocket by path: /events -> bus, /control -> UI commands, else legacy."""
     request = getattr(ws, "request", None)
     path = (getattr(request, "path", None) or "/").split("?")[0].rstrip("/")
-    # Guard the actionable + live-state sockets against foreign browser origins.
-    if path in ("/events", "/control") and not _origin_ok(ws):
+    # Guard EVERY socket against foreign browser origins — not just /events and
+    # /control. The legacy "/" handler streams build_state(), which includes 30
+    # memory.db facts + a live log tail; a foreign page opening ws://127.0.0.1/
+    # would otherwise exfiltrate personal memory. Native clients send no Origin.
+    if not _origin_ok(ws):
         log.warning("ws_forbidden_origin", path=path)
         with contextlib.suppress(Exception):
             await ws.close(code=1008, reason="forbidden origin")
