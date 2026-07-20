@@ -53,3 +53,28 @@ def test_reflection_suppress_blackout() -> None:
     assert reflection._is_suppressed() is False
     reflection.suppress(30)
     assert reflection._is_suppressed() is True
+
+
+@pytest.mark.asyncio
+async def test_reflection_rechecks_blackout_after_classify(monkeypatch) -> None:
+    # TOCTOU: if the blackout fires DURING classify (i.e. forget_last_turn ran while
+    # this reflection was mid-flight), the fact must NOT be written back.
+    from memory.short_term import Turn
+
+    writes: list = []
+
+    async def fake_remember(*a, **k):
+        writes.append(a)
+
+    async def fake_classify(_v):
+        reflection.suppress(30)  # blackout fires while classifying
+        return "personal"
+
+    async def fake_reflect_once(_w):
+        return [{"content": "x", "kind": "general", "confidence": 0.8}]
+
+    monkeypatch.setattr(reflection.long_term, "remember", fake_remember)
+    monkeypatch.setattr(reflection, "_classify_sensitivity", fake_classify)
+    monkeypatch.setattr(reflection, "reflect_once", fake_reflect_once)
+    await reflection.reflect_async([Turn(user_text="hi", assistant_text="ok", timestamp=0.0)])
+    assert writes == []  # the re-check caught the blackout before the write
