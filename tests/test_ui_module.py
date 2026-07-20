@@ -38,3 +38,22 @@ def test_talks_only_to_loopback() -> None:
 
 def test_unknown_state_falls_back_to_idle() -> None:
     assert ui._STATE_BUCKET.get("some_future_state", "idle") == "idle"
+
+
+def test_thinking_state_is_distinct() -> None:
+    assert ui._STATE_BUCKET.get("thinking") == "thinking"
+    assert ui._ICON_FOR_STATE["thinking"] not in (ui._ICON_FOR_STATE["idle"],)
+
+
+def test_on_message_ignores_non_dict_and_non_state_frames() -> None:
+    calls: list = []
+
+    class _FakeBar:
+        def setState_(self, s):  # noqa: N802
+            calls.append(s)
+
+    listener = ui._StateListener(_FakeBar(), "ws://x")
+    # a hostile/buggy /events stream must not crash the handler or tear the socket
+    for bad in ("123", '"x"', "[]", "not json", '{"type":"other"}', "null"):
+        listener._on_message(bad)  # must not raise
+    assert calls == []  # nothing dispatched to the UI
