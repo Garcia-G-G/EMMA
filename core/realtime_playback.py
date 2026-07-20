@@ -58,8 +58,13 @@ class PlaybackClock:
 
     Written by the output transport (one increment per device write, which in
     PyAudio blocking mode returns only once PortAudio accepts the bytes), read by
-    the LLM service at truncation time. Thread-safe: the transport writes from an
-    executor thread, the LLM reads from the event loop.
+    the LLM service at truncation time. Both run on the pipeline event loop (only
+    ``_out_stream.write`` itself is offloaded to an executor), so the lock guards
+    against future cross-thread use rather than a current one — cheap insurance.
+
+    Assumes the no-mixer output path (Emma's config): the mixer path writes
+    continuous silence frames through write_audio_frame, which would inflate the
+    played counter — add a guard here if an audio_out_mixer is ever introduced.
     """
 
     def __init__(self, rate: int = _OPENAI_RATE) -> None:
@@ -141,16 +146,23 @@ class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
         super().__init__(*args, **kwargs)
         # NOT self._clock — the base service already owns a BaseClock by that name.
         self._playback_clock = playback_clock
-        self._truncated_items: set[str] = set()
+        # Insertion-ordered (dict, not set): the trim must never evict the id we
+        # just truncated, or its trailing deltas would leak past the interruption.
+        self._truncated_items: dict[str, None] = {}
 
     async def _handle_evt_audio_delta(self, evt: Any) -> None:
         item_id = getattr(evt, "item_id", None)
         if item_id is not None and item_id in self._truncated_items:
             # Late delta for an item we already cut — drop it (no trailing speech).
             return
-        # First delta of a new assistant turn → reset the played clock so its
-        # counter is aligned with this item, matching pipecat's per-turn start_time.
-        if getattr(self, "_current_audio_response", None) is None:
+        # Reset the played clock on the FIRST delta of a turn AND at every item
+        # boundary. A turn can span multiple output items (common on gpt-realtime-2
+        # long replies); pipecat resets total_size=0 per item (last-item-wins), so
+        # the clock must reset too — otherwise played_ms accumulates across items
+        # while audio_duration_ms is per-item and min() collapses to the received
+        # length, reintroducing the wall-clock overcount this class exists to kill.
+        cur = getattr(self, "_current_audio_response", None)
+        if cur is None or getattr(cur, "item_id", None) != item_id:
             self._playback_clock.reset()
         await super()._handle_evt_audio_delta(evt)  # type: ignore[no-untyped-call]
 
@@ -163,9 +175,10 @@ class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
             await super()._truncate_current_audio_response()  # type: ignore[no-untyped-call]
             return
         played_ms = self._playback_clock.played_ms()
-        self._truncated_items.add(current.item_id)
-        if len(self._truncated_items) > 256:  # bound the set over a long session
-            self._truncated_items = set(list(self._truncated_items)[-128:])
+        self._truncated_items[current.item_id] = None
+        # Bound over a long session, evicting OLDEST first so the just-added id stays.
+        while len(self._truncated_items) > 256:
+            self._truncated_items.pop(next(iter(self._truncated_items)))
         self._current_audio_response = None
         try:
             audio_duration_ms = self._calculate_audio_duration_ms(current.total_size)
