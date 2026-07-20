@@ -32,6 +32,7 @@ import asyncio
 import contextlib
 import json
 import math
+import re
 import threading
 import time
 from collections.abc import Awaitable, Callable
@@ -505,6 +506,11 @@ async def _build_instructions() -> str:
     # rule). The whole prompt below writes "Garcia" as a stand-in for the user and
     # is rewritten to the real name at the end of this function.
     user_name = _profile.get("display_name") or _profile.get("full_name") or "tu usuario"
+    # Defense-in-depth: this name is substituted into the TRUSTED region of the
+    # prompt (including the security section), so a hostile display_name from a
+    # compromised backend could otherwise inject directives that bypass the
+    # untrusted-content fence. Strip prompt-structural chars and cap the length.
+    user_name = re.sub(r"[<>{}\r\n]", " ", user_name).strip()[:60] or "tu usuario"
     base = (
         "# Session language\n"
         f"Your first sentence MUST be in {lang_name}. Do NOT decide the "
@@ -1031,7 +1037,7 @@ def _session_seed_messages(immediate_command: bool = False) -> list[Any]:
             {
                 "role": "system",
                 "content": "This is a continuation of an in-progress conversation. "
-                "Don't greet Garcia again, don't introduce yourself. "
+                "Don't greet the user again, don't introduce yourself. "
                 "Pick up where you left off.",
             }
         )
@@ -1046,8 +1052,8 @@ def _session_seed_messages(immediate_command: bool = False) -> list[Any]:
         seed.append(
             {
                 "role": "system",
-                "content": "Garcia spoke immediately after the wake word. Skip any "
-                "greeting and respond directly to his command.",
+                "content": "The user spoke immediately after the wake word. Skip any "
+                "greeting and respond directly to their command.",
             }
         )
 
@@ -1159,6 +1165,12 @@ def _fence_untrusted(source: str, payload: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             parts.append(str(data))
     body = "\n".join(parts) if parts else "(sin contenido)"
+    # Neutralize any forged fence delimiter in the content: without this, attacker
+    # text (an email/webpage/iMessage) could embed a literal </untrusted_content>
+    # to "close" the fence early and smuggle instructions OUTSIDE it. Defang the
+    # angle bracket of any real or closing untrusted_content tag so it reads as
+    # inert text, never as a delimiter. (source is the internal tool name — safe.)
+    body = re.sub(r"<(/?\s*untrusted_content)", r"&lt;\1", body, flags=re.IGNORECASE)
     fenced = f'<untrusted_content source="{source}">\n{body}\n</untrusted_content>'
     return {
         "success": payload.get("success", True),

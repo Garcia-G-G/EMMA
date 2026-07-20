@@ -84,7 +84,7 @@ async def _fetch(url: str) -> list[dict[str, str]]:
     return items
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def rss_latest(feed_url: str, n: int = 5) -> ToolResult:
     """Lee los últimos titulares de un feed RSS ("últimas de Hacker News").
 

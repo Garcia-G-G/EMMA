@@ -47,10 +47,14 @@ _snooze_until: float = 0.0
 _muted: bool = False
 
 
+_SNOOZE_MAX_MIN = 24 * 60  # a snooze is a nap, not a permanent mic-off (DoS guard)
+
+
 def snooze_listening(minutes: int) -> float:
     """Pause wake detection for ``minutes`` (then auto-resume). Returns the deadline."""
     global _snooze_until
-    _snooze_until = time.monotonic() + max(1, int(minutes)) * 60
+    minutes = max(1, min(int(minutes), _SNOOZE_MAX_MIN))
+    _snooze_until = time.monotonic() + minutes * 60
     log.info("listening_snoozed", minutes=minutes)
     return _snooze_until
 

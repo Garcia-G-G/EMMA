@@ -110,7 +110,7 @@ def _as_applescript(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def tableplus_query(connection: str, sql: str, confirmed: bool = False) -> ToolResult:
     """Ejecuta SQL dentro de una conexión de TablePlus y lee los resultados.
 

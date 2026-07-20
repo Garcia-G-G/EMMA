@@ -54,7 +54,7 @@ def _api_get(path: str, params: dict[str, str]) -> dict[str, Any] | None:
     return data
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 def latest_video_from_creator(creator_name: str) -> ToolResult:
     """Open the most recent video from a YouTube creator/channel.
 
@@ -140,7 +140,7 @@ def latest_video_from_creator(creator_name: str) -> ToolResult:
     )
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 def search_and_open(query: str) -> ToolResult:
     """Search YouTube and open the top video result in the browser."""
     if not settings.YOUTUBE_API_KEY:

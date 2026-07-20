@@ -12,7 +12,7 @@ log = structlog.get_logger("emma.tools.safari")
 _SAFARI_TIMEOUT_S = 12.0
 
 
-@tool()
+@tool(returns_untrusted_content=True)
 async def current_url() -> ToolResult:
     """Devuelve la URL de la pestaña activa de Safari."""
     script = (
