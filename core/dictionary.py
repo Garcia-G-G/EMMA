@@ -10,6 +10,7 @@ including the control-character stripping that closes the TOML-injection hole).
 
 from __future__ import annotations
 
+import os
 import threading
 import tomllib
 from dataclasses import dataclass
@@ -227,6 +228,19 @@ def _rewrite_user_block(values: dict[str, str]) -> None:
     _rewrite_named_block("[user]", "\n".join(block_lines))
 
 
+def _atomic_write(text: str) -> None:
+    """Write the dictionary file atomically (temp + os.replace).
+
+    A plain write_text truncates then writes; a crash mid-write — during the
+    pairing critical path (`set_user_field`) — would leave a corrupt TOML, and the
+    next boot's `_parse` would fail and load ALL caches empty (identity, personality,
+    pages, contacts, prefs). os.replace swaps the fully-written temp in one step.
+    """
+    tmp = _DICT_PATH.with_name(_DICT_PATH.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, _DICT_PATH)
+
+
 def _rewrite_named_block(header: str, block: str) -> None:
     """Replace the ``header`` table's lines with ``block`` (or append it if absent).
 
@@ -255,7 +269,7 @@ def _rewrite_named_block(header: str, block: str) -> None:
     if not replaced:
         out.append("")
         out.append(block)
-    _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    _atomic_write("\n".join(out) + "\n")
 
 
 def personality_profile() -> dict[str, int]:
@@ -337,7 +351,7 @@ def _rewrite_apps_default(category: str, app: str) -> None:
         i += 1
     if not replaced:
         out.extend(["", header, f'default = "{esc}"'])
-    _DICT_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
+    _atomic_write("\n".join(out) + "\n")
 
 
 def user_app(name: str) -> dict[str, Any]:
