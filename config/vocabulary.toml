@@ -8,7 +8,7 @@
 [Claude]
 canonical = "Claude"
 description = "Anthropic's AI assistant; pronounced like English 'klohd'."
-stt_aliases = ["clout", "cloud", "clod", "claudia", "klaud", "klauz"]
+stt_aliases = ["clout", "cloud", "clod", "claudia", "klaud", "klauz", "cld"]
 say_es = "clod"
 say_en = "klohd"
 
@@ -174,3 +174,11 @@ stt_aliases = ["Nil Ojeda"]
 [ObservacincierrepestaafallidoenChrome]
 canonical = "Observación cierre pestaña fallido en Chrome"
 stt_aliases = ["Observación cierre pestaña fallo en Chrome"]
+
+[cloud]
+canonical = "cloud"
+stt_aliases = ["clod"]
+
+[reachy]
+canonical = "reachy"
+stt_aliases = ["riichi"]
