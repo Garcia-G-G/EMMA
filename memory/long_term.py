@@ -567,7 +567,12 @@ async def forget(content_or_id: str | int) -> int:
 
 def _forget_recent_sync(cutoff: float) -> int:
     with _connect() as conn:
-        rows = conn.execute("SELECT id FROM facts WHERE created_at >= ?", (cutoff,)).fetchall()
+        # Only auto-LEARNED (reflection) facts — "borra lo que acabo de decir" purges
+        # what Emma inferred this turn, NOT an explicit remember_fact the user
+        # deliberately set seconds ago (e.g. "recuérdame que soy alérgico").
+        rows = conn.execute(
+            "SELECT id FROM facts WHERE created_at >= ? AND source = 'reflection'", (cutoff,)
+        ).fetchall()
         ids = [int(r["id"]) for r in rows]
         for i in ids:
             conn.execute("DELETE FROM facts WHERE id = ?", (i,))

@@ -207,6 +207,13 @@ async def reflect_async(window: list[short_term.Turn]) -> None:
         value = f["content"]
         try:
             tier = await _classify_sensitivity(value)
+            # Re-check AFTER the long classify await, right before any write:
+            # `forget_last_turn` may have fired the blackout while we were awaiting.
+            # Without this, a fact from the just-purged turn is written back AFTER
+            # the delete (TOCTOU) and the purge silently leaks.
+            if _is_suppressed():
+                log.info("reflection_suppressed_mid_loop")
+                return
             if tier == "secret":
                 label = f"fact_{uuid.uuid4().hex[:8]}"
                 await secrets.store(label, value, kind="secret_fact")

@@ -92,6 +92,17 @@ class TestLongTerm:
         assert removed == 1  # only the fresh one
         assert _count_sync() == 1
 
+    def test_forget_recent_spares_explicit_facts(self) -> None:
+        from memory import long_term
+        from memory.long_term import _count_sync, _remember_sync
+
+        _remember_sync("auto-inferred junk", "general", 0.7, "reflection")  # created now
+        _remember_sync("I am allergic to shrimp", "fact", 1.0, "explicit")  # explicit, now
+        assert _count_sync() == 2
+        removed = asyncio.get_event_loop().run_until_complete(long_term.forget_recent(120))
+        assert removed == 1  # only the reflection fact
+        assert _count_sync() == 1  # the explicit safety fact survives
+
     def test_forget_last_turn_purges_and_blacks_out_reflection(self) -> None:
         from memory import long_term, reflection
         from memory.long_term import _remember_sync
