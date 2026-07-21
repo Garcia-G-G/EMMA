@@ -6,8 +6,29 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Garcia" }]
 dependencies = [
+    # Shipped wake engine: sherpa-onnx KeywordSpotter (WAKE_WORD_ENGINE=sherpa).
+    # Keyword-list KWS with per-keyword thresholds — the offline, no-key, no-train
+    # replacement for Vosk, which ships NO macOS arm64 wheel (or sdist) and so can
+    # never `uv sync` on Apple Silicon. sherpa-onnx has native macosx_11_0_arm64
+    # wheels. Vosk (Linux/Intel only) now lives in the optional [vosk] group.
+    "sherpa-onnx>=1.13.4",
+    # sherpa-onnx's native libs (libsherpa-onnx-*.dylib + the bundled
+    # libonnxruntime the glue .so dlopens via @rpath) ship in this companion
+    # package. sherpa-onnx declares `Requires-Dist: sherpa-onnx-core==<ver>` but
+    # marks it `Dynamic`, and uv drops that dynamic requirement — so without an
+    # explicit dep the arm64 glue wheel installs alone and import fails with
+    # "Library not loaded: @rpath/libonnxruntime". They release in lockstep;
+    # keep the floors equal so uv always resolves a matching pair (both platforms
+    # incl. the Linux backend have core wheels).
+    "sherpa-onnx-core>=1.13.4",
+    # BPE tokenizer for the KWS keyword list. core/wake_sherpa.py tokenizes the
+    # wake phrases against the model's bpe.model at load, so WAKE_PHRASES stays the
+    # single source of truth (no committed, drift-prone pre-tokenized asset). Native
+    # wheel with a macosx_11_0_arm64 build; ~1MB.
+    "sentencepiece>=0.2.0",
+    # openWakeWord stays available (WAKE_WORD_ENGINE=openwakeword) for anyone who
+    # trains a custom .onnx; it's pure-Python (py3-none-any) so it installs anywhere.
     "openwakeword>=0.6.0",
-    "vosk>=0.3.44",  # always-on offline wake transcription (WAKE_WORD_ENGINE=vosk)
     "aiohttp>=3.14.1",  # 24.6: floor above 11 CVEs in <3.14.1 (transitive; pinned direct)
     # onnxruntime is openWakeWord's actual (and only) inference backend on
     # macOS — wake_word.py forces inference_framework="onnx". Pin it directly
@@ -42,6 +63,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Legacy Vosk always-on wake engine (WAKE_WORD_ENGINE=vosk). Vosk publishes NO
+# macOS arm64 wheel and NO sdist, so it CANNOT be a base dependency on the Apple
+# Silicon target — `uv sync` would hard-fail with "no wheel for this platform".
+# It resolves only on Linux/Intel (the backend box never imports it). Install
+# explicitly on a supported host with `pip install -e .[vosk]`.
+vosk = [
+    "vosk>=0.3.44 ; platform_system == 'Linux'",
+]
+
 # Optional speaker-ID (Prompt 35.1). Resemblyzer is BSD, ~30 MB models. Install with
 # `pip install -e .[speaker]`. Absent → speaker ID degrades to "always Garcia"; the
 # daemon never refuses to start without it.

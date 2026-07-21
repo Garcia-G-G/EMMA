@@ -74,7 +74,7 @@ uv sync
 ### Runtime flow
 
 ```
-Wake word (local openWakeWord) → ack chime → 0.4s delay →
+Wake word (local sherpa-onnx KWS) → ack chime → 0.4s delay →
   Pipecat pipeline (OpenAI Realtime WebSocket) → idle timeout → loop back
 ```
 
@@ -88,7 +88,9 @@ The orchestrator (`core/orchestrator.py`) runs an infinite loop: wait for wake w
 
 **`core/echo_gate.py`** — `BaseAudioFilter` that silences mic input while the bot speaks (prevents self-interruption on MacBook speakers) with an energy-based barge-in threshold so the user can still interrupt.
 
-**`core/wake_word.py`** — Lazy-loads an openWakeWord model (built-in or custom .onnx), listens on a 16kHz `RawInputStream`, signals detection via `asyncio.Event`. Resets model state after each detection to prevent afterglow re-triggers.
+**`core/wake_word.py`** — Engine selector. `listen_for_wake_word()` dispatches on `WAKE_WORD_ENGINE`: the shipped default `sherpa` (→ `core/wake_sherpa.py`), plus `openwakeword` (built-in/custom `.onnx`, `_listen_openwakeword`), `pvporcupine` (`_listen_porcupine`), and the legacy Linux/Intel-only `vosk` (→ `core/speech_wake.py`). An unknown value falls back to openWakeWord. All engines listen on a 16kHz `RawInputStream` and signal detection via `asyncio.Event`.
+
+**`core/wake_sherpa.py`** — The shipped wake engine: sherpa-onnx `KeywordSpotter`, an always-on offline streaming KWS restricted to a fixed keyword list (`WAKE_PHRASES`: "emma", "oye emma", "hey emma", "hola emma", "ey emma"). Replaces Vosk grammar-mode with the same "decode only the keywords or nothing" discipline on an engine that actually ships a macOS arm64 wheel — Vosk ships none, so it can't `uv sync` on Apple Silicon. Phrases are BPE-tokenized against the model's `bpe.model` at load (sentencepiece), each with a per-phrase trigger threshold; the bare one-word "emma" (primary target) gets the most sensitive threshold. Accent detection is empirical — tune `WAKE_PHRASES` thresholds or `SHERPA_KWS_*`. Model downloads to `~/.emma/sherpa-kws` (installer step 5).
 
 **`tools/base.py`** — `@tool()` decorator, `ToolResult` dataclass, automatic Python-type-to-JSON-schema conversion. The `confirmed`/`cancelled` parameters are hidden from the LLM schema and used for the two-phase confirmation flow on destructive actions.
 
@@ -128,7 +130,7 @@ The decorator auto-generates the JSON schema from type hints. `confirmed: bool =
 
 All settings load from `.env` via pydantic-settings (`config/settings.py`). Key active settings:
 - `REALTIME_MODEL`, `REALTIME_VOICE` — Realtime API model and voice
-- `WAKE_WORD_PATH`, `WAKE_WORD_NAME`, `WAKE_WORD_THRESHOLD` — wake word config
+- `WAKE_WORD_ENGINE` (default `sherpa`), `SHERPA_KWS_MODEL_PATH` — shipped wake engine + its model dir. `WAKE_WORD_PATH`/`WAKE_WORD_NAME`/`WAKE_WORD_THRESHOLD` apply to the `openwakeword`/`pvporcupine` engines only
 - `SESSION_MAX_S` — Pipecat idle timeout before returning to wake-word listening
 - `MEMORY_DB_PATH` — SQLite store location
 
@@ -207,7 +209,7 @@ No .pkg, no notarization, no Apple Developer Program. The installer
   (`github.com/theemmafamily/emma`, tag or `main`)
 - Uses `uv` standalone for Python 3.12 (no Homebrew forced); pins the venv
   to `~/.emma/.venv` via `UV_PROJECT_ENVIRONMENT`
-- Downloads the Vosk Spanish wake-word model to `~/.emma/vosk`
+- Downloads the sherpa-onnx KWS wake-word model to `~/.emma/sherpa-kws`
 - Pairs interactively via `emma --first-run --pair` (RFC 8628), FOREGROUND
   and BEFORE the LaunchAgent loads so failures surface in the terminal
 - Registers a LaunchAgent labelled `com.emma.daemon` (generic, public-copy
