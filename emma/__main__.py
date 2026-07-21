@@ -158,7 +158,14 @@ def _credential_preflight(log: structlog.BoundLogger) -> int | None:
     a wake word — instead of looping on reconnect. Exit code 2 is distinct from
     0 (success) and 1 (generic), so launchd's SuccessfulExit=false policy treats
     it as a real failure rather than a retry case.
+
+    Managed/client mode (EMMA_REQUIRE_PAIRING) is exempt: there is no local sk- key
+    to validate — the credential is the paired device bearer, resolved from Keychain
+    AFTER the app pairs this Mac (which happens post-boot, see orchestrator._ensure_
+    paired). Failing here would stop the daemon from ever booting to show onboarding.
     """
+    if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes"):
+        return None
     from core.conversation import _looks_like_openai_key
 
     if not _looks_like_openai_key(settings.OPENAI_API_KEY):

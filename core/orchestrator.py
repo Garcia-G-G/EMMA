@@ -235,13 +235,29 @@ async def _one_session() -> None:
         structlog.contextvars.unbind_contextvars("turn_id")
 
 
+_onboarding_needed = False
+
+
+def onboarding_needed() -> bool:
+    """True while the daemon is parked waiting for the app to pair this Mac
+    (managed mode, no device token yet). Read by the dashboard's onboarding-state
+    endpoint so the app knows to show the onboarding flow instead of the steady
+    state (PAID-ONBOARDING Part 2/3)."""
+    return _onboarding_needed
+
+
 async def _ensure_paired() -> None:
-    """PAIR-DEVICE-1 (Part G) — gate the daemon on device pairing in managed/client
-    mode. Enabled only when EMMA_REQUIRE_PAIRING is set; a dev/BYOK daemon (own
-    OpenAI key in .env) leaves it unset and is unaffected. On first run it fetches a
-    user_code, speaks + prints it, and blocks until the user authorizes on the web.
-    If pairing can't complete, exits cleanly (SystemExit) so launchd doesn't
-    loop-restart into a broken pairing spin."""
+    """PAIR-DEVICE-1 — in managed/client mode, PARK ALIVE until the app pairs this Mac.
+
+    The app owns onboarding now (PAID-ONBOARDING). A fresh managed install boots
+    with no device token; instead of pairing in the terminal or exiting, we publish
+    ``state=needs_onboarding`` — the menubar UI + onboarding window (running in this
+    process under EMMA_DASHBOARD) show the flow — and poll the Keychain until the app
+    writes a device token (its browser pairing calls core.pairing), then load it and
+    fall through to the wake loop. Never opens a Realtime session while unpaired
+    (there's no account yet). A dev/BYOK daemon (EMMA_REQUIRE_PAIRING unset) returns
+    immediately and is unaffected. Cancellable: a shutdown unwinds the wait cleanly."""
+    global _onboarding_needed
     import os
 
     if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() not in ("1", "true", "yes"):
@@ -251,29 +267,22 @@ async def _ensure_paired() -> None:
     if await pairing.is_paired():
         await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
         return
+
+    _onboarding_needed = True
+    log.info("awaiting_onboarding")
     try:
-        info = await pairing.start_pairing()
-    except Exception as exc:
-        log.error("pairing_start_failed", error=str(exc))
-        print("No pude conectar con el servidor de Emma. Revisa tu internet y reinicia.", flush=True)
-        raise SystemExit(2) from exc
-
-    code = info["user_code"]
-    spoken = ("Hola. Para empezar, visita tu cuenta en theemmafamily.com slash pair "
-              f"y pon este código: {' '.join(code.replace('-', ' guion '))}")
-    import subprocess
-
-    subprocess.run(["say", "-v", "Paulina", spoken], check=False)  # `say`, not Realtime (unpaired)
-    print(f"\n  Pair code: {code}", flush=True)
-    print(f"  Visit:      {info['verification_uri']}\n", flush=True)
-
-    token = await pairing.poll_until_authorized(
-        info["device_code"], info["interval"], info["expires_in"])
-    if not token:
-        print("La vinculación expiró. Reinicia Emma para intentar de nuevo.", flush=True)
-        raise SystemExit(2)
-    await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
-    log.info("device_paired_at_boot")
+        while not _shutdown.is_set():
+            if await pairing.is_paired():
+                await pairing.load_token_cache()
+                log.info("onboarding_complete")
+                events_bus.publish("state", state="waiting_for_wake")
+                return
+            # Re-publish each tick: the events bus doesn't replay to subscribers, so
+            # a late/reconnecting UI still learns it should show onboarding.
+            events_bus.publish("state", state="needs_onboarding")
+            await asyncio.sleep(2.0)
+    finally:
+        _onboarding_needed = False
 
 
 async def main_loop() -> None:
@@ -289,8 +298,14 @@ async def main_loop() -> None:
     # Touch the background-task registry once: loads ~/.emma/tasks.jsonl and
     # marks any in-flight rows from a previous run as "aborted" on disk.
     background.registry()
-    log.info("waiting_for_wake")
     try:
+        # Managed mode: park alive until the app pairs this Mac (no-op for a paired
+        # or dev/BYOK daemon). Runs after the dashboard + menubar UI are up (started
+        # as sibling tasks in emma.__main__) so there's somewhere to onboard.
+        await _ensure_paired()
+        if _shutdown.is_set():
+            return
+        log.info("waiting_for_wake")
         while not _shutdown.is_set():
             try:
                 await _one_session()
