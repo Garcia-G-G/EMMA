@@ -44,6 +44,12 @@ async def trigger_auto_refill(user_id: int, plan: str) -> bool:
     method, charge the configured bundle off-session and credit it. Returns True only
     if they now have minutes; False on no-opt-in / no-PM / decline / Stripe error —
     the caller then closes the WS."""
+    # PAID-ONBOARDING: free is the trial — it NEVER auto-charges. It has no payment
+    # method (buy_bundle is 403 for free), so the guards below would already return
+    # False, but make the invariant explicit here so no future path can charge a
+    # trial user. Free hits its 90s cap and the app upsells; it does not refill.
+    if (plan or "free") == "free":
+        return False
     bal = db.get_user_balance(user_id)
     if not bal or not bal["auto_refill_enabled"]:
         return False

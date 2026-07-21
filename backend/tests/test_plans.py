@@ -66,6 +66,15 @@ def test_plan_caps_have_expected_shape():
     assert PLAN_CAPS["team"] == PLAN_CAPS["power"]  # team is a legacy alias
 
 
+def test_free_is_the_90s_trial():
+    # PAID-ONBOARDING: free = 90 managed daemon seconds/month, a single session can't
+    # exceed the whole budget, and it NEVER auto-charges (hard-stop → app upsells).
+    free = PLAN_CAPS["free"]
+    assert free["monthly_seconds"] == 90
+    assert free["daemon_session_max_seconds"] == 90
+    assert free["overage_per_min_usd"] == 0.0
+
+
 # ---- demo caps per plan -----------------------------------------------------
 
 

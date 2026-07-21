@@ -20,16 +20,19 @@ from typing import Any
 # them): ``daemon_session_max_seconds`` = per managed voice session ceiling (much
 # longer than the demo's ``session_seconds``); ``overage_per_min_usd`` = Stripe overage
 # rate (Phase 5). The managed MONTHLY allowance reuses ``monthly_seconds``.
-# ⚠️ PRICING: free.monthly_seconds is 0 → free gets NO managed daemon minutes (demo
-# only). Bump it if you want free trial minutes on the daemon. pro=3600s (60min) /
-# power=12000s (200min) match /api/plans; the CLIENT-INSTALL prompt's 200/1000 figures
-# are a separate pricing decision — change here + /api/plans together if adopting them.
+# PAID-ONBOARDING (2026-07-21): free is now the TRIAL — 90 managed daemon seconds/month
+# so a new user can experience the real Emma on their Mac before paying, then the app
+# upsells. ``daemon_session_max_seconds: 90`` so one free session can't exceed the whole
+# monthly budget. ``overage_per_min_usd: 0.0`` — free NEVER auto-charges; it hard-stops
+# and the app upsells (no payment method exists on free). Cost to us ≈ $0.09/mo per user
+# who burns the full 90s — negligible. pro=3600s (60min) / power=12000s (200min) match
+# /api/plans; change here + /api/plans together if repricing.
 # ABUSE-PROTECTION-2 added `concurrent_sessions` (Capa 2) and `reconnect_min_seconds`
-# (Capa 3, sliding-window floor between reconnects). free's 30s is deliberately
-# aggressive — free gets no managed minutes anyway (monthly_seconds=0).
+# (Capa 3, sliding-window floor between reconnects). free's 30s reconnect floor is
+# deliberately aggressive — the trial is a taste, not a workload.
 PLAN_CAPS: dict[str, dict[str, object]] = {
-    "free":  {"session_seconds": 60,   "daily_seconds": 60,    "monthly_seconds": 0,
-              "cost_cap_cents": 40,   "daemon_session_max_seconds": 900,  "overage_per_min_usd": 0.30,
+    "free":  {"session_seconds": 60,   "daily_seconds": 90,    "monthly_seconds": 90,
+              "cost_cap_cents": 15,   "daemon_session_max_seconds": 90,   "overage_per_min_usd": 0.0,
               "concurrent_sessions": 1, "reconnect_min_seconds": 30},
     "pro":   {"session_seconds": 300,  "daily_seconds": 600,   "monthly_seconds": 3600,
               "cost_cap_cents": 200,  "daemon_session_max_seconds": 1800, "overage_per_min_usd": 0.20,
