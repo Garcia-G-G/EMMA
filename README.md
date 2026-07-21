@@ -25,7 +25,7 @@ To uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh`.
 
 ## Highlights
 
-- 🎙️ **Local wake word** — "Hey Emma" / "Oye Emma" detected on-device, offline, via a [Vosk](https://alphacephei.com/vosk/) Spanish model. No audio leaves the machine until the wake phrase fires.
+- 🎙️ **Local wake word** — "Emma" / "Oye Emma" / "Hey Emma" detected on-device, offline, via a [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotter. No audio leaves the machine until a wake phrase fires.
 - ⚡ **Audio-to-audio** — a single [Pipecat](https://github.com/pipecat-ai/pipecat) pipeline over the **OpenAI Realtime API**: audio in → reasoning + tool calls → audio out, no separate STT/TTS hop.
 - 🧰 **180+ tools** — apps, music (Spotify), web/YouTube search, browser automation (Playwright), shell, screen brightness, and native macOS integrations (Calendar, Mail, Messages, Notes, Reminders, Safari, Finder, Music) via AppleScript.
 - 🧠 **Long-term memory** — a local SQLite fact store with semantic recall (sqlite-vec embeddings) and automatic deduplication. Emma primes each session with what she knows about you.
@@ -38,7 +38,7 @@ To uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh`.
 ## How it works
 
 ```
-"Hey Emma"  ──►  local wake word (Vosk, offline)  ──►  ack chime
+"Emma"      ──►  local wake word (sherpa-onnx KWS, offline)  ──►  ack chime
                                                           │
                                                           ▼
         ┌──────────────── Pipecat pipeline ────────────────┐
@@ -109,20 +109,29 @@ launchctl enable gui/$UID/com.emma.daemon && launchctl kickstart -k gui/$UID/com
 
 ## Wake word
 
-Emma answers to **"Hey Emma"** and **"Oye Emma"** (also "Hola Emma", "Ey Emma",
-or a bare "Emma"), detected **fully offline** by a [Vosk](https://alphacephei.com/vosk/)
-Spanish model. The installer downloads it to `~/.emma/vosk` on first run — there
-is nothing to train and no model ships in the repo. The recognizer is
-grammar-constrained to the wake phrases (tuned for Mexican-Spanish and English
-phrasing), so it rejects anything that isn't a wake phrase instead of forcing a
-match. **No audio leaves the Mac until a wake phrase fires.**
+Say **"Emma"** — also **"Oye Emma"**, **"Hey Emma"**, "Hola Emma", or "Ey Emma"
+— detected **fully offline** by a [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
+`KeywordSpotter`. The installer downloads a small keyword-spotting model to
+`~/.emma/sherpa-kws` on first run — there is nothing to train, no account, and no
+API key. The spotter runs a streaming beam search restricted to the wake phrases,
+so it only ever emits a wake phrase or stays silent: ordinary speech, including
+Spanish words that share the `-ema-` sound (tema, sistema, problema), is rejected
+without a loose substring match. **No audio leaves the Mac until a wake phrase
+fires.**
 
-### Advanced: swap in a custom openWakeWord model
+The wake phrases live in `core/wake_sherpa.py` (`WAKE_PHRASES`), each with its own
+trigger threshold — the bare one-word "Emma" (the primary target, and the hardest
+to spot cleanly) gets the most sensitive setting. Accent detection is empirical:
+if the bare "Emma" is missed or a word false-triggers, tune the per-phrase
+thresholds there, or `SHERPA_KWS_*` in `.env`.
 
-If you'd rather use a trained [openWakeWord](https://github.com/dscripka/openWakeWord)
-ONNX model, set `WAKE_WORD_ENGINE=openwakeword` and point `WAKE_WORD_PATH` at your
-`.onnx` in `.env`. Tune `WAKE_WORD_THRESHOLD` (0.4 = more sensitive, 0.6–0.7 =
-fewer false positives). This path is optional; the shipped default is Vosk.
+### Advanced: other engines
+
+`WAKE_WORD_ENGINE` also accepts `openwakeword` (point `WAKE_WORD_PATH` at a trained
+`.onnx`; tune `WAKE_WORD_THRESHOLD`), `pvporcupine` (needs a `.ppn` +
+`PICOVOICE_ACCESS_KEY`), or the legacy `vosk` — **Linux/Intel only**, since Vosk
+publishes no macOS Apple-Silicon wheel (install it explicitly with `.[vosk]`). The
+shipped default is `sherpa`.
 
 ## Security & privacy
 

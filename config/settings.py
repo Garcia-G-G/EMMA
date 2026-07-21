@@ -78,14 +78,26 @@ class Settings(BaseSettings):
     WAKE_WORD_NAME: str = "hey_emma"
     # Detection threshold (0.0-1.0). Raise for fewer false positives (stricter),
     # lower for higher recall. 0.5 is balanced for personal use in a quiet room.
-    # For pvporcupine this is passed as the per-keyword `sensitivity`.
+    # For pvporcupine this is passed as the per-keyword `sensitivity`. NOTE: the
+    # shipped "sherpa" engine does NOT use this — its per-keyword trigger
+    # thresholds live in SHERPA_KWS_* (and, per phrase, in core/wake_sherpa.py).
     WAKE_WORD_THRESHOLD: float = 0.5
-    # Wake-word engine: "openwakeword" (default, single-phrase ONNX model),
-    # "pvporcupine" (Picovoice; needs a .ppn + PICOVOICE_ACCESS_KEY), or "vosk"
-    # (always-on offline transcription that fires on "hey emma" — best for accents).
-    WAKE_WORD_ENGINE: str = "openwakeword"
-    # Vosk model directory, only read when WAKE_WORD_ENGINE="vosk". A small offline
-    # Spanish model lives here; download from https://alphacephei.com/vosk/models.
+    # Wake-word engine (the shipped default is "sherpa"):
+    #   "sherpa"       — sherpa-onnx KeywordSpotter, always-on offline KWS on a
+    #                    fixed keyword list ("emma", "oye emma", …). No training,
+    #                    no keys, native arm64 wheel. Best fit for a bare "Emma".
+    #   "openwakeword" — single-phrase ONNX model (needs a trained .onnx).
+    #   "pvporcupine"  — Picovoice (needs a .ppn + PICOVOICE_ACCESS_KEY).
+    #   "vosk"         — legacy offline transcription; Linux/Intel ONLY (Vosk
+    #                    publishes no macOS arm64 wheel — install via `.[vosk]`).
+    WAKE_WORD_ENGINE: str = "sherpa"
+    # sherpa-onnx KWS model directory, read when WAKE_WORD_ENGINE="sherpa". The
+    # installer downloads the offline gigaspeech KWS model here (encoder/decoder/
+    # joiner .onnx + tokens.txt + bpe.model). See install.sh step 5.
+    SHERPA_KWS_MODEL_PATH: str = str(
+        Path.home() / ".emma" / "sherpa-kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
+    )
+    # Vosk model directory, only read when WAKE_WORD_ENGINE="vosk" (Linux/Intel).
     VOSK_MODEL_PATH: str = str(Path.home() / ".emma" / "vosk" / "vosk-model-small-es-0.42")
     # Picovoice AccessKey, only read when WAKE_WORD_ENGINE="pvporcupine". Treated
     # as a credential (ends in _KEY) — migrated to Keychain by bootstrap_from_env.

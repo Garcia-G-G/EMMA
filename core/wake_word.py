@@ -357,16 +357,24 @@ async def _listen_porcupine() -> None:
 async def listen_for_wake_word() -> None:
     """Block until the configured wake word fires, then return (plays a chime).
 
-    Engine is selected by ``WAKE_WORD_ENGINE`` (``pvporcupine`` or, by default,
-    ``openwakeword``). An unset/unknown value falls back to openWakeWord so a
-    broken ``.env`` never bricks wake detection — the openWakeWord branch itself
-    falls back to the built-in ``hey_jarvis`` model when WAKE_WORD_PATH is unset.
+    Engine is selected by ``WAKE_WORD_ENGINE``. The shipped default is ``sherpa``
+    (sherpa-onnx KeywordSpotter). Other values: ``pvporcupine``, ``openwakeword``,
+    and the legacy Linux/Intel-only ``vosk``. An unset/unknown value falls back to
+    openWakeWord so a broken ``.env`` never bricks wake detection — the
+    openWakeWord branch itself falls back to a built-in model when WAKE_WORD_PATH
+    is unset.
     """
-    engine = (settings.WAKE_WORD_ENGINE or "openwakeword").strip().lower()
-    if engine == "pvporcupine":
+    engine = (settings.WAKE_WORD_ENGINE or "sherpa").strip().lower()
+    if engine == "sherpa":
+        # Always-on offline KWS on a fixed keyword list ("emma", "oye emma", …).
+        from core import wake_sherpa
+
+        await wake_sherpa.listen()
+    elif engine == "pvporcupine":
         await _listen_porcupine()
     elif engine == "vosk":
-        # Always-on local transcription that fires on "hey emma" (Vosk, offline).
+        # Legacy always-on transcription (Vosk, offline). Linux/Intel only — Vosk
+        # has no macOS arm64 wheel, so this branch can't load there.
         from core import speech_wake
 
         await speech_wake.listen()
