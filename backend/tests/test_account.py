@@ -62,7 +62,7 @@ def test_account_reports_plan_and_usage(client):
     body = client.get("/api/account").json()
     assert body["plan"] == "free" and body["email"] == "a@b.com"
     assert body["usage"]["today_min"] == 0.0
-    assert body["usage"]["daily_cap_min"] == 1.0  # free = 60s
+    assert body["usage"]["daily_cap_min"] == 1.5  # free trial = 90s/day (PAID-ONBOARDING)
 
 
 def test_change_password_requires_current(client):
