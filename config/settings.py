@@ -46,7 +46,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     # Managed HTTP proxy base, used ONLY in managed mode (EMMA_REQUIRE_PAIRING set).
     OPENAI_BASE_URL: str = "https://api.theemmafamily.com/v1"
-    ELEVENLABS_API_KEY: str
+    # DEPRECATED after the Prompt 13 Realtime migration — the Realtime API does
+    # ALL voice now; ElevenLabs is only touched by tools/diagnostics health-check.
+    # Optional so a fresh managed install (no .env) can boot; a dev/BYOK daemon
+    # can still set it. (Was required — broke every clean install: no ElevenLabs
+    # key exists in the managed model.)
+    ELEVENLABS_API_KEY: str = ""
     YOUTUBE_API_KEY: str | None = None
     SPOTIFY_CLIENT_ID: str | None = None
     SPOTIFY_CLIENT_SECRET: str | None = None
@@ -65,8 +70,8 @@ class Settings(BaseSettings):
     POSTMAN_API_KEY: str = ""    # optional — resolve collections via the Postman API
     # Where Emma drops cloned repos by default (override in .env).
     CLONE_DIR: Path = Path.home() / "Documents" / "repos"
-    ELEVENLABS_VOICE_ID_ES: str
-    ELEVENLABS_VOICE_ID_EN: str
+    ELEVENLABS_VOICE_ID_ES: str = ""  # DEPRECATED — Realtime API does voice (see ELEVENLABS_API_KEY)
+    ELEVENLABS_VOICE_ID_EN: str = ""  # DEPRECATED — Realtime API does voice
     # Path to the locally-trained openWakeWord ONNX model. Produced by
     # scripts/train_wake_word.py (Prompt 16.2) → models/hey_emma.onnx.
     # Relative paths are anchored to the project root by core/wake_word.py.
