@@ -146,7 +146,7 @@ def test_format_screen_labels_by_role_and_hides_password() -> None:
     win = FakeAX(role="AXWindow", title="Banco — Login", children=[
         FakeAX(role="AXButton", title="Iniciar sesión"),
         FakeAX(role="AXButton", title="Cancelar"),
-        FakeAX(role="AXTextField", title="Usuario", value="garcia2024"),
+        FakeAX(role="AXTextField", title="Usuario", value="alex2024"),
         FakeAX(role="AXSecureTextField", title="Password", value="hunter2"),
         FakeAX(role="AXStaticText", value="Por seguridad ingrese sus datos"),
     ])
@@ -154,7 +154,7 @@ def test_format_screen_labels_by_role_and_hides_password() -> None:
     assert "App: Safari" in out
     assert 'Window: "Banco — Login"' in out
     assert "Iniciar sesión" in out and "Cancelar" in out
-    assert "garcia2024" in out
+    assert "alex2024" in out
     assert "Password: <hidden>" in out
     assert "hunter2" not in out
     assert "Por seguridad" in out

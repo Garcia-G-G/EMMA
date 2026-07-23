@@ -45,14 +45,14 @@ def test_ranks_by_confidence_times_sim(tmp_mem, monkeypatch):
 
 
 def test_embed_failure_falls_back_to_flat(tmp_mem, monkeypatch):
-    _seed("Garcia toma café por las mañanas", 0.9)
+    _seed("the user toma café por las mañanas", 0.9)
     monkeypatch.setattr(lt.embeddings, "embed", AsyncMock(side_effect=RuntimeError("net down")))
     block = asyncio.run(lt.priming_block(top_n=5, context="cualquier cosa"))
-    assert "Garcia toma café por las mañanas" in block
+    assert "the user toma café por las mañanas" in block
 
 
 def test_no_context_uses_flat_path(tmp_mem, monkeypatch):
-    _seed("Garcia vive en Monterrey", 0.9)
+    _seed("the user vive en San José", 0.9)
     called = {"semantic": False}
 
     def _spy(qv, k):
@@ -61,5 +61,5 @@ def test_no_context_uses_flat_path(tmp_mem, monkeypatch):
 
     monkeypatch.setattr(lt, "_recall_vec_ranked_sync", _spy)
     block = asyncio.run(lt.priming_block(top_n=5, context=None))
-    assert "Garcia vive en Monterrey" in block
+    assert "the user vive en San José" in block
     assert called["semantic"] is False

@@ -163,15 +163,15 @@ class TestSuggestSimilar:
             "contacts",
             lambda: {
                 "mom": SimpleNamespace(
-                    name="Ana García", relation="madre", aliases=["mami", "mamá"], email="a@x.com"
+                    name="Ana Garza", relation="madre", aliases=["mami", "mamá"], email="a@x.com"
                 )
             },
         )
         monkeypatch.setattr(dictionary, "find_contact", lambda q: None)
-        resolved, miss = resolve_recipient("Anna Garcia")
+        resolved, miss = resolve_recipient("Anna Garza")
         assert resolved is None
         assert miss is not None and miss.requires_confirmation
-        assert "Ana García" in miss.user_message
+        assert "Ana Garza" in miss.user_message
 
     @pytest.mark.asyncio
     async def test_address_passes_through(self):
@@ -195,7 +195,7 @@ class TestSystemPromptDirectives:
         assert "tool results does NOT govern" in text
         assert "# Learn from corrections (mandatory, not optional)" in text
         assert "remember_stt_correction('Nill Ojeda', 'Neil Ojeda')" in text
-        assert "remember_stt_correction('gilbergaciata', 'gilbergarciata')" in text
+        assert "remember_stt_correction('examplehandl', 'examplehandle')" in text
         assert "# Anaphora resolution" in text
         assert "recall_last_action" in text
         assert "Do NOT in the same turn generate the user's consent" in text

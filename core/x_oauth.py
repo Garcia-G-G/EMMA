@@ -118,7 +118,7 @@ def run_callback_server(
     Returns ``{"code": ..., "state": ...}`` once X redirects to
     ``/callback?code=&state=``. The ``state`` is checked against
     ``expected_state`` (CSRF) — a mismatch never yields a code. Raises
-    ``TimeoutError`` if Garcia doesn't authorize within ``timeout_s``.
+    ``TimeoutError`` if the user doesn't authorize within ``timeout_s``.
     """
     result: dict[str, str] = {}
 

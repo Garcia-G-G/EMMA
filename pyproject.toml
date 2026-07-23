@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Emma - bilingual voice-activated AI assistant for macOS"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Garcia" }]
 dependencies = [
     # Shipped wake engine: sherpa-onnx KeywordSpotter (WAKE_WORD_ENGINE=sherpa).
     # Keyword-list KWS with per-keyword thresholds — the offline, no-key, no-train
@@ -73,7 +72,7 @@ vosk = [
 ]
 
 # Optional speaker-ID (Prompt 35.1). Resemblyzer is BSD, ~30 MB models. Install with
-# `pip install -e .[speaker]`. Absent → speaker ID degrades to "always Garcia"; the
+# `pip install -e .[speaker]`. Absent → speaker ID degrades to "always the user"; the
 # daemon never refuses to start without it.
 speaker = [
     "resemblyzer>=0.1.4",

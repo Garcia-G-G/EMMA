@@ -20,7 +20,7 @@ from tools.base import ToolResult, tool
 
 
 def _user_lang_name() -> str:
-    """Garcia's configured language as a prompt-friendly name (21-B26)."""
+    """the user's configured language as a prompt-friendly name (21-B26)."""
     from core import dictionary
 
     lang = dictionary.user_profile().get("preferred_lang", "es") or "es"

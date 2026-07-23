@@ -135,7 +135,7 @@ def _make_near_miss_logger(
 ) -> Callable[[float], None]:
     """Rate-limited logger for sub-threshold wake scores.
 
-    Garcia's Spanish-accented "hey jarvis" often scores well below the
+    the user's Spanish-accented "hey jarvis" often scores well below the
     English-TTS ~0.99 — without seeing those scores we can't tune
     WAKE_WORD_THRESHOLD with data. Scores in [floor, threshold) are logged at
     most once per ``interval_s``; ambient noise (< floor) stays silent.

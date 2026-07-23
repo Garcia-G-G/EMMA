@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sign + notarize dist/Emma.pkg (Prompt 29.1 — DEFERRED, not run during 29.0).
 #
-# This script EXISTS but is only meaningful once Garcia enrolls in the Apple
+# This script EXISTS but is only meaningful once the user enrolls in the Apple
 # Developer Program and exports the certs. It is NOT invoked by `make pkg`. When
 # the env vars below are set, the already-built unsigned .pkg becomes
 # Gatekeeper-clean in minutes. See installer/BUILD.md for the full walkthrough.

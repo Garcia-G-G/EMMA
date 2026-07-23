@@ -10,7 +10,7 @@ then torn down.
 KNOWN LIMITATION (needs live verification): this opens its own
 ``LocalAudioTransport`` (mic + speaker). If the orchestrator's wake-word loop is
 holding the mic, the two can contend. Delivery always sends the NOTIFY-level
-notification *before* calling this, so if the voice session fails to open, Garcia
+notification *before* calling this, so if the voice session fails to open, the user
 still got the alert — the spoken layer degrades gracefully to silent-but-notified.
 A future change should coordinate mic ownership with the orchestrator.
 """

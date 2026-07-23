@@ -100,7 +100,7 @@ class Settings:
     # abuse that sidesteps the per-IP limit). Demo opens 503 past this until midnight.
     DEMO_DAILY_USD_CEILING = float(os.environ.get("DEMO_DAILY_USD_CEILING", "50"))
     OPS_ALERT_WEBHOOK = os.environ.get("OPS_ALERT_WEBHOOK", "")  # optional Slack/Discord; no-op if unset
-    # Hashed-IP salt + Garcia's test bypass token. BOTH are secrets — set via env on
+    # Hashed-IP salt + the user's test bypass token. BOTH are secrets — set via env on
     # the Fly host (migrated to the host's secret store), NEVER committed.
     DEMO_IP_SALT = os.environ.get("DEMO_IP_SALT", "")
     DEMO_BYPASS_TOKEN = os.environ.get("DEMO_BYPASS_TOKEN", "")

@@ -90,7 +90,7 @@ def _spotify_auth() -> Any:
     from spotipy.oauth2 import SpotifyOAuth
 
     if _evict_token_on_scope_drift():
-        # The next call runs the PKCE consent in the browser — Garcia
+        # The next call runs the PKCE consent in the browser — the user
         # hears about it instead of a mystery hang (22.1-B37).
         log.info("spotify_reauth_needed", reason="scope set widened (playlists)")
     return SpotifyOAuth(
@@ -187,7 +187,7 @@ def _resolve_music_or_ask(explicit: str) -> tuple[str | None, ToolResult | None]
     """(app, None) to proceed, or (None, ask) when NOTHING music-ish is open.
 
     22-B33: with neither Spotify nor Music running, launching one silently
-    guesses — Emma asks instead ("¿Abro Spotify o uso Music?"). Garcia's
+    guesses — Emma asks instead ("¿Abro Spotify o uso Music?"). the user's
     pick comes back as the explicit ``app`` arg, which always proceeds.
     """
     if explicit:
@@ -246,7 +246,7 @@ async def play_track(query: str, app: str = "") -> ToolResult:
     """Search for a track or artist and start playing the top result.
 
     Routes to whatever music app is actually open (22-B30); with none open
-    it ASKS which to launch — Garcia's pick comes back as `app="Spotify"` /
+    it ASKS which to launch — the user's pick comes back as `app="Spotify"` /
     `app="Music"`, which always proceeds."""
     picked, ask = _resolve_music_or_ask(app)
     if ask is not None:

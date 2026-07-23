@@ -152,7 +152,7 @@ class TestQualifier422:
 
     def test_strip_scope_qualifiers(self):
         f = github_tool._strip_scope_qualifiers
-        assert f("user:Garcia-G-H Reachi") == "Reachi"
+        assert f("user:example-user Reachi") == "Reachi"
         assert f("org:foo repo:bar/baz voice ai") == "voice ai"
         assert f("REPOSITORY:x/y kanban") == "kanban"
         assert f("user:only") == ""  # nothing left to search
@@ -168,11 +168,11 @@ class TestQualifier422:
             return _ProgrammedResp(200, _FAKE_ITEMS)
 
         monkeypatch.setattr(github_tool.httpx, "AsyncClient", _client_from_handler(handler, calls))
-        r = await github_tool.search_github("user:Garcia-G-H Reachi")
+        r = await github_tool.search_github("user:example-user Reachi")
         assert r.success is True
         assert r.data["matches"][0]["full_name"] == "pipecat-ai/pipecat"
         # First the original query 422'd, then the stripped retry succeeded.
-        assert calls == ["user:Garcia-G-H Reachi", "Reachi"]
+        assert calls == ["user:example-user Reachi", "Reachi"]
 
     @pytest.mark.asyncio
     async def test_422_persists_surfaces_github_message(self, monkeypatch):
@@ -182,7 +182,7 @@ class TestQualifier422:
             return _ProgrammedResp(422, _VALIDATION_422)
 
         monkeypatch.setattr(github_tool.httpx, "AsyncClient", _client_from_handler(handler, calls))
-        r = await github_tool.search_github("user:Garcia-G-H Reachi")
+        r = await github_tool.search_github("user:the user-G-H Reachi")
         assert r.success is False
         # GitHub's real validation message is surfaced, not an opaque httpx error.
         assert "cannot be searched" in r.user_message

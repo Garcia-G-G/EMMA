@@ -66,7 +66,7 @@ def _seeded_db(tmp_path):
 
     from memory import long_term
 
-    long_term._remember_sync("Garcia prefiere tacos al pastor", "preference", 0.90, "explicit")
+    long_term._remember_sync("the user prefiere tacos al pastor", "preference", 0.90, "explicit")
     sec = long_term._remember_sync("EMMA_X_SECRET_SENTINEL leak", "fact", 0.99, "reflection")
     conn = sqlite3.connect(db)
     conn.execute("UPDATE facts SET vault_ref=? WHERE id=?", ("X_ACCESS_TOKEN", sec))

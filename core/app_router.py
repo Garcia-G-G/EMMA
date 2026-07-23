@@ -1,7 +1,7 @@
 """Dynamic app routing — the single source of truth for "which app" (22-B30).
 
 The old model asked the dictionary ("preference") or a 24-hour cache.
-Reality changes second-to-second: Garcia looks at Chrome → Chrome IS the
+Reality changes second-to-second: the user looks at Chrome → Chrome IS the
 browser, even if Brave is the favorite. Resolution order, re-evaluated on
 EVERY call:
 
@@ -153,7 +153,7 @@ def running(category: str) -> list[str]:
 
 
 def _dictionary_preference(category: str, cat: environment.Category) -> str | None:
-    """Garcia's configured pick (dictionary first, then detect_preferred)."""
+    """the user's configured pick (dictionary first, then detect_preferred)."""
     from core import apps as core_apps
 
     pick = dictionary.app_for(category) or dictionary.app_for(cat)
@@ -172,7 +172,7 @@ def inspect(category: str) -> RouteDecision:
     live = running(category)
     pref = _dictionary_preference(category, cat)
 
-    # 1. Frontmost wins when it belongs to the category. Garcia is LOOKING
+    # 1. Frontmost wins when it belongs to the category. the user is LOOKING
     #    at it — that's the app, preferences be damned.
     front = _frontmost_pair()
     if front is not None:
@@ -219,7 +219,7 @@ def _installed_editor_displays() -> list[str]:
 
 def preferred_or_ask(category: str) -> tuple[str | None, list[str]]:
     """Like :func:`preferred`, but signals when the EDITOR pick is genuinely
-    ambiguous and Garcia should be asked once (23.1-B41).
+    ambiguous and the user should be asked once (23.1-B41).
 
     Returns ``(picked, [])`` when the chain (frontmost → running → explicit
     preference) is confident, OR when only one editor is installed (not

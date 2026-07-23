@@ -1,6 +1,6 @@
 """Emma self-control voice tools — shut down, restart, sleep.
 
-Garcia asked for voice commands to control Emma's own running state. These
+the user asked for voice commands to control Emma's own running state. These
 complement the existing self-tools (diagnose_self = status, reload_tools =
 hot-reload, snooze_proactivities = mute) to make a full self-control set.
 

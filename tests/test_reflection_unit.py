@@ -86,9 +86,9 @@ def test_valid_fact_is_passed_through(monkeypatch) -> None:
 
 
 def test_missing_kind_and_confidence_get_defaults(monkeypatch) -> None:
-    _mock_client(monkeypatch, content='{"facts": [{"content": "vive en Monterrey"}]}')
-    out = _run(reflection.reflect_once([_turn(user="vivo en Monterrey")]))
-    assert out == [{"content": "vive en Monterrey", "kind": "general", "confidence": 0.7}]
+    _mock_client(monkeypatch, content='{"facts": [{"content": "vive en San José"}]}')
+    out = _run(reflection.reflect_once([_turn(user="vivo en San José")]))
+    assert out == [{"content": "vive en San José", "kind": "general", "confidence": 0.7}]
 
 
 def test_confidence_is_clamped_and_coerced(monkeypatch) -> None:

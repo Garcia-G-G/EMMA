@@ -44,7 +44,7 @@ DEFAULTS: dict[str, int] = dict.fromkeys(AXES, 3)
 # matching change to tests/test_personality.py (the byte-for-byte guarantee).
 BASE_LINES: tuple[str, ...] = (
     "- Confident, calm, slightly witty. Never flustered.",
-    "- Talk to Garcia like a trusted colleague, not a customer.",
+    "- Talk to the user like a trusted colleague, not a customer.",
     "- Be direct. No filler, no hedging, no apologies.",
 )
 

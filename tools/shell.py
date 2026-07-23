@@ -94,7 +94,7 @@ def _is_destructive(command: str) -> bool:
 
 @tool()
 def run_command(command: str, confirmed: bool = False) -> ToolResult:
-    """Run a simple shell command on Garcia's Mac and return the output.
+    """Run a simple shell command on the user's Mac and return the output.
 
     IMPORTANT: Use ONE simple command. Do NOT write multi-line scripts,
     do NOT chain with && or ;, do NOT embed osascript/AppleScript
@@ -116,7 +116,7 @@ def run_command(command: str, confirmed: bool = False) -> ToolResult:
     - run_command("top -l 1 | head -10")
     """
     # Pre-execution refusal: the blocklist is checked BEFORE the command is ever
-    # handed to the shell. We tell Garcia the REASON (e.g. "tubería hacia una
+    # handed to the shell. We tell the user the REASON (e.g. "tubería hacia una
     # shell"), never the matched command text — the command can carry a secret.
     for pattern, reason in _BLOCKED_RE:
         if pattern.search(command):

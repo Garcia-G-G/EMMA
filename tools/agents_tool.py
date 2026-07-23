@@ -20,7 +20,7 @@ async def setup_worktree(repo: Path, branch: str) -> Path:
     """Create a fresh git worktree for ``branch`` off HEAD; return its path.
 
     Shared by both delegate paths (Prompt 23) so the main checkout stays
-    clean and Garcia can review the diff later. No-op (returns ``repo``)
+    clean and the user can review the diff later. No-op (returns ``repo``)
     when ``branch`` is empty.
     """
     if not branch:
@@ -44,7 +44,7 @@ async def delegate_to_claude_code(
 ) -> ToolResult:
     """Hand a coding task off to Claude Code (the CLI) and let it work.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
     - "Emma, reprograma X"
     - "Emma, arregla el bug de Y"
     - "Emma, refactoriza Z"
@@ -52,7 +52,7 @@ async def delegate_to_claude_code(
 
     The CLI runs as a background subprocess. Captures stdout/stderr.
     If `branch` is set, Emma creates a fresh git worktree on that branch
-    (so the main checkout stays clean and Garcia can review the diff later).
+    (so the main checkout stays clean and the user can review the diff later).
 
     On completion Emma fires a macOS notification and updates the visualizer.
     """

@@ -30,7 +30,7 @@ def _mock_system(monkeypatch, *, front=None, running=(), pref=None):
 
 class TestRoutingOrder:
     def test_frontmost_wins_over_preference(self, monkeypatch):
-        """Garcia is LOOKING at Chrome → Chrome is the browser. Period."""
+        """the user is LOOKING at Chrome → Chrome is the browser. Period."""
         _mock_system(monkeypatch, front=CHROME, running=[CHROME, BRAVE], pref="Brave Browser")
         d = app_router.inspect("browser")
         assert d.picked == "Google Chrome"

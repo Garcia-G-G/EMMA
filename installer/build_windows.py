@@ -1,6 +1,6 @@
 """Build the Windows Emma.exe with PyInstaller (Prompt 30, Part C1).
 
-Runs ON Windows (the CI windows job, or Garcia's Win11 VM). py2app is mac-only, so
+Runs ON Windows (the CI windows job, or the user's Win11 VM). py2app is mac-only, so
 Windows uses PyInstaller. One-FOLDER build (faster startup than one-file). Tier-1
 runs; Tier-2 calls hit the platform-layer stubs → friendly "no tengo eso todavía".
 

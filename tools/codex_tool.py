@@ -24,7 +24,7 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.codex")
 
-# Garcia may name a model by voice; only these are honored (anything else
+# the user may name a model by voice; only these are honored (anything else
 # falls back to the configured default — never an arbitrary string).
 _ALLOWED_MODELS = frozenset({"gpt-5.3-codex", "gpt-5-codex", "gpt-5.2-codex", "gpt-5.5"})
 
@@ -39,7 +39,7 @@ async def delegate_to_codex(
 ) -> ToolResult:
     """Encarga una tarea de programación a un agente de codificación interno.
 
-    Úsalo cuando Garcia pida trabajo NO trivial sobre un repo: "agrega login
+    Úsalo cuando the user pida trabajo NO trivial sobre un repo: "agrega login
     con Google", "refactoriza este módulo", "arregla el bug de X", "escribe
     tests". Para cambios chiquitos de una o dos líneas usa edit_file_* en su
     lugar.
@@ -110,7 +110,7 @@ async def delegate_to_codex(
     )
     where = f"la rama '{branch}'" if branch else work_dir.name
     data: dict[str, Any] = {"id": rec.id}
-    # 28.1-C1: reversing Codex is operational, not programmatic — Garcia may want
+    # 28.1-C1: reversing Codex is operational, not programmatic — the user may want
     # to keep the work. Hand him the exact discard command (a manual blueprint).
     if branch:
         wt = f"emma-wt-{branch.replace('/', '-')}"
@@ -127,7 +127,7 @@ async def delegate_to_codex(
 async def codex_status(task_id: str = "") -> ToolResult:
     """Dice cómo va la última tarea del agente de codificación (o una por id).
 
-    Úsalo cuando Garcia pregunte "¿cómo va el agente?" / "¿ya terminó Codex?".
+    Úsalo cuando the user pregunte "¿cómo va el agente?" / "¿ya terminó Codex?".
     """
     reg = registry()
     if task_id:

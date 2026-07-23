@@ -46,5 +46,5 @@ async def deliver(event: ProactiveEvent, effective: Priority) -> None:
         await asyncio.to_thread(macos.notify, "Emma", body)
 
     if effective >= Priority.SPEAK:
-        # Garcia's explicit preference: real voice, not the macOS `say` fallback.
+        # the user's explicit preference: real voice, not the macOS `say` fallback.
         await proactive_voice.speak_unprompted(event.detail or event.summary_es)

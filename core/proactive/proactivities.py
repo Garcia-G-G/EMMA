@@ -73,13 +73,13 @@ async def morning_briefing() -> ProactiveEvent | None:
     cal = await today_events()
     mail = await list_unread(limit=3)
     text = await _synthesize_es(
-        "Sintetiza en 2-3 oraciones un briefing matinal en español para Garcia. "
+        "Sintetiza en 2-3 oraciones un briefing matinal en español para the user. "
         f"Hoy es {_today_es()}. "
         f"Eventos: {cal.user_message[:400]}. Correos sin leer: {mail.user_message[:400]}."
     )
     if not text:
         # Fallback without the LLM: stitch the tool messages.
-        text = f"Buenos días, Garcia. {cal.user_message} {mail.user_message}"
+        text = f"Buenos días, the user. {cal.user_message} {mail.user_message}"
     return ProactiveEvent(
         source="morning_briefing", priority=Priority.SPEAK, summary_es=text[:140], detail=text
     )
@@ -102,7 +102,7 @@ async def meeting_prep() -> ProactiveEvent | None:
                 source="meeting_prep",
                 priority=Priority.SPEAK,
                 summary_es=f"En 5 minutos: {ev.title}.",
-                detail=f"Garcia, en 5 minutos tienes {ev.title} a las {ev.start.strftime('%H:%M')}.",
+                detail=f"the user, en 5 minutos tienes {ev.title} a las {ev.start.strftime('%H:%M')}.",
                 meta={"uid": ev.uid},
             )
     return None
@@ -115,7 +115,7 @@ async def eod_reflection() -> ProactiveEvent | None:
         source="eod_reflection",
         priority=Priority.NOTIFY,
         summary_es="¿Quieres que recuerde algo de hoy?",
-        detail="Garcia, ¿quieres que recuerde algo importante de hoy? Dímelo y lo guardo.",
+        detail="the user, ¿quieres que recuerde algo importante de hoy? Dímelo y lo guardo.",
     )
 
 
@@ -132,7 +132,7 @@ async def calendar_conflict() -> ProactiveEvent | None:
                 priority=Priority.NOTIFY,
                 summary_es=f"Conflicto: {a.title} y {b.title} se traslapan.",
                 detail=(
-                    f"Garcia, '{a.title}' termina a las {a.end.strftime('%H:%M')} "
+                    f"the user, '{a.title}' termina a las {a.end.strftime('%H:%M')} "
                     f"pero '{b.title}' empieza a las {b.start.strftime('%H:%M')}."
                 ),
             )
@@ -156,7 +156,7 @@ async def urgent_email() -> ProactiveEvent | None:
                     source="urgent_email",
                     priority=Priority.NOTIFY,
                     summary_es=f"Correo importante: {line.strip()[:140]}",
-                    detail=f"Garcia, llegó correo de {vip}: {line.strip()}",
+                    detail=f"the user, llegó correo de {vip}: {line.strip()}",
                 )
     return None
 
@@ -174,7 +174,7 @@ async def friday_recap() -> ProactiveEvent | None:
         source="friday_recap",
         priority=Priority.SPEAK,
         summary_es="Recap del viernes.",
-        detail=f"Garcia, recap de la semana: {text}. ¿Quieres profundizar en algo?",
+        detail=f"the user, recap de la semana: {text}. ¿Quieres profundizar en algo?",
     )
 
 
@@ -185,7 +185,7 @@ async def habit_tracker() -> ProactiveEvent | None:
         source="habit_tracker",
         priority=Priority.AMBIENT,
         summary_es="Pausa sugerida.",
-        detail="Garcia, llevas varias horas. ¿Una pausa de 5 minutos?",
+        detail="the user, llevas varias horas. ¿Una pausa de 5 minutos?",
     )
 
 
@@ -202,7 +202,7 @@ async def memory_followup() -> ProactiveEvent | None:
         source="memory_followup",
         priority=Priority.AMBIENT,
         summary_es=f"Recordatorio: {f.content[:120]}",
-        detail=f"Garcia, me dijiste: '{f.content}'. ¿Ya lo hiciste?",
+        detail=f"the user, me dijiste: '{f.content}'. ¿Ya lo hiciste?",
     )
 
 
@@ -213,7 +213,7 @@ async def intention_setting() -> ProactiveEvent | None:
         source="intention_setting",
         priority=Priority.NOTIFY,
         summary_es="¿Qué quieres lograr hoy?",
-        detail="Garcia, ¿qué quieres lograr hoy? Te lo recuerdo al final del día.",
+        detail="the user, ¿qué quieres lograr hoy? Te lo recuerdo al final del día.",
     )
 
 
@@ -240,7 +240,7 @@ async def birthday_alerts() -> ProactiveEvent | None:
         source="birthday_alerts",
         priority=Priority.NOTIFY,
         summary_es=f"Cumpleaños hoy: {merged}",
-        detail=f"Garcia, hoy cumple {merged}. ¿Le mando un mensaje?",
+        detail=f"the user, hoy cumple {merged}. ¿Le mando un mensaje?",
     )
 
 
@@ -261,7 +261,7 @@ async def overdue_reminders() -> ProactiveEvent | None:
         source="overdue_reminders",
         priority=Priority.NOTIFY,
         summary_es=f"Vencidos: {text[:140]}",
-        detail=f"Garcia, tienes recordatorios vencidos: {text}",
+        detail=f"the user, tienes recordatorios vencidos: {text}",
     )
 
 
@@ -295,7 +295,7 @@ async def background_task_subscriber() -> None:
                 source="background_task_done",
                 priority=Priority.AMBIENT,
                 summary_es=f"Listo: {name}.",
-                detail=f"Garcia, terminé '{name}' en {msg.get('elapsed_s', '?')}s.",
+                detail=f"the user, terminé '{name}' en {msg.get('elapsed_s', '?')}s.",
                 meta=dict(msg),
             )
             await delivery.deliver(ev, ev.priority)

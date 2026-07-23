@@ -6,7 +6,7 @@
 -->
 <installer-gui-script minSpecVersion="2">
     <title>Emma</title>
-    <organization>com.garcia</organization>
+    <organization>com.emma</organization>
     <welcome    file="Welcome.html"    mime-type="text/html"/>
     <license    file="License.html"    mime-type="text/html"/>
     <conclusion file="Conclusion.html" mime-type="text/html"/>

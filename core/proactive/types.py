@@ -20,6 +20,6 @@ class ProactiveEvent:
     source: str  # "morning_briefing", "meeting_prep", etc.
     priority: Priority
     summary_es: str  # one-line Spanish summary (notification body)
-    summary_en: str = ""  # optional English (only when Garcia is in EN context)
+    summary_en: str = ""  # optional English (only when the user is in EN context)
     detail: str = ""  # longer text Emma will speak; LLM may rephrase
     meta: dict[str, Any] = field(default_factory=dict)

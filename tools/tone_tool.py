@@ -1,6 +1,6 @@
 """Voice-driven tone control (Prompt 35).
 
-Lets Garcia steer Emma's spoken style directly ("háblame más serio", "relájate",
+Lets the user steer Emma's spoken style directly ("háblame más serio", "relájate",
 "tono normal"). Writes a directive into the runtime style state that is appended
 to the system prompt on the next session build. Complements the automatic
 affect detection in ``core/affect.py`` — this is the explicit override.

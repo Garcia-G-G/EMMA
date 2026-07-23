@@ -195,7 +195,7 @@ def apps_preferences() -> dict[str, str]:
 
 
 def user_profile() -> dict[str, str]:
-    """Garcia's identity fields (copy). Empty strings for anything unset.
+    """the user's identity fields (copy). Empty strings for anything unset.
 
     The single source of truth for "yo/mi/mis"; secrets never live here.
     """
@@ -300,7 +300,7 @@ def set_personality_field(field: str, value: int) -> bool:
 
 
 def set_app_preference(category: str, app: str) -> bool:
-    """Set Garcia's preferred app for ``category`` in the ``[apps.<category>]``
+    """Set the user's preferred app for ``category`` in the ``[apps.<category>]``
     block (last-write-wins). This is the store the app router reads FIRST
     (:func:`core.app_router.inspect`), so writing here — not the environment
     cache — is what makes a voice "cambia mi editor" actually stick (23.1-B41).

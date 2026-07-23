@@ -115,7 +115,7 @@ async def _apply_reverse(rec: episodic.ActionRecord) -> tuple[bool, str]:
     rev = rec.reverse or {}
     kind = rev.get("kind")
     if kind == "inverse_call":
-        # Garcia confirmed at the undo level → bypass the inverse tool's own gate.
+        # the user confirmed at the undo level → bypass the inverse tool's own gate.
         res = await dispatch(rev["tool"], {**rev.get("args", {}), "confirmed": True})
         return (res.success, "Listo, lo deshice." if res.success else f"No pude deshacerlo: {res.user_message}")
     if kind == "restore_text":
@@ -162,7 +162,7 @@ async def undo_last_action(confirmed: bool = False) -> ToolResult:
 async def undo_action_by_id(action_id: int, confirmed: bool = False) -> ToolResult:
     """Deshace una acción específica del historial (por su id). SIEMPRE confirma.
 
-    Úsalo después de what_did_you_do, cuando Garcia diga "deshaz la de las 3pm".
+    Úsalo después de what_did_you_do, cuando the user diga "deshaz la de las 3pm".
     """
     rec = await episodic.get(action_id)
     if rec is None:

@@ -5,7 +5,7 @@ confirmation flow on a destructive tool, AppleScript dialog-blocked handling
 (no hang), and tool-call telemetry.
 
 The memory test uses a temp DB and a mocked embedder so it neither touches
-Garcia's real memory.db nor calls the embedding API.
+the user's real memory.db nor calls the embedding API.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def test_semantic_forget_deletes_paraphrase(tmp_path, monkeypatch):
     async def run():
         lt.initialize()
         await lt.remember("Tomo mucho café por las mañanas", kind="preference")
-        await lt.remember("El clima en Monterrey es caluroso", kind="general")
+        await lt.remember("El clima en San José es caluroso", kind="general")
         # paraphrase that maps (via mock) to the coffee vector
         removed = await lt.forget("preferencia de cafe")
         remaining = await lt.recall(limit=50)

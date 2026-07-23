@@ -1,6 +1,6 @@
 """Multi-step workflow tool (Prompt 32).
 
-When Garcia asks for several things in one breath ("haz X y Y y agrega Z"), Emma
+When the user asks for several things in one breath ("haz X y Y y agrega Z"), Emma
 builds a list of steps and calls ``run_workflow``. The first call returns the plan
 as a bullet list for a single confirmation; on "sí" the orchestrator replays with
 ``confirmed=True`` and the steps execute in dependency order.

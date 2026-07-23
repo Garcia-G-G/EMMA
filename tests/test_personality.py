@@ -16,7 +16,7 @@ from core import dictionary, personality
 def test_defaults_are_byte_for_byte_todays_bullets() -> None:
     assert personality.personality_lines() == [
         "- Confident, calm, slightly witty. Never flustered.",
-        "- Talk to Garcia like a trusted colleague, not a customer.",
+        "- Talk to the user like a trusted colleague, not a customer.",
         "- Be direct. No filler, no hedging, no apologies.",
     ]
     # explicit all-default profile is identical

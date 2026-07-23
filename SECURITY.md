@@ -28,7 +28,7 @@ of what Emma protects, how, and what it explicitly does **not** protect.
 | Tier | Examples | Storage |
 |------|----------|---------|
 | **Public** | tool registry, `self/capabilities.md`, version | plaintext on disk |
-| **Personal** | preferences, profile facts ("prefers Zed", "lives in Monterrey"), schedule patterns | `~/.emma/memory.db` — cold-disk protection relies on **FileVault** |
+| **Personal** | preferences, profile facts ("prefers Zed", "lives in San José"), schedule patterns | `~/.emma/memory.db` — cold-disk protection relies on **FileVault** |
 | **Secret** | passwords, API keys, account numbers, government IDs (CURP/RFC/SSN), credit cards, IBAN | **macOS Keychain only** (`com.garcia.emma` service). `memory.db` may hold a `vault_ref` label, **never** the value |
 
 **The architectural rule:** *no Secret-tier value ever lands in `memory.db`, in
@@ -192,7 +192,7 @@ Since LANDING-25.0/25.0.1, Emma is internet-facing at `api.theemmafamily.com`
 - **Zero daemon tools.** The demo bridge runs exactly 4 server-side tools
   (`web_search`, `current_time`, `translate`, `explain_install`) — the backend
   never imports the daemon's registry, so nothing the visitor says can touch
-  Garcia's Mac. Every `function_call` is re-validated server-side; a
+  the user's Mac. Every `function_call` is re-validated server-side; a
   non-whitelisted name is rejected, never executed.
 - **Server-injected config.** The bridge sends the demo persona + voice + tools
   and DROPS any client `session.update` — a tampered client can't widen scope.
@@ -210,7 +210,7 @@ Since LANDING-25.0/25.0.1, Emma is internet-facing at `api.theemmafamily.com`
   only — no IPs.
 
 ## Voice data hygiene (24.7-C1)
-Garcia's wake-word training set is **biometric PII** (his actual voice):
+the user's wake-word training set is **biometric PII** (his actual voice):
 - `scripts/wake_data/positive_real/*.wav` + `validation/*.wav` — local only,
   **gitignored** (never committed, verified absent from history), dir is `0700`.
 - `~/.emma/wake_models/*.onnx` — derived from his voice (Personal tier), `0700`.

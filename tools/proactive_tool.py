@@ -41,7 +41,7 @@ def _set_enabled(name: str, on: bool) -> ToolResult:
 async def enable_proactivity(name: str) -> ToolResult:
     """Activa una proactividad por nombre (p. ej. 'morning_briefing').
 
-    Úsalo cuando Garcia diga "Emma, activa el briefing matinal" o
+    Úsalo cuando the user diga "Emma, activa el briefing matinal" o
     "enciende los avisos de reuniones".
     """
     return _set_enabled(name, True)
@@ -51,7 +51,7 @@ async def enable_proactivity(name: str) -> ToolResult:
 async def disable_proactivity(name: str) -> ToolResult:
     """Desactiva una proactividad por nombre.
 
-    Úsalo cuando Garcia diga "Emma, apaga el recap del viernes".
+    Úsalo cuando the user diga "Emma, apaga el recap del viernes".
     """
     return _set_enabled(name, False)
 
@@ -60,7 +60,7 @@ async def disable_proactivity(name: str) -> ToolResult:
 async def snooze_proactivities(minutes: int = 60, confirmed: bool = False) -> ToolResult:
     """Pausa TODA la salida proactiva por N minutos. Pide confirmación.
 
-    Úsalo cuando Garcia diga "Emma, no me molestes por 30 minutos" o
+    Úsalo cuando the user diga "Emma, no me molestes por 30 minutos" o
     "snooze 60".
     """
     minutes = max(1, int(minutes))
@@ -147,7 +147,7 @@ async def list_proactivities() -> ToolResult:
 async def set_quiet_hours(window: str) -> ToolResult:
     """Define las horas de silencio con un rango 'HH:MM-HH:MM' (coma para varios).
 
-    Úsalo cuando Garcia diga "Emma, silencio de 11 de la noche a 7 de la mañana".
+    Úsalo cuando the user diga "Emma, silencio de 11 de la noche a 7 de la mañana".
     """
     from core.proactive.quiet import _parse_windows
 

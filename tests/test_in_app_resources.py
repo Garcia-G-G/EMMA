@@ -82,7 +82,7 @@ class TestOpenInAppRouting:
 
     @pytest.mark.asyncio
     async def test_explicit_app_kind_without_dictionary_entry(self, _open_mock):
-        """Garcia dictates an exact connection name that isn't saved yet."""
+        """the user dictates an exact connection name that isn't saved yet."""
         res = await aut.open_in_app("scratch-db", app="tableplus", kind="connection")
         assert res.success
         _open_mock.assert_awaited_once_with("tableplus://connect/scratch-db")

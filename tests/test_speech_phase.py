@@ -30,7 +30,7 @@ class TestSpeechPhaseMachine:
     def test_word_count_graduates_to_body(self):
         p = SpeechPhase()
         p.on_bot_started()
-        p.on_bot_text("hola garcia dime qué necesitas ahora mismo por favor")  # 9 words
+        p.on_bot_text("hola alex dime qué necesitas ahora mismo por favor")  # 9 words
         assert p.current() == "body"
 
     def test_elapsed_time_graduates_to_body(self, monkeypatch):

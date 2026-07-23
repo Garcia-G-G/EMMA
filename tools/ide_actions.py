@@ -7,7 +7,7 @@ Layered fallback per call (first that works wins):
   2. ``open -a "<App>" <path>`` (no line jump).
   3. (search only) AppleScript via System Events.
 
-Garcia's preferred IDE comes from :func:`core.apps.resolve("editor")`.
+the user's preferred IDE comes from :func:`core.apps.resolve("editor")`.
 
 Sources: VS Code CLI `--goto` (code.visualstudio.com/docs/configure/command-line),
 Zed CLI `file:line` (zed.dev/docs/reference/cli).
@@ -64,7 +64,7 @@ def _open_args(cli: str | None, app: str, path: str, line: int) -> list[str]:
 async def open_in_ide(
     path: str, line: int = 0, ide: str = "", project_mode: bool = False
 ) -> ToolResult:
-    """Abre un archivo o carpeta en el IDE preferido de Garcia.
+    """Abre un archivo o carpeta en el IDE preferido de the user.
 
     Úsalo cuando diga:
     - "Emma, abre <path> en mi IDE"
@@ -127,7 +127,7 @@ async def new_file_in_ide(path: str, content: str = "", ide: str = "") -> ToolRe
 async def toggle_ide_terminal(ide: str = "") -> ToolResult:
     """Abre/cierra la terminal integrada del IDE (Bug 19.2-B6).
 
-    Úsalo cuando Garcia diga 'abre la terminal', 'muéstrame la terminal',
+    Úsalo cuando the user diga 'abre la terminal', 'muéstrame la terminal',
     'abre una terminal en Cursor'."""
     app = ide or resolve("editor")
     if not app:
@@ -163,14 +163,14 @@ def _terminal_paste_script(app: str, text: str, enter: bool) -> str:
 async def ide_terminal_send(text: str, enter: bool = True, ide: str = "") -> ToolResult:
     """Escribe `text` en la terminal integrada del IDE y opcionalmente da Enter.
 
-    Úsalo cuando Garcia diga "Emma, en la terminal de Cursor corre 'npm test'"
+    Úsalo cuando the user diga "Emma, en la terminal de Cursor corre 'npm test'"
     o "escribe X en la terminal". Abre/enfoca la terminal primero (Bug 19.6-B18).
 
     Limitación conocida: TUIs interactivas estilo Ink (p. ej. los prompts de
     Claude Code) tratan el salto de línea programático como newline, NO como
     submit — solo la tecla Return física dispara el envío en esos prompts
     (github.com/anthropics/claude-code/issues/15553, Approach 7). Si el
-    destino es una de esas, usa enter=false y que Garcia presione Enter.
+    destino es una de esas, usa enter=false y que the user presione Enter.
     Nota: si la terminal ya estaba abierta Y enfocada, el toggle puede
     cerrarla (sin señal fiable de visibilidad entre IDEs); re-pedirlo la
     reabre.

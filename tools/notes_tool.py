@@ -59,7 +59,7 @@ _PREVIEW_HANDLER = (
 )
 
 
-# Recently-Deleted folder names to skip during enumeration (Garcia's locales:
+# Recently-Deleted folder names to skip during enumeration (the user's locales:
 # English + Mexican Spanish). A note moved here by `delete` must NOT resurface as
 # a live match — otherwise read_note/delete_note re-offer a phantom (Bug 19.2).
 # Top-level folders only; deeply-nested subfolders are out of scope.
@@ -140,7 +140,7 @@ def _enumerate_light_script(scan_cap: int) -> str:
 
 
 async def _most_recent_note(scan_cap: int = 500) -> Match | None:
-    """The most recently MODIFIED note (what Garcia means by 'la última nota').
+    """The most recently MODIFIED note (what the user means by 'la última nota').
 
     Modification date, not creation date — "last touched" is what he
     experiences in the Notes UI."""
@@ -155,7 +155,7 @@ async def _most_recent_note(scan_cap: int = 500) -> Match | None:
 async def resolve_recent_note() -> ToolResult:
     """Devuelve el título y un vistazo de la nota MÁS RECIENTE (última modificada).
 
-    Úsalo para confirmar antes de actuar cuando Garcia diga 'la última nota' /
+    Úsalo para confirmar antes de actuar cuando the user diga 'la última nota' /
     'esa nota que acabo de crear' y no estés seguro de cuál es."""
     try:
         m = await _most_recent_note()
@@ -230,7 +230,7 @@ async def create_note(
 
     Si ya existe una nota cuyo título solo difiere en puntuación/acentos
     ('Limitación: terminal Cursor' vs 'Limitación terminal Cursor'), pregunta
-    primero: con el sí de Garcia para crear de todos modos, re-llama con
+    primero: con el sí de the user para crear de todos modos, re-llama con
     confirmed=true; si prefiere agregar a la existente, usa append_to_note.
     `folder` es opcional; si se omite, usa la carpeta por defecto.
     """
@@ -290,7 +290,7 @@ async def _append_to_match(match: Match, text: str) -> ToolResult:
 
 async def _create_with_text(new_title: str, text: str, *, existed: bool) -> ToolResult:
     """Create a note titled ``new_title`` with ``text`` as the body (reusing
-    create_note's HTML-body fix), with an append-flavored message. Garcia
+    create_note's HTML-body fix), with an append-flavored message. the user
     already confirmed the creation upstream — skip the near-dup guard."""
     res = await create_note(new_title, text, confirmed=True)
     if not res.success:
@@ -368,7 +368,7 @@ async def append_to_note(
             requires_confirmation=True,
         )
 
-    # Exactly one → append (Garcia already said "agrega"; no extra confirm).
+    # Exactly one → append (the user already said "agrega"; no extra confirm).
     if len(matches) == 1:
         return await _append_to_match(matches[0], text)
 

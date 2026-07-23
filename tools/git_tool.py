@@ -1,4 +1,4 @@
-"""Clone a GitHub repo and open it in Garcia's preferred IDE — one voice command.
+"""Clone a GitHub repo and open it in the user's preferred IDE — one voice command.
 
 The single flow Phase 18 targets: resolve a repo (URL, owner/name, or a search
 query), clone it shallowly as a background task (so Emma answers immediately),
@@ -75,9 +75,9 @@ async def clone_and_open(
     ide: str = "",
     confirmed: bool = False,
 ) -> ToolResult:
-    """Clone a GitHub repo and open it in Garcia's preferred IDE.
+    """Clone a GitHub repo and open it in the user's preferred IDE.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
     - "Emma, clona <repo> en mi IDE"
     - "Emma, baja ese repo y ábrelo"
     - "Emma, clona el primero de los que encontraste"

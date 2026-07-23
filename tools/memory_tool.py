@@ -1,6 +1,6 @@
 """Voice-callable memory tools.
 
-These expose the long-term store directly to the LLM so Garcia can
+These expose the long-term store directly to the LLM so the user can
 say things like "Emma, recuérdame que soy alérgico a los mariscos"
 and have the fact persisted explicitly with high confidence, or ask
 "¿qué sabes de mí?" to hear Emma recite what she has on file.
@@ -22,9 +22,9 @@ log = structlog.get_logger("emma.tools.memory")
 
 @tool()
 async def remember_fact(content: str, kind: str = "general") -> ToolResult:
-    """Save a durable fact about Garcia to long-term memory.
+    """Save a durable fact about the user to long-term memory.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
 
     - "Emma, recuérdame que ..."
     - "Emma, acuérdate de que ..."
@@ -55,9 +55,9 @@ async def remember_fact(content: str, kind: str = "general") -> ToolResult:
 
 @tool()
 async def recall_facts(query: str = "") -> ToolResult:
-    """Look up what Emma already knows about Garcia.
+    """Look up what Emma already knows about the user.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
 
     - "¿qué sabes de mí?"
     - "what do you know about me?"
@@ -97,7 +97,7 @@ async def recall_facts(query: str = "") -> ToolResult:
 async def forget_fact(content: str) -> ToolResult:
     """Delete a fact (or facts) matching the given content from long-term memory.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
 
     - "Emma, olvida que ..."
     - "Emma, borra lo de ..."

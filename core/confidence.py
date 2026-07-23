@@ -68,7 +68,7 @@ def _tokens(s: str) -> list[str]:
 
 
 def is_low_confidence(text: str, last_bot_text: str = "") -> bool:
-    """True when the transcript smells like noise/echo rather than Garcia."""
+    """True when the transcript smells like noise/echo rather than the user."""
     tokens = _tokens(text)
     if not tokens:
         return True

@@ -26,7 +26,7 @@ def _describe(action: dict[str, object]) -> str:
 async def recall_last_action() -> ToolResult:
     """Devuelve la última acción que Emma completó en esta sesión.
 
-    Úsalo PRIMERO cuando Garcia diga 'otra vez', 'como antes', 'lo de hace
+    Úsalo PRIMERO cuando the user diga 'otra vez', 'como antes', 'lo de hace
     rato', 'eso', 'lo mismo', 'deshazlo' — confirma con él el referente y
     luego re-llama la herramienta original con los mismos argumentos.
     """

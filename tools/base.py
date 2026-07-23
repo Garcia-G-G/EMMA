@@ -58,7 +58,7 @@ class RegisteredTool:
     parameters: dict[str, Any]
     destructive: bool = False
     aliases: tuple[str, ...] = field(default_factory=tuple)
-    # True for tools whose result carries text Emma did NOT hear from Garcia's own
+    # True for tools whose result carries text Emma did NOT hear from the user's own
     # microphone — email, web pages, on-screen text, notes, filenames, browser
     # tabs. That text is attacker-reachable, so the function handler fences it in
     # <untrusted_content> before it reaches the model (see core/conversation.py).

@@ -2,7 +2,7 @@
 
 Two consumers:
 - The confirmation invariant (B24): "a destructive ``confirmed=True`` call is
-  only valid if Garcia actually SPOKE after the tool asked its question."
+  only valid if the user actually SPOKE after the tool asked its question."
   Event ORDER is the source of truth — never durations (a real "sí" can land
   200 ms after the question).
 - Anaphora resolution (B29): "otra vez" / "lo de hace rato" resolve against

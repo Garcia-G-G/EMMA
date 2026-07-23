@@ -81,8 +81,8 @@ def test_realtime_rejects_bad_token(client):
 # ---- B: auth ----------------------------------------------------------------
 
 
-def _login(client, email="garcia@example.com", provider="google"):
-    user = db.upsert_user(email, "Garcia", provider, "pid-1")
+def _login(client, email="alex@example.com", provider="google"):
+    user = db.upsert_user(email, "the user", provider, "pid-1")
     client.cookies.set("emma_session", auth._serializer.dumps({"uid": user["id"]}))
     return user
 

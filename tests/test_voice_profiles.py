@@ -29,31 +29,31 @@ def test_schema_init_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_enroll_then_identify_roundtrip() -> None:
     e = _emb(1)
-    await vp.enroll("garcia", e)
+    await vp.enroll("alex", e)
     assert vp.count_sync() == 1
-    assert await vp.identify(e) == "garcia"  # same embedding → cosine 1.0
+    assert await vp.identify(e) == "alex"  # same embedding → cosine 1.0
 
 
 @pytest.mark.asyncio
 async def test_too_different_identifies_none() -> None:
-    await vp.enroll("garcia", _emb(1))
+    await vp.enroll("alex", _emb(1))
     assert await vp.identify(_emb(999)) is None  # unrelated voice → below threshold
 
 
 @pytest.mark.asyncio
 async def test_reenroll_bumps_confidence() -> None:
-    await vp.enroll("garcia", _emb(1))
-    await vp.enroll("garcia", _emb(2))
+    await vp.enroll("alex", _emb(1))
+    await vp.enroll("alex", _emb(2))
     profs = await vp.list_profiles()
     assert len(profs) == 1 and profs[0].confidence > 1.0
 
 
 @pytest.mark.asyncio
 async def test_mark_seen_and_delete() -> None:
-    await vp.enroll("garcia", _emb(1))
-    await vp.mark_seen("garcia")
+    await vp.enroll("alex", _emb(1))
+    await vp.mark_seen("alex")
     assert (await vp.list_profiles())[0].last_seen is not None
-    assert await vp.delete_profile("garcia") is True
+    assert await vp.delete_profile("alex") is True
     assert await vp.list_profiles() == []
 
 

@@ -2,7 +2,7 @@
 """
 Smoke helper for Prompt 27.1 — pane awareness across apps.
 
-Garcia: focus any app + pane on your screen, then run
+the user: focus any app + pane on your screen, then run
 
     .venv/bin/python scripts/smoke_focus_matrix.py
 

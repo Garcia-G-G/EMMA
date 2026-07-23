@@ -4,7 +4,7 @@ Architectural decision: edit the file on disk, never the IDE buffer.
 Cursor/VS Code's automation surface is too shallow to mutate buffers
 reliably, their file watchers pick up disk changes live, and the same tool
 works whether the IDE is open or not. After a successful edit the file is
-revealed in Garcia's IDE via ``open_in_ide`` so he SEES the change.
+revealed in the user's IDE via ``open_in_ide`` so he SEES the change.
 
 Safety rails:
 - Paths resolve under ``$HOME`` only — anything else is rejected.
@@ -13,7 +13,7 @@ Safety rails:
   atomic rename on POSIX: docs.python.org/3/library/os.html#os.replace)
 - All four tools are ``destructive=True`` two-phase: the first call answers
   with the diff summary + ``requires_confirmation``; the orchestrator
-  re-calls with ``confirmed=True`` after Garcia's "sí".
+  re-calls with ``confirmed=True`` after the user's "sí".
 - ``edit_file_search_replace`` is LITERAL, never regex (attack surface).
 """
 
@@ -66,7 +66,7 @@ def _reveal(path: str, line: int) -> None:
 
 
 def _home() -> Path:
-    """Seam for tests; runtime is always Garcia's real home."""
+    """Seam for tests; runtime is always the user's real home."""
     return Path.home()
 
 
@@ -138,7 +138,7 @@ def _reveal_line(old: str, reveal_line_fn: Callable[[str], int] | None) -> int:
 
 def _editor_gate() -> ToolResult | None:
     """First-time editor pick (B41): when no editor is frontmost/running/preferred
-    and more than one is installed, ask Garcia once. Returns the question
+    and more than one is installed, ask the user once. Returns the question
     ToolResult to short-circuit the edit, or None to proceed."""
     picked, candidates = app_router.preferred_or_ask("editor")
     if picked is not None:
@@ -230,7 +230,7 @@ def _ensure_trailing_newline(s: str) -> str:
 async def edit_file_append(path: str, text: str, confirmed: bool = False) -> ToolResult:
     """Agrega `text` al FINAL de un archivo (con confirmación y diff hablado).
 
-    Úsalo cuando Garcia diga "Emma, en mi archivo X agrega Y al final".
+    Úsalo cuando the user diga "Emma, en mi archivo X agrega Y al final".
     Edita el disco directamente y luego abre/refresca el archivo en su IDE.
     """
 
@@ -252,7 +252,7 @@ async def edit_file_append(path: str, text: str, confirmed: bool = False) -> Too
 async def edit_file_prepend(path: str, text: str, confirmed: bool = False) -> ToolResult:
     """Agrega `text` al INICIO de un archivo (con confirmación y diff hablado).
 
-    Úsalo cuando Garcia diga "Emma, en mi archivo X agrega Y al principio".
+    Úsalo cuando the user diga "Emma, en mi archivo X agrega Y al principio".
     """
 
     def mutate(old: str) -> str:
@@ -271,7 +271,7 @@ async def edit_file_prepend(path: str, text: str, confirmed: bool = False) -> To
 async def edit_file_replace(path: str, content: str, confirmed: bool = False) -> ToolResult:
     """SOBRESCRIBE un archivo completo con `content`. Siempre pide confirmación.
 
-    Úsalo solo cuando Garcia diga explícitamente "sobrescribe X con esto".
+    Úsalo solo cuando the user diga explícitamente "sobrescribe X con esto".
     Es la edición más riesgosa: el contenido anterior se pierde.
     """
 
@@ -296,7 +296,7 @@ async def edit_file_search_replace(
     """Reemplaza texto LITERAL en un archivo: `search` → `replace`.
 
     `count=1` reemplaza solo la primera aparición (seguro por defecto);
-    si Garcia pide "todas las ocurrencias", pasa `count=-1`. Nunca es regex.
+    si the user pide "todas las ocurrencias", pasa `count=-1`. Nunca es regex.
     """
     if not search:
         return ToolResult(False, None, "¿Qué texto busco para reemplazar?", False)

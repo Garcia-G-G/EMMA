@@ -1,14 +1,14 @@
 """Enrolled voice profiles (Prompt 35.1).
 
 A tiny table in the existing ``~/.emma/memory.db`` holding one voice embedding per
-enrolled person (Garcia in V1; the schema is generic for future "esta es la voz de
+enrolled person (the user in V1; the schema is generic for future "esta es la voz de
 mi hermana"). Personal-tier data — embeddings live in memory.db, never the Keychain,
 and we NEVER persist raw audio (only the ~1 KB float32 embedding).
 
 Identification is a cosine-similarity match against the enrolled embeddings. The
 embedding is computed by ``embed_audio`` via the optional ``resemblyzer`` dependency;
 if it isn't installed, ``embed_audio`` raises :class:`SpeakerIDUnavailable` and the
-caller degrades to "always Garcia".
+caller degrades to "always the user".
 """
 
 from __future__ import annotations

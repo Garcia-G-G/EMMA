@@ -58,7 +58,7 @@ class TestSessionLanguagePin:
         assert "If unsure, default to Spanish" in text
         # the mirroring rule survives; the user's name is now parameterized (Part 1)
         assert "SAME language" in text and "just spoke" in text
-        assert "Garcia" not in text
+        assert "the user" in text
 
 
 class TestContextSeed:

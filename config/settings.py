@@ -112,7 +112,7 @@ class Settings(BaseSettings):
 
     # ---- Barge-in tuning (22.1-B38). The single-frame SPIKE threshold sits
     # above Emma's own speaker echo (measured 4000-12600 RMS on this MacBook)
-    # so a clap/shout cuts her instantly; the WINDOW pair catches Garcia's
+    # so a clap/shout cuts her instantly; the WINDOW pair catches the user's
     # NORMAL voice, which rarely spikes 18000 on one frame but sustains
     # >6000 over 250 ms. Both live during her body phase; the opener stays
     # protected regardless (22-B32).
@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     # incoming mic audio against it while Emma speaks; high coherence => echo
     # => drop the frame before it reaches the RMS barge-in path. This is real
     # (if simple) AEC, no new dependency. ECHO_CORR_THRESHOLD is the knob:
-    # raise it if Garcia's real voice ever gets eaten, lower it if echo leaks.
+    # raise it if the user's real voice ever gets eaten, lower it if echo leaks.
     # Tune from the per-decision `echo_suppressed` DEBUG logs. Once validated,
     # BARGE_IN_RMS_WINDOW (Layer A) can drop back toward 6000-8000 since echo
     # no longer reaches the RMS path.
@@ -225,7 +225,7 @@ class Settings(BaseSettings):
     X_REDIRECT_URI: str = "http://localhost:8723/callback"
     X_SCOPES: str = "tweet.read tweet.write users.read offline.access"
     # After 26.1 the API is the supported path; the unauthenticated web-intent
-    # composer is OFF by default (only opened if Garcia explicitly re-enables it).
+    # composer is OFF by default (only opened if the user explicitly re-enables it).
     X_USE_COMPOSER_FALLBACK: bool = False
 
     # Emma's browser is visible by default so the user can watch it work.
@@ -320,9 +320,9 @@ class Settings(BaseSettings):
     # network backend; if it's set the long-term store will use it
     # instead of SQLite (handled in memory/long_term.py).
     MEMORY_DB_PATH: Path = Path.home() / ".emma" / "memory.db"
-    # 35.1: gate destructive tools on "speaker == Garcia". Effective only when
+    # 35.1: gate destructive tools on "speaker == the user". Effective only when
     # resemblyzer is installed AND a profile is enrolled — so a fresh install never
-    # locks itself out, and a daemon without resemblyzer treats every turn as Garcia.
+    # locks itself out, and a daemon without resemblyzer treats every turn as the user.
     SPEAKER_GATE_DESTRUCTIVE: bool = True
 
     # Reflection: how many facts to extract per turn (cap, model may
@@ -350,7 +350,7 @@ class Settings(BaseSettings):
     # hot-word bias (core.vocabulary.bias_render). `whisper-1` retires ~June 2026;
     # its streaming successor `gpt-realtime-whisper` ignores the free-text
     # `prompt` and wants a short "Keywords: a, b, c" list instead. Both are
-    # config so the migration is a one-line flip once Garcia A/B-tests his accent.
+    # config so the migration is a one-line flip once the user A/B-tests his accent.
     # Docs: https://developers.openai.com/api/docs/guides/realtime-transcription
     REALTIME_TRANSCRIPTION_MODEL: str = "whisper-1"
     REALTIME_BIAS_MODE: str = "prompt"  # "prompt" (whisper-1) | "keywords" (gpt-realtime-whisper)

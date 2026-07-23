@@ -1,6 +1,6 @@
 # data/
 
-Drop a reference clip here as `transcription_ab_sample.wav` (~30s of Garcia
+Drop a reference clip here as `transcription_ab_sample.wav` (~30s of the user
 speaking representative phrases — names, numbers, accented Spanish) to use the
 offline transcription A/B harness:
 

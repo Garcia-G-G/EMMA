@@ -39,13 +39,13 @@ def test_adapt_tool_specs_passthrough() -> None:
 
 
 def test_build_instructions_has_sections() -> None:
-    instructions = asyncio.get_event_loop().run_until_complete(_build_instructions())
+    instructions = asyncio.run(_build_instructions())
     assert "# Role" in instructions
     assert "# Personality" in instructions
     assert "# Language" in instructions
     assert "# Response Length" in instructions
     assert "# Forbidden" in instructions
     # EMMA-APP Part 1: the prompt no longer hardcodes the maker's name; it names
-    # the paired user (or a generic stand-in when unpaired), never "Garcia".
-    assert "Garcia" not in instructions
+    # the paired user, or a generic stand-in when unpaired.
+    assert "the user" in instructions
     assert "Emma" in instructions

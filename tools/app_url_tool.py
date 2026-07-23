@@ -4,7 +4,7 @@ One tool drives many apps: it builds the app's deep-link URL from
 ``core.app_capabilities`` (public capability) + ``core.dictionary.user_app``
 (per-user IDs) and hands it to macOS ``open``. Apps without a scheme just launch.
 
-Scaling happens in the TOML registry, not here — ``remember_app`` lets Garcia
+Scaling happens in the TOML registry, not here — ``remember_app`` lets the user
 add an app by voice.
 
 Sources (verified): Slack slack://channel?team&id (api.slack.com/reference/
@@ -108,13 +108,13 @@ async def open_in_app(
 ) -> ToolResult:
     """Abre algo en una app: una URL directa, un recurso guardado, o destino + app.
 
-    Úsalo cuando Garcia diga:
+    Úsalo cuando the user diga:
     - "Emma, abre la conexión learning-rots-local" → kind="connection"
     - "Emma, abre el canal general en Slack" → app="slack", kind="channel"
     - "Emma, crea una tarea en Things: comprar leche"
     - "Emma, abre <url>"
     `kind` es el tipo de recurso (connection/channel/dm/note); `fields` aporta
-    datos extra. Si sugerí opciones ("¿quisiste decir…?") y Garcia eligió,
+    datos extra. Si sugerí opciones ("¿quisiste decir…?") y the user eligió,
     re-llámame con `picked=<su elección>` y confirmed=true (21-B25).
     """
     target = (picked or target or "").strip()
@@ -129,7 +129,7 @@ async def open_in_app(
             return ToolResult(False, None, f"No pude abrir eso: {exc}", False)
         return ToolResult(True, {"opened": target}, "Abriendo.", False)
 
-    # 2. Saved resource? [connections] knows Garcia's in-app resource names
+    # 2. Saved resource? [connections] knows the user's in-app resource names
     #    (19.6-B17): "abre la conexión learning-rots-local" → TablePlus deep link.
     conn = dictionary.find_connection(target)
     if conn:
@@ -224,7 +224,7 @@ async def remember_app(
 ) -> ToolResult:
     """Enseña a Emma a controlar una app nueva (info pública, no destructiva).
 
-    Úsalo cuando Garcia diga "Emma, recuerda que <app> usa el esquema <scheme>".
+    Úsalo cuando the user diga "Emma, recuerda que <app> usa el esquema <scheme>".
     """
     name = (name or "").strip()
     if not name:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Offline A/B for transcription models — run by Garcia, never in CI / the daemon.
+"""Offline A/B for transcription models — run by the user, never in CI / the daemon.
 
 Sends one reference clip through two transcription models and prints both
-transcripts plus a word-level diff, so Garcia can judge which handles his
+transcripts plus a word-level diff, so the user can judge which handles his
 accented Spanish (names, numbers) better before we flip
 ``REALTIME_TRANSCRIPTION_MODEL`` (Bug 19.5-A4).
 

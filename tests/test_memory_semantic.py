@@ -51,8 +51,8 @@ def test_embed_and_cosine() -> None:
     from memory.embeddings import cosine, embed
 
     async def body() -> None:
-        v1 = await embed("Garcia loves tacos al pastor")
-        v2 = await embed("Garcia loves tacos al pastor")
+        v1 = await embed("the user loves tacos al pastor")
+        v2 = await embed("the user loves tacos al pastor")
         v3 = await embed("the weather in Tokyo is rainy")
         assert len(v1) == 1536
         assert cosine(v1, v2) > 0.99  # identical text
@@ -65,7 +65,7 @@ def test_recall_paraphrased_query() -> None:
     from memory.long_term import recall, remember
 
     async def body() -> None:
-        await remember("Garcia prefiere Zed como editor de código", kind="preference")
+        await remember("the user prefiere Zed como editor de código", kind="preference")
         results = await recall("cuál es mi editor favorito", limit=3)
         assert results, "paraphrased query returned nothing"
         assert any("Zed" in f.content for f in results)
@@ -77,8 +77,8 @@ def test_dedup_near_duplicate_no_new_row() -> None:
     from memory.long_term import _count_sync, remember
 
     async def body() -> None:
-        a = await remember("Garcia usa neovim como editor principal", kind="preference")
-        b = await remember("El editor principal de Garcia es neovim", kind="preference")
+        a = await remember("the user usa neovim como editor principal", kind="preference")
+        b = await remember("El editor principal de the user es neovim", kind="preference")
         assert a == b, "near-duplicate created a new row instead of bumping"
 
     asyncio.run(body())
@@ -93,9 +93,9 @@ def test_consolidate_collapses_cluster() -> None:
         # Insert a synthetic cluster directly (bypassing dedup) to simulate
         # pre-existing paraphrase pollution, then consolidate.
         paraphrases = [
-            "Garcia tiene un perro llamado Max",
-            "El perro de Garcia se llama Max",
-            "Garcia's dog is named Max",
+            "the user tiene un perro llamado Max",
+            "El perro de the user se llama Max",
+            "the user's dog is named Max",
         ]
         now = time.time()
         with _connect() as conn:

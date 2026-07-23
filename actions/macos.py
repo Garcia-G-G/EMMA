@@ -146,7 +146,7 @@ async def launch_app(app: str, warmup_s: float = 1.5, *, background: bool = Fals
 
     ``background=True`` adds ``-g -j`` (don't steal focus, launch hidden) — for
     daemon-side launches like the proactive calendar poll, where popping a
-    window in Garcia's face would be rude."""
+    window in the user's face would be rude."""
     proc = await asyncio.create_subprocess_exec(
         "open",
         *(("-g", "-j") if background else ()),

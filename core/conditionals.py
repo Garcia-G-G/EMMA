@@ -270,7 +270,7 @@ async def check_once(dispatcher: Dispatcher, now: dt.datetime | None = None) -> 
         if not matched:
             continue
         # The action's confirmed flag (for destructive tools) was baked in at
-        # schedule time — Garcia already confirmed the whole conditional. Only
+        # schedule time — the user already confirmed the whole conditional. Only
         # mark fired on a REAL success: a failure or a requires_confirmation
         # bounce must NOT burn the one-shot, or the action silently never happens.
         try:

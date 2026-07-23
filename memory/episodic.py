@@ -5,7 +5,7 @@ The layer between ``core.session_memory`` (process-local conversation ring) and
 an ``actions`` table in the SAME memory DB (``settings.MEMORY_DB_PATH``, new
 table only). Two consumers share it:
 
-1. "¿Qué hiciste el martes?" — Garcia querying the past (``query_by_date``).
+1. "¿Qué hiciste el martes?" — the user querying the past (``query_by_date``).
 2. ``undo_last_action`` — reversing the last fixable action, via the per-tool
    "reverse blueprint" captured at record time.
 
@@ -116,7 +116,7 @@ def blueprint_restore_text(path: str, before: str) -> dict[str, Any]:
 
 
 def blueprint_manual(hint: str) -> dict[str, Any]:
-    """Reversible only with Garcia's intervention; ``hint`` tells him the step."""
+    """Reversible only with the user's intervention; ``hint`` tells him the step."""
     return {"kind": "manual", "hint": hint}
 
 
@@ -145,7 +145,7 @@ def _record_sync(
     reverse_kind = reverse.get("kind", "noop")
     reverse_json = json.dumps(reverse, ensure_ascii=False, default=str)
     # B3: a restore_text blob (or any reverse) that blows the row cap downgrades
-    # to manual — point Garcia at the OS-level escape hatch instead.
+    # to manual — point the user at the OS-level escape hatch instead.
     if len((args_json + reverse_json).encode("utf-8")) > _ROW_CAP:
         reverse = blueprint_manual(
             reverse.get("hint")
