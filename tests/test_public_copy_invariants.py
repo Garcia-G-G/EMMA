@@ -48,7 +48,10 @@ def _shipping_text_files() -> list[Path]:
         path
         for root_name in SCAN_ROOTS
         for path in (ROOT / root_name).rglob("*")
-        if path.is_file() and path.suffix in TEXT_SUFFIXES
+        if path.is_file()
+        and ".venv" not in path.parts
+        and "__pycache__" not in path.parts
+        and path.suffix in TEXT_SUFFIXES
     ]
     return [*(ROOT / name for name in ROOT_FILES), *nested]
 
