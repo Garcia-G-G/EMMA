@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,16 +45,18 @@ ALLOWED_LEGACY_IDENTIFIERS = ("com." + PRIVATE_NAME.casefold() + ".emma",)
 
 
 def _shipping_text_files() -> list[Path]:
-    nested = [
-        path
-        for root_name in SCAN_ROOTS
-        for path in (ROOT / root_name).rglob("*")
-        if path.is_file()
-        and ".venv" not in path.parts
-        and "__pycache__" not in path.parts
-        and path.suffix in TEXT_SUFFIXES
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", *ROOT_FILES, *SCAN_ROOTS],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
+    return [
+        ROOT / relative
+        for raw_path in tracked.split(b"\0")
+        if raw_path
+        and (relative := raw_path.decode("utf-8")).endswith(tuple(TEXT_SUFFIXES))
     ]
-    return [*(ROOT / name for name in ROOT_FILES), *nested]
 
 
 def test_shipping_surfaces_do_not_assume_maker_identity_or_location() -> None:
