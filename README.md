@@ -32,7 +32,7 @@ To uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh`.
 - 🔐 **Privacy-first by design** — secrets (API keys, tokens) live **only in the macOS Keychain**; personal data sits in `~/.emma/` behind FileVault and owner-only permissions; nothing secret ever reaches logs or the model prompt. See [`SECURITY.md`](SECURITY.md).
 - ✅ **Safe destructive actions** — anything irreversible (delete, send, overwrite) goes through a spoken two-phase confirmation flow.
 - 🪄 **Background tasks** — long-running work (installs, builds, delegated coding jobs) runs in the background and notifies you when done, so you can walk away.
-- 🛰️ **Live dashboard + 3D visualizer** — a real-time web dashboard and an optional JARVIS-style wireframe HUD wired to live pipeline events.
+- ⚛️ **Live dashboard + atom visualizer** — a real-time dashboard and Emma's line-art atom responding to live listening, thinking, speaking, and tool events.
 - 🔁 **Runs as a service** — installs as a launchd agent that survives reboots, with a voice-triggered dev mode and self-recovering crash handling.
 
 ## How it works
