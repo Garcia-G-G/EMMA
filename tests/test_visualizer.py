@@ -67,7 +67,13 @@ def test_visualizer_route_and_events_ws():
 
             status, body = await asyncio.get_event_loop().run_in_executor(None, _get)
             assert status == 200
-            assert "jb-host" in body and "three.min.js" in body  # the HUD scaffold
+            assert 'class="emma-atom"' in body
+            assert 'class="atom-nucleus"' in body
+            assert body.count('class="atom-orbit ') >= 3
+            assert 'class="atom-electron ' in body
+            assert "THREE." not in body
+            assert "three.min.js" not in body
+            assert "WebGLRenderer" not in body
 
             # WS /events sends the init payload within 1s
             async with websockets.connect("ws://localhost:39211/events") as ws:
