@@ -30,6 +30,7 @@ tmp.txt
 picovoice-support-email-v2.md
 # Throwaway visualizer design prototypes (the live one is dashboard/visualizer.html)
 _visualizer_previews/
+.worktrees/
 # theemmafamily.com landing page — its own separate git repo + Kamal deploy
 _landing/
 # 19.7 voice harness: cached TTS audio is binary + regenerable; manifest stays in git
