@@ -15,6 +15,7 @@ import json
 import logging
 import secrets
 import time
+from typing import Any
 
 import websockets
 from fastapi import APIRouter, WebSocket
@@ -27,6 +28,14 @@ from backend.session import decode_token
 
 log = logging.getLogger("emma.realtime_proxy")
 router = APIRouter()
+
+
+async def _cancel_and_await(tasks: set[asyncio.Task[Any]]) -> None:
+    """Cancel unfinished tasks and let every task run its cleanup."""
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def _is_client_session_frame(raw: str) -> bool:
@@ -277,9 +286,8 @@ async def _demo_realtime(ws: WebSocket) -> None:
                     await ws.send_text(json.dumps({"type": "emma.session_expired"}))
 
             tasks = {asyncio.create_task(t()) for t in (client_to_openai, openai_to_client, hard_timeout)}
-            _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in pending:
-                t.cancel()
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            await _cancel_and_await(tasks)
     except Exception:
         pass
     finally:

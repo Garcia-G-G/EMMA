@@ -28,6 +28,11 @@ _STRIP = {"authorization", "host", "content-length", "content-encoding", "transf
           "accept-encoding"}
 
 
+async def close_client() -> None:
+    """Release the shared upstream connection pool during app shutdown."""
+    await _CLIENT.aclose()
+
+
 def _authorize(req: Request) -> dict[str, Any]:
     auth = req.headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):

@@ -156,6 +156,33 @@ def test_reset_request_never_enumerates(client):
     assert known.status_code == unknown.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_reset_email_closes_http_client(monkeypatch):
+    import httpx
+
+    state = {"exited": False, "posted": False}
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            state["exited"] = True
+
+        async def post(self, *_args, **_kwargs):
+            state["posted"] = True
+
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "test-key", raising=False)
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    await auth_local._send_reset_email("alex@example.test", "https://example.test/reset")
+
+    assert state == {"exited": True, "posted": True}
+
+
 def test_reset_confirm_changes_password(client):
     client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
     client.post("/api/auth/reset-request", json={"email": "a@b.com"})

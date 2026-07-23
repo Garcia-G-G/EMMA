@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from backend import db, metering
+from backend import db, metering, realtime_proxy
 from backend import device_pairing as dp
 from backend.app import app
 from backend.config import settings
@@ -60,6 +60,25 @@ class _FakeUpstream:
         if msg is None:
             raise StopAsyncIteration
         return msg
+
+
+@pytest.mark.asyncio
+async def test_cancel_and_await_runs_task_cleanup():
+    assert hasattr(realtime_proxy, "_cancel_and_await")
+    cleaned = asyncio.Event()
+
+    async def sleeper():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaned.set()
+
+    task = asyncio.create_task(sleeper())
+    await asyncio.sleep(0)
+    await realtime_proxy._cancel_and_await({task})
+
+    assert task.done()
+    assert cleaned.is_set()
 
 
 def test_invalid_token_closes_4401():
