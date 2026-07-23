@@ -40,7 +40,7 @@ from backend import db
 from backend.auth import current_user, require_user
 from backend.config import plan_caps, settings
 from backend.netutil import client_ip as _client_ip
-from backend.realtime_proxy import cost_usd
+from backend.realtime_proxy import _cancel_and_await, cost_usd
 from backend.session import decode_token, issue_token, verify_captcha
 
 log = structlog.get_logger("emma.demo")
@@ -471,9 +471,8 @@ async def demo_ws(ws: WebSocket, session_id: str) -> None:
 
             tasks = {asyncio.create_task(t())
                      for t in (client_to_openai, openai_to_client, timers, hard_close)}
-            _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in pending:
-                t.cancel()
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            await _cancel_and_await(tasks)
     except Exception:
         pass
     finally:

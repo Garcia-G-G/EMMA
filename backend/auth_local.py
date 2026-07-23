@@ -152,14 +152,15 @@ async def _send_reset_email(email: str, link: str) -> None:
         return
     import httpx
     with __import__("contextlib").suppress(Exception):
-        await httpx.AsyncClient(timeout=8.0).post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {key}"},
-            json={"from": "Emma <noreply@theemmafamily.com>", "to": [email],
-                  "subject": "Restablece tu contraseña de Emma",
-                  "html": f'<p>Para restablecer tu contraseña, abre este enlace '
-                          f'(válido 1 hora):</p><p><a href="{link}">{link}</a></p>'},
-        )
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"from": "Emma <noreply@theemmafamily.com>", "to": [email],
+                      "subject": "Restablece tu contraseña de Emma",
+                      "html": f'<p>Para restablecer tu contraseña, abre este enlace '
+                              f'(válido 1 hora):</p><p><a href="{link}">{link}</a></p>'},
+            )
 
 
 @router.get("/api/auth/whoami")

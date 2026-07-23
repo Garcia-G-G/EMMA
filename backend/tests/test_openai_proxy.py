@@ -113,6 +113,21 @@ def _req(headers):
     return Request(scope)
 
 
+@pytest.mark.asyncio
+async def test_close_client_releases_shared_pool(monkeypatch):
+    assert hasattr(openai_proxy, "close_client")
+    closed = False
+
+    class FakeClient:
+        async def aclose(self):
+            nonlocal closed
+            closed = True
+
+    monkeypatch.setattr(openai_proxy, "_CLIENT", FakeClient())
+    await openai_proxy.close_client()
+    assert closed
+
+
 def test_upstream_headers_force_identity_encoding():
     # Client asks for compressed; proxy must forward a single Accept-Encoding: identity
     # so aiter_raw() yields plain SSE (metering can parse it, client can read it).

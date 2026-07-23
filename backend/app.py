@@ -7,6 +7,7 @@ key lives only in this process (Part A's seam).
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +40,14 @@ from backend.config import assert_secure_secrets, settings
 
 assert_secure_secrets()  # fail loud if a prod (HTTPS) host is still on the dev signing keys
 
-app = FastAPI(title="Emma")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    yield
+    await openai_proxy.close_client()
+
+
+app = FastAPI(title="Emma", lifespan=_lifespan)
 # 25.0.1-B2: the landing only ever lives on the apex + www; the backend at
 # api.theemmafamily.com must reject cross-origin calls from anywhere else.
 # A closed allowlist — never ["*"]. Local dev origins are added when not HTTPS.
