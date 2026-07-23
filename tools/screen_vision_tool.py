@@ -96,7 +96,7 @@ def _short_summary(r: sv.ScreenRead) -> str:
 async def describe_screen() -> ToolResult:
     """Describe lo que hay en la ventana de adelante: botones, campos y texto.
 
-    Úsalo cuando Garcia diga "¿qué dice esa ventana?", "describe la pantalla",
+    Úsalo cuando the user diga "¿qué dice esa ventana?", "describe la pantalla",
     "¿qué ves?". Solo lectura — nunca lee el valor de una contraseña.
     """
     r = await sv.current_screen()
@@ -134,7 +134,7 @@ async def read_window_text() -> ToolResult:
 async def find_button(name: str, scope: str = "window") -> ToolResult:
     """Dice si existe un botón con ese nombre en la ventana de adelante.
 
-    Úsalo cuando Garcia pregunte "¿hay un botón de X?" / "encuentra el botón Y".
+    Úsalo cuando the user pregunte "¿hay un botón de X?" / "encuentra el botón Y".
     Con scope="focus" busca SOLO en el panel donde está la atención ("el botón
     Enviar de este panel"); por defecto ("window") busca en toda la ventana.
     """
@@ -160,7 +160,7 @@ async def find_button(name: str, scope: str = "window") -> ToolResult:
 
 @tool(returns_untrusted_content=True)
 async def summarize_screen(question: str = "") -> ToolResult:
-    """Resume la pantalla, enfocándose en lo que responde la pregunta de Garcia.
+    """Resume la pantalla, enfocándose en lo que responde la pregunta de the user.
 
     Para "¿qué dice ese popup?", "resúmeme lo que veo", "¿qué significa esto?".
     Lee la pantalla y la sintetiza en una respuesta corta.
@@ -178,12 +178,12 @@ async def _summarize(structured: str, question: str, web_content: bool = False) 
     # content — tell the model to summarize that, not the surrounding chrome.
     role = (
         "Eres Emma. El texto de abajo es el CONTENIDO de la página o el archivo que "
-        "Garcia está viendo (no las pestañas ni los menús alrededor). En español y en "
+        "the user está viendo (no las pestañas ni los menús alrededor). En español y en "
         "1-3 frases, resume ese contenido enfocándote en lo que responde su pregunta. "
         "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
         if web_content else
         "Eres Emma. En español y en 1-2 frases, resume lo que hay en la "
-        "pantalla de Garcia, enfocándote en lo que responde su pregunta. "
+        "pantalla de the user, enfocándote en lo que responde su pregunta. "
         "Usa SOLO lo que aparece; no inventes. Nunca repitas contraseñas."
     )
     q = redact(q)  # egress guard: strip secrets/PII (in the screen text AND the spoken
@@ -336,7 +336,7 @@ def _pane_phrase(p: sv.PaneInfo) -> str:
 
 @tool(returns_untrusted_content=True)
 async def where_am_i() -> ToolResult:
-    """Dice en qué panel o región de la ventana está puesta la atención de Garcia.
+    """Dice en qué panel o región de la ventana está puesta la atención de the user.
 
     Para "¿dónde estoy?", "¿en qué panel estoy?", "¿qué región es esta?".
     """

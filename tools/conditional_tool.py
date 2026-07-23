@@ -1,6 +1,6 @@
 """Conditional-trigger tools (Prompt 32): "si X pasa, haz Y" + the pending list.
 
-``schedule_conditional`` confirms the trigger semantics back to Garcia before
+``schedule_conditional`` confirms the trigger semantics back to the user before
 saving (so a misheard sender/time can't silently arm). The background watcher
 (``core/conditionals.watch``) fires the action once when the trigger matches.
 """
@@ -67,7 +67,7 @@ async def schedule_conditional(
             requires_confirmation=True,
         )
 
-    # Bake confirmed=True for a destructive action: Garcia confirmed the whole
+    # Bake confirmed=True for a destructive action: the user confirmed the whole
     # conditional here, so when it fires unattended later the action must execute
     # (not bounce on its own confirmation gate and silently no-op).
     args = dict(action_args or {})

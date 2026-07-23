@@ -24,14 +24,14 @@ app_dialog_blocked: osascript timed out after 20.0s (an app likely opened a conf
 ```
 
 **Root cause (measured 2026-06-04):** Calendar.app's `every event of cal whose
-start date ≥ …` is O(all events). Garcia's calendars: main "Calendar" 39.6s,
+start date ≥ …` is O(all events). the user's calendars: main "Calendar" 39.6s,
 "US Holidays" 5.8s, others <0.5s → ~57s total, hopeless against the 20s
 timeout. The "dialog" in the error message was a red herring.
 
 **✅ FIXED (Prompt 24, 2026-06-08) — EventKit migration.** Reads now go through
 `actions/calendar_store.py`, which binds EventKit via `objc.loadBundle` (zero new
 pip — pyobjc-core only) and queries Apple's indexed store with
-`predicateForEventsWithStartDate:endDate:calendars:`. Measured live on Garcia's
+`predicateForEventsWithStartDate:endDate:calendars:`. Measured live on the user's
 calendars: `today_events` **75.9 ms cold / <1 ms warm**, `events_in_range` over
 a **full year 0.2 ms** — vs the 20 s timeout / 57 s scan. `tools/calendar_tool.py`
 (`today_events`/`next_event`/`events_in_range`) and the proactive reader
@@ -62,14 +62,14 @@ Confirmed live 2026-06-04 20:57: voice "qué tengo hoy" → `today_events` →
 Not one bug — three stacked causes, confirmed from the session log:
 
 1. **Wake word (biggest):** session ends (idle or after a tool) → re-wake needs
-   `hey_jarvis`, which took **45s of attempts** to fire for Garcia's accent.
+   `hey_jarvis`, which took **45s of attempts** to fire for the user's accent.
    Real fix = Picovoice "Emma" .ppn (code ready, blocked on Console signup —
    see `picovoice-support-email-v2.md`). Mitigations applied: threshold
    0.5 → 0.35 in `.env` + new `wake_score_near_miss` logging
    (`core/wake_word.py:_make_near_miss_logger`) to tune with data.
 2. **Echo gate starvation:** Emma spoke **58% of the 4-min session** (21
    utterances) + 600ms tail each; `barge_in_rms=18000` ≈ unreachable by
-   normal voice → Garcia's speech onsets land in gated (zeroed) audio.
+   normal voice → the user's speech onsets land in gated (zeroed) audio.
    ✅ FIXED 22.1-B38: rolling-window barge-in (sustained ≥6000 RMS over
    250ms) + the 18000 spike shortcut kept; opener still absolute.
 3. **`session_end_after_tool`:** after `play_track` Emma closed the session
@@ -97,7 +97,7 @@ names. Real gap found in 19.7 (see §3).
 
 ## 5. ✅ Zombie session — FIXED 22.1-B35 (DeadSessionWatcher: debounced cancel → back to wake; 3-in-60s → 30s cooldown; unit-tested, V66 documented)
 
-**Symptom:** Garcia: "she's not talking." Wake fired, session opened, then
+**Symptom:** the user: "she's not talking." Wake fired, session opened, then
 OpenAI threw a SERVER-side error ("The server had an error… retry",
 non-fatal) and closed the WS cleanly (code 1000). Pipecat kept pushing mic
 audio into the dead socket at ~50 errors/second ("Error sending client
@@ -125,7 +125,7 @@ GET /v1/me/playlists
 
 The OAuth token in `~/.emma/spotify_token.json` was minted without
 `playlist-read-private` / `playlist-read-collaborative`. Playing tracks
-works; listing/playing Garcia's own playlists doesn't. Fix = add the scopes
+works; listing/playing the user's own playlists doesn't. Fix = add the scopes
 to the auth flow's scope list and re-run the Spotify authorization (token
 refresh won't add scopes — needs a fresh consent). Check what scopes the
 flow requests in the spotify tool/action module.
@@ -134,7 +134,7 @@ flow requests in the spotify tool/action module.
 `play playlist "Classical Essentials"` → AppleScript -1700: editorial
 playlists aren't in the local library; `play playlist "X"` only resolves
 LIBRARY playlists. The fallback should detect the miss and either search
-Apple Music ("search playlist") or tell Garcia it needs the playlist saved
+Apple Music ("search playlist") or tell the user it needs the playlist saved
 to his library — not die with a type error. Both halves belong to one
 "playlists actually work" fix.
 

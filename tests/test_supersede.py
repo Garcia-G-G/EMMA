@@ -64,9 +64,9 @@ class TestMigration:
 
 class TestSupersedeInsert:
     def test_marks_old_and_links_new(self, tmp_mem):
-        old = _seed("Garcia prefiere VSCode")
+        old = _seed("the user prefiere VSCode")
         new = lt._supersede_insert_sync(
-            old, "Garcia prefiere Zed", "preference", 0.9, "test", [0.2] * lt._EMBED_DIMS
+            old, "the user prefiere Zed", "preference", 0.9, "test", [0.2] * lt._EMBED_DIMS
         )
         assert _superseded_at(old) is not None
         with lt._connect() as conn:
@@ -77,8 +77,8 @@ class TestSupersedeInsert:
 
 class TestReadFilters:
     def test_recall_excludes_superseded(self, tmp_mem):
-        keep = _seed("Garcia prefiere Zed")
-        gone = _seed("Garcia prefiere VSCode")
+        keep = _seed("the user prefiere Zed")
+        gone = _seed("the user prefiere VSCode")
         with lt._connect() as conn:
             conn.execute("UPDATE facts SET superseded_at = ? WHERE id = ?", (time.time(), gone))
         active = lt._recall_sync(None, 50)
@@ -87,29 +87,29 @@ class TestReadFilters:
 
 class TestRememberSupersedePath:
     def test_contradiction_in_band_supersedes(self, tmp_mem, monkeypatch):
-        old = _seed("Garcia prefiere VSCode", confidence=0.9)
+        old = _seed("the user prefiere VSCode", confidence=0.9)
         monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "Garcia prefiere VSCode"), 0.6)
+            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.6)
         )
         monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=True))
-        new = asyncio.run(lt.remember("Garcia prefiere Zed", kind="preference", confidence=0.9))
+        new = asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
         assert _superseded_at(old) is not None
         active = asyncio.run(lt.recall(limit=20))
-        assert [f.content for f in active] == ["Garcia prefiere Zed"]
+        assert [f.content for f in active] == ["the user prefiere Zed"]
         assert new != old
 
     def test_publishes_fact_superseded_event(self, tmp_mem, monkeypatch):
         from core import events_bus
 
-        old = _seed("Garcia prefiere VSCode", confidence=0.9)
+        old = _seed("the user prefiere VSCode", confidence=0.9)
         monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "Garcia prefiere VSCode"), 0.6)
+            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.6)
         )
         monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=True))
 
         async def _go():
             q = events_bus.subscribe()
-            await lt.remember("Garcia prefiere Zed", kind="preference", confidence=0.9)
+            await lt.remember("the user prefiere Zed", kind="preference", confidence=0.9)
             events_bus.unsubscribe(q)
             return [q.get_nowait() for _ in range(q.qsize())]
 
@@ -120,42 +120,42 @@ class TestRememberSupersedePath:
         # orthogonal vectors so the fall-through dedup INSERTS instead of merging
         e0 = [1.0] + [0.0] * (lt._EMBED_DIMS - 1)
         e1 = [0.0, 1.0] + [0.0] * (lt._EMBED_DIMS - 2)
-        old = _seed("Garcia entrena en las mañanas", vec=e0)
+        old = _seed("the user entrena en las mañanas", vec=e0)
         monkeypatch.setattr(lt.embeddings, "embed", AsyncMock(return_value=e1))
         monkeypatch.setattr(
             lt,
             "_nearest_active_fact_sync",
-            lambda qv: (_fact(old, "Garcia entrena en las mañanas"), 0.6),
+            lambda qv: (_fact(old, "the user entrena en las mañanas"), 0.6),
         )
         monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=False))
-        asyncio.run(lt.remember("Garcia prefiere Zed", kind="preference", confidence=0.9))
+        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
         assert _superseded_at(old) is None
         active = asyncio.run(lt.recall(limit=20))
         assert len(active) == 2
 
     def test_out_of_band_never_classifies(self, tmp_mem, monkeypatch):
-        old = _seed("Garcia prefiere VSCode")
+        old = _seed("the user prefiere VSCode")
         # sim 0.9 >= dedup floor → out of supersede band; classifier must NOT run
         monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "Garcia prefiere VSCode"), 0.9)
+            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.9)
         )
         classifier = AsyncMock(return_value=True)
         monkeypatch.setattr(lt, "_classify_contradiction", classifier)
-        asyncio.run(lt.remember("Garcia prefiere Zed", kind="preference", confidence=0.9))
+        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
         classifier.assert_not_awaited()
         assert _superseded_at(old) is None
 
     def test_low_confidence_does_not_supersede(self, tmp_mem, monkeypatch):
-        old = _seed("Garcia prefiere VSCode", confidence=0.9)
+        old = _seed("the user prefiere VSCode", confidence=0.9)
         monkeypatch.setattr(
             lt,
             "_nearest_active_fact_sync",
-            lambda qv: (_fact(old, "Garcia prefiere VSCode", 0.9), 0.6),
+            lambda qv: (_fact(old, "the user prefiere VSCode", 0.9), 0.6),
         )
         classifier = AsyncMock(return_value=True)
         monkeypatch.setattr(lt, "_classify_contradiction", classifier)
         # 0.5 < 0.9 * 0.8 → confidence guard blocks supersession (and the classifier)
-        asyncio.run(lt.remember("Garcia prefiere Zed", kind="preference", confidence=0.5))
+        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.5))
         classifier.assert_not_awaited()
         assert _superseded_at(old) is None
 

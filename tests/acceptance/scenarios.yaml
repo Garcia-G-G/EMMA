@@ -85,17 +85,17 @@
     "name": "search_web",
     "language": "en",
     "given": "BRAVE_API_KEY or TAVILY_API_KEY set.",
-    "utterance": "Hey Emma, search the web for the weather in Monterrey tomorrow.",
+    "utterance": "Hey Emma, search the web for the weather in San José tomorrow.",
     "expected_actions": [
       {
         "tool": "search_web",
         "args_contain": {
-          "query": "weather in Monterrey tomorrow"
+          "query": "weather in San José tomorrow"
         }
       }
     ],
-    "expected_spoken_pattern": "monterrey",
-    "mock_spoken_text": "Tomorrow in Monterrey: sunny with a high near 32 degrees.",
+    "expected_spoken_pattern": "san josé",
+    "mock_spoken_text": "Tomorrow in San José: sunny with a high near 32 degrees.",
     "max_latency_ms": 5000,
     "destructive": false
   },
@@ -375,7 +375,7 @@
     "mock_spoken_text": "Tus repos más recientes: EMMA y dotfiles.",
     "max_latency_ms": 6000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "A20",
@@ -871,54 +871,54 @@
     "name": "username_variant_1",
     "language": "es",
     "given": "Identity rule: 'mis repos' → my_repos.",
-    "utterance": "Hey Emma, enséñame los repos de gilbergarciata.",
+    "utterance": "Hey Emma, enséñame los repos de examplehandle.",
     "expected_actions": [
       {
         "tool": "my_repos"
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|garcia)",
+    "expected_transcript_pattern": "(gilber|alex)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V22",
     "name": "username_variant_2",
     "language": "es",
     "given": "Same intent, spaced pronunciation.",
-    "utterance": "Hey Emma, enséñame los repos de gilbert garcia ata.",
+    "utterance": "Hey Emma, enséñame los repos de example handle.",
     "expected_actions": [
       {
         "tool": "my_repos"
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|garcia)",
+    "expected_transcript_pattern": "(gilber|alex)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V23",
     "name": "username_variant_3",
     "language": "es",
     "given": "Same intent, garbled pronunciation.",
-    "utterance": "Hey Emma, enséñame los repos de gilbergaciata.",
+    "utterance": "Hey Emma, enséñame los repos de examplehandl.",
     "expected_actions": [
       {
         "tool": "my_repos"
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|gacia|garcia)",
+    "expected_transcript_pattern": "(gilber|gacia|alex)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V24",
@@ -1030,18 +1030,18 @@
     "name": "username_variant_4",
     "language": "es",
     "given": "Fourth pronunciation variant.",
-    "utterance": "Hey Emma, mis repos de guilber garciata.",
+    "utterance": "Hey Emma, mis repos de example handle.",
     "expected_actions": [
       {
         "tool": "my_repos"
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|guilber|garcia)",
+    "expected_transcript_pattern": "(gilber|guilber|alex)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V31",
@@ -1058,7 +1058,7 @@
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 6000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V32",
@@ -1123,8 +1123,8 @@
         "tool": "recall_facts"
       }
     ],
-    "expected_spoken_pattern": "(garcia|monterrey|desarrollador|sé que)",
-    "mock_spoken_text": "Sé que eres Garcia, desarrollador en Monterrey.",
+    "expected_spoken_pattern": "(alex|san josé|desarrollador|sé que)",
+    "mock_spoken_text": "Sé que eres the user, desarrollador en San José.",
     "max_latency_ms": 6000,
     "destructive": false
   },
@@ -1432,23 +1432,23 @@
     "name": "fuzzy_own_username",
     "language": "es",
     "given": "github_username set; query is a near-miss of it (21-B25).",
-    "utterance": "Hey Emma, busca los repos de gilbergaciata en GitHub.",
+    "utterance": "Hey Emma, busca los repos de examplehandl en GitHub.",
     "expected_actions": [
       {
         "tool": "search_github"
       }
     ],
     "expected_spoken_pattern": "(se parece a tu usuario|tus repos|repos)",
-    "mock_spoken_text": "No encontré 'gilbergaciata', pero se parece a tu usuario. ¿Te enseño tus repos?",
+    "mock_spoken_text": "No encontré 'examplehandl', pero se parece a tu usuario. ¿Te enseño tus repos?",
     "max_latency_ms": 8000,
     "destructive": false,
-    "live_blocked_by": "github_username unset by design (Garcia teaches it by voice)"
+    "live_blocked_by": "github_username unset by design (the user teaches it by voice)"
   },
   {
     "id": "V56",
     "name": "no_english_drift_post_tool",
     "language": "es",
-    "given": "Tool results arrive in English; Garcia asked in Spanish (21-B26).",
+    "given": "Tool results arrive in English; the user asked in Spanish (21-B26).",
     "utterance": "Hey Emma, busca el repo de pytorch en GitHub y dime qué encontraste.",
     "expected_actions": [
       {
@@ -1563,7 +1563,7 @@
     "id": "V63",
     "name": "opener_barge_in_protected",
     "language": "es",
-    "given": "Garcia speaks OVER Emma's greeting; she must finish it, then respond (22-B32).",
+    "given": "the user speaks OVER Emma's greeting; she must finish it, then respond (22-B32).",
     "utterance": "Hey Emma, espera espera.",
     "expected_actions": [],
     "expected_spoken_pattern": "(dime|aquí estoy|qué pasó|te escucho)",
@@ -1636,7 +1636,7 @@
     "id": "V68",
     "name": "delegate_to_codex_mock",
     "language": "es",
-    "given": "Garcia delegates non-trivial coding work; routes to the native sub-agent (Prompt 23).",
+    "given": "the user delegates non-trivial coding work; routes to the native sub-agent (Prompt 23).",
     "utterance": "Hey Emma, en mi carpeta scratch agrega un comentario TODO al final de README punto m d.",
     "expected_actions": [
       {

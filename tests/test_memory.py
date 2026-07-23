@@ -67,11 +67,11 @@ class TestLongTerm:
     def test_remember_and_recall(self) -> None:
         from memory.long_term import _recall_sync, _remember_sync
 
-        fid = _remember_sync("Garcia likes tacos", "preference", 0.9, "explicit")
+        fid = _remember_sync("the user likes tacos", "preference", 0.9, "explicit")
         assert fid > 0
         facts = _recall_sync(None, 10)
         assert len(facts) == 1
-        assert facts[0].content == "Garcia likes tacos"
+        assert facts[0].content == "the user likes tacos"
 
     def test_forget_recent_removes_only_recent(self) -> None:
         import time
@@ -109,7 +109,7 @@ class TestLongTerm:
         from tools.memory_tool import forget_last_turn
 
         reflection._suppress_until = 0.0
-        _remember_sync("Garcia just said something private", "general", 0.7, "reflection")
+        _remember_sync("the user just said something private", "general", 0.7, "reflection")
         res = asyncio.get_event_loop().run_until_complete(forget_last_turn())
         assert res.success and res.data["removed"] >= 1
         # the in-flight reflection from the purged turn will be swallowed
@@ -120,8 +120,8 @@ class TestLongTerm:
     def test_dedup_on_same_content(self) -> None:
         from memory.long_term import _count_sync, _remember_sync
 
-        _remember_sync("Garcia is a dev", "fact", 0.7, "reflection")
-        _remember_sync("Garcia is a dev", "fact", 0.9, "explicit")
+        _remember_sync("the user is a dev", "fact", 0.7, "reflection")
+        _remember_sync("the user is a dev", "fact", 0.9, "explicit")
         assert _count_sync() == 1
 
     def test_forget(self) -> None:
@@ -135,8 +135,8 @@ class TestLongTerm:
     def test_recall_with_query(self) -> None:
         from memory.long_term import _recall_sync, _remember_sync
 
-        _remember_sync("Garcia likes tacos", "preference", 0.9, "explicit")
-        _remember_sync("Garcia has a cat named Luna", "fact", 0.8, "explicit")
+        _remember_sync("the user likes tacos", "preference", 0.9, "explicit")
+        _remember_sync("the user has a cat named Luna", "fact", 0.8, "explicit")
         facts = _recall_sync("cat", 10)
         assert len(facts) == 1
         assert "cat" in facts[0].content
@@ -150,6 +150,6 @@ class TestLongTerm:
     def test_priming_block_with_facts(self) -> None:
         from memory.long_term import _remember_sync, priming_block
 
-        _remember_sync("Garcia speaks Spanish", "language", 0.9, "explicit")
+        _remember_sync("the user speaks Spanish", "language", 0.9, "explicit")
         block = asyncio.get_event_loop().run_until_complete(priming_block())
-        assert "Garcia speaks Spanish" in block
+        assert "the user speaks Spanish" in block

@@ -113,7 +113,7 @@ def preflight() -> None:
     return
 
 
-# 22.1-B39: voice-energy threshold + frame count for "Garcia kept talking
+# 22.1-B39: voice-energy threshold + frame count for "the user kept talking
 # right after the wake word." RMS 1200 is well above room tone, well below
 # speech; 3 voiced 80ms frames ≈ 240ms of actual speech (a syllable or two).
 _IMMEDIATE_RMS = 1200.0
@@ -194,7 +194,7 @@ async def _one_session() -> None:
         events_bus.publish("session_started", id=turn_id, ts=_now_iso())
         events_bus.publish("state", state="listening")
         # Let the ack tone fully decay before Pipecat opens the mic — and USE
-        # that window (22.1-B39): if Garcia chained "hey jarvis, abre X" in
+        # that window (22.1-B39): if the user chained "hey jarvis, abre X" in
         # one breath, raw voice ENERGY lands here. Detect it (energy, not
         # STT — transcription is far too slow for this window) and tell the
         # session to skip the greeting preamble.

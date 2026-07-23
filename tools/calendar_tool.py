@@ -2,7 +2,7 @@
 
 Prompt 24 killed the AppleScript dead-path on reads: ``today_events`` /
 ``next_event`` / ``events_in_range`` scanned ``whose start date ≥ …`` O(all
-events) — ~57 s on Garcia's calendars (``ERRORS-TO-FIX.md`` §1b) — and timed out.
+events) — ~57 s on the user's calendars (``ERRORS-TO-FIX.md`` §1b) — and timed out.
 They now go through :mod:`actions.calendar_store` (EventKit predicate, ~60 ms).
 
 ``create_event`` / ``delete_event`` stay on AppleScript: they're single, fast

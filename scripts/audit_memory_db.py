@@ -92,7 +92,7 @@ def main() -> int:
     print(f"\nDetalle (sin valores) → {out_csv}")
 
     if args.fix_classification and crit:
-        # Replace leaked secret content with a placeholder (keep the row so Garcia
+        # Replace leaked secret content with a placeholder (keep the row so the user
         # can review). Does NOT delete and does NOT move to Keychain automatically.
         wconn = sqlite3.connect(args.db)
         try:

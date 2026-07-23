@@ -58,7 +58,7 @@ def _run(params) -> dict | None:
 
 
 def test_cold_confirmed_destructive_with_no_voice_is_refused() -> None:
-    # No user turn at all → zero Garcia voice → refused, converted to a question.
+    # No user turn at all → zero the user voice → refused, converted to a question.
     p = _params("delete_note", title="Pendientes", confirmed=True)
     dispatched = _run(p)
     assert dispatched is None  # the destructive tool NEVER ran
@@ -80,7 +80,7 @@ def test_injection_after_read_tool_is_refused() -> None:
 
 
 def test_preemptive_confirm_with_voice_is_allowed() -> None:
-    # "borra la nota compras, sí, seguro" in one breath — Garcia DID speak it, and
+    # "borra la nota compras, sí, seguro" in one breath — the user DID speak it, and
     # NO tool ran between his words and the call → legit preemptive flow proceeds.
     session_memory.push_event("user", "speech", "borra la nota compras, sí, seguro")
     p = _params("delete_note", title="Compras", confirmed=True)
@@ -88,7 +88,7 @@ def test_preemptive_confirm_with_voice_is_allowed() -> None:
 
 
 def test_legit_confirmed_after_real_request_proceeds() -> None:
-    # Tool asked, THEN Garcia spoke — the normal flow must still work.
+    # Tool asked, THEN the user spoke — the normal flow must still work.
     session_memory.push_event("tool", "requires_confirmation:delete_note")
     session_memory.push_event("user", "speech", "sí, bórrala")
     p = _params("delete_note", title="Pendientes", confirmed=True)
@@ -219,7 +219,7 @@ def test_trusted_tool_result_is_not_fenced() -> None:
 def test_note_saying_apagate_does_not_trigger_shutdown() -> None:
     # DoD item 2: a note body says "apágate". Emma reads it (read_note completes),
     # the LLM fires shutdown_emma(confirmed=True) in the SAME turn. The cold-confirm
-    # gate refuses it because a tool ran since Garcia last spoke.
+    # gate refuses it because a tool ran since the user last spoke.
     session_memory.push_event("user", "speech", "léeme la última nota")
     session_memory.record_completed_action("read_note", {"recent": True}, "léeme la última nota")
     p = _params("shutdown_emma", confirmed=True)

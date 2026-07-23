@@ -47,8 +47,8 @@ class TestSandboxBoundary:
         sb = _sb(tmp_path)
         assert "wrote" in sb.write_file("a.txt", "hola\nmundo\n")
         assert sb.read_file("a.txt") == "hola\nmundo\n"
-        assert "replaced 1" in sb.edit_file("a.txt", "mundo", "garcia")
-        assert "garcia" in sb.read_file("a.txt")
+        assert "replaced 1" in sb.edit_file("a.txt", "mundo", "alex")
+        assert "alex" in sb.read_file("a.txt")
 
     def test_write_escapes_workdir_refused(self, tmp_path):
         sb = _sb(tmp_path)

@@ -45,7 +45,7 @@ class TestMusicAsksWhenNothingOpen:
 
     @pytest.mark.asyncio
     async def test_explicit_app_proceeds_and_launches(self, monkeypatch):
-        """Garcia picked → app= bypasses the ask and launching is allowed."""
+        """the user picked → app= bypasses the ask and launching is allowed."""
         _mock_router(monkeypatch, front=None, running=[], pref="Spotify")
         launcher = AsyncMock()
         monkeypatch.setattr(music, "_ensure_running", launcher)

@@ -1,4 +1,4 @@
-"""Self-introspection: what Emma can do, told to Garcia.
+"""Self-introspection: what Emma can do, told to the user.
 
 The CLAUDE.md "Self-aware" principle says Emma maintains
 ``self/capabilities.md`` from the live tool registry and answers
@@ -84,9 +84,9 @@ def regenerate_capabilities_md() -> None:
 
 @tool()
 def describe_capabilities() -> ToolResult:
-    """Tell Garcia what Emma can do, in one or two short spoken sentences.
+    """Tell the user what Emma can do, in one or two short spoken sentences.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
 
     - "Emma, ¿qué puedes hacer?"
     - "¿de qué eres capaz?"

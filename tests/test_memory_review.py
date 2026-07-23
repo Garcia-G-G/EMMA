@@ -28,7 +28,7 @@ def _seed_supersession() -> tuple[int, int]:
             conn.execute(
                 "INSERT INTO facts (content, kind, confidence, source, created_at, "
                 "last_seen_at, times_observed, superseded_at) "
-                "VALUES ('Garcia prefiere VSCode', 'preference', 0.9, 'test', ?, ?, 1, ?)",
+                "VALUES ('the user prefiere VSCode', 'preference', 0.9, 'test', ?, ?, 1, ?)",
                 (now, now, now),
             ).lastrowid
         )
@@ -36,7 +36,7 @@ def _seed_supersession() -> tuple[int, int]:
             conn.execute(
                 "INSERT INTO facts (content, kind, confidence, source, created_at, "
                 "last_seen_at, times_observed, supersedes) "
-                "VALUES ('Garcia prefiere Zed', 'preference', 0.9, 'test', ?, ?, 1, ?)",
+                "VALUES ('the user prefiere Zed', 'preference', 0.9, 'test', ?, ?, 1, ?)",
                 (now, now, old),
             ).lastrowid
         )
@@ -53,7 +53,7 @@ def test_review_prints_stats_and_pairs(tmp_mem, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "1 active fact(s), 1 superseded" in out
-    assert "Garcia prefiere VSCode" in out and "Garcia prefiere Zed" in out
+    assert "the user prefiere VSCode" in out and "the user prefiere Zed" in out
 
 
 def test_undo_reactivates_old_and_removes_new(tmp_mem, capsys):

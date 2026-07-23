@@ -1,4 +1,4 @@
-"""User-browser actions — Garcia's everyday browser (Arc/Chrome/Safari/Brave).
+"""User-browser actions — the user's everyday browser (Arc/Chrome/Safari/Brave).
 
 Distinct from ``tools/browser.py``, which drives a headless Playwright Chromium
 for automation. This drives the real default browser via ``open -a`` + a couple
@@ -28,7 +28,7 @@ def _state_failure(app: str, exc_text: str) -> dict[str, object] | None:
 
 @tool()
 async def open_url(url: str, new_window: bool = False) -> ToolResult:
-    """Abre una URL en el navegador preferido de Garcia.
+    """Abre una URL en el navegador preferido de the user.
 
     Úsalo cuando diga:
     - "Emma, abre <url>"
@@ -59,13 +59,13 @@ async def open_url(url: str, new_window: bool = False) -> ToolResult:
 async def web_search_in_browser(query: str) -> ToolResult:
     """Abre una búsqueda de Google para `query` en el navegador preferido.
 
-    Úsalo cuando Garcia diga "Emma, busca <query> en Google"."""
+    Úsalo cuando the user diga "Emma, busca <query> en Google"."""
     q = urllib.parse.quote_plus(query)
     return await open_url(f"https://www.google.com/search?q={q}")
 
 
 # Chromium-family browsers share Chrome's AppleScript dictionary
-# ("close active tab of front window"). Verified for Brave in Garcia's own use.
+# ("close active tab of front window"). Verified for Brave in the user's own use.
 _CHROME_SYNTAX = ("Google Chrome", "Chrome", "Brave Browser", "Microsoft Edge")
 
 
@@ -73,7 +73,7 @@ _CHROME_SYNTAX = ("Google Chrome", "Chrome", "Brave Browser", "Microsoft Edge")
 async def close_current_tab(browser: str = "") -> ToolResult:
     """Cierra la pestaña activa del navegador. Directo y rápido (Bug 19.2-B5).
 
-    Úsalo cuando Garcia diga 'cierra esta pestaña' / 'cierra la pestaña'."""
+    Úsalo cuando the user diga 'cierra esta pestaña' / 'cierra la pestaña'."""
     app = browser or app_router.preferred("browser")
     if app == "Safari":
         script = 'tell application "Safari" to close current tab of front window'
@@ -124,7 +124,7 @@ async def close_current_tab(browser: str = "") -> ToolResult:
 # detection. utm_* is matched by prefix.
 _TRACKING_PARAMS = frozenset({"fbclid", "gclid", "ref", "igshid"})
 
-# Garcia's standing rule: never bulk-close Google tabs unless he explicitly
+# the user's standing rule: never bulk-close Google tabs unless he explicitly
 # overrides with protect_domains=[] on that single call.
 _DEFAULT_PROTECT = ("google.com",)
 
@@ -209,7 +209,7 @@ def _close_script(app: str, tabs: list[dict[str, object]]) -> str:
 async def list_browser_tabs(browser: str = "") -> ToolResult:
     """Lista todas las pestañas abiertas del navegador (todas las ventanas).
 
-    Úsalo cuando Garcia diga "¿cuántas pestañas tengo?" / "lista mis pestañas".
+    Úsalo cuando the user diga "¿cuántas pestañas tengo?" / "lista mis pestañas".
     """
     app = browser or app_router.preferred("browser")
     try:
@@ -253,7 +253,7 @@ async def close_duplicate_tabs(
     """Detecta y cierra pestañas duplicadas (misma URL canónica). Pide
     confirmación y respeta dominios protegidos (google.com por defecto).
 
-    Úsalo cuando Garcia diga "cierra las pestañas duplicadas". Si pide
+    Úsalo cuando the user diga "cierra las pestañas duplicadas". Si pide
     explícitamente incluir Google ("cierra todas, incluyendo Google"), pasa
     protect_domains=[] SOLO en esa llamada."""
     app = browser or app_router.preferred("browser")
@@ -298,7 +298,7 @@ async def close_tabs_matching(
 ) -> ToolResult:
     """Cierra las pestañas cuyo título O URL contienen `pattern` (literal).
 
-    Úsalo cuando Garcia diga "cierra todas las de YouTube". Pide confirmación
+    Úsalo cuando the user diga "cierra todas las de YouTube". Pide confirmación
     y respeta dominios protegidos (google.com por defecto)."""
     p = (pattern or "").strip().lower()
     if not p:
@@ -352,7 +352,7 @@ async def current_tab_url(browser: str = "") -> ToolResult:
     app = browser or app_router.preferred("browser")
     # 22-B34: Brave/Edge share Chrome's AppleScript dictionary (_CHROME_SYNTAX,
     # proven by the tab tools) — the old Safari-or-Chrome-only refusal was a
-    # stale patch that broke this for Garcia's actual browser (Brave).
+    # stale patch that broke this for the user's actual browser (Brave).
     if app != "Safari" and app not in _CHROME_SYNTAX:
         return ToolResult(
             False,

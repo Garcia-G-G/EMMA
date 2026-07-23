@@ -152,7 +152,7 @@ async def send_to(
     """Envía un correo a `recipient`. Pide confirmación antes de enviarlo.
 
     `recipient` puede ser un correo O un contacto guardado ('mi mamá'). Si
-    sugerí contactos parecidos y Garcia eligió, re-llámame con
+    sugerí contactos parecidos y the user eligió, re-llámame con
     `picked=<su elección>` (21-B25)."""
     from tools.contact_resolve import resolve_recipient
 

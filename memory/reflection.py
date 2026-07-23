@@ -3,7 +3,7 @@
 After every turn the orchestrator schedules :func:`reflect_async` as a
 fire-and-forget task. It feeds gpt-4o-mini a short window of the
 session (the just-completed user/assistant pair plus a few prior
-turns) and asks for a small list of new long-term facts about Garcia.
+turns) and asks for a small list of new long-term facts about the user.
 Each fact is then upserted into the long-term store via
 :func:`memory.long_term.remember`.
 
@@ -39,24 +39,24 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 
-_SYSTEM_PROMPT = """You read short windows of a conversation between Garcia and his \
-voice assistant Emma. Your job is to extract NEW long-term facts about Garcia \
+_SYSTEM_PROMPT = """You read short windows of a conversation between the user and his \
+voice assistant Emma. Your job is to extract NEW long-term facts about the user \
 that Emma should remember across sessions.
 
 Output strict JSON with this shape:
 {"facts": [{"content": "...", "kind": "preference|name|habit|fact|language|tool_use|general", "confidence": 0.0-1.0}]}
 
 Rules:
-- Only include facts that are stable about Garcia himself - preferences, names, \
+- Only include facts that are stable about the user himself - preferences, names, \
 allergies, habitual choices, language preferences, how he likes Emma to behave.
 - DO NOT include ephemeral / one-shot info ("he asked about the weather today", \
 "he played Bad Bunny just now"). Skip those.
 - DO NOT include facts about external entities (creators, brands, places) unless \
-they describe Garcia's preference for them.
+they describe the user's preference for them.
 - If nothing durable was learned in this window, return {"facts": []}.
-- Keep each fact to one short sentence. No translation - keep the language Garcia \
+- Keep each fact to one short sentence. No translation - keep the language the user \
 used or natural English, your choice.
-- Confidence: 0.9 if Garcia stated it directly; 0.7 if you inferred it from \
+- Confidence: 0.9 if the user stated it directly; 0.7 if you inferred it from \
 context; below 0.6 you should usually skip the fact entirely.
 - Max 5 facts per call.
 """

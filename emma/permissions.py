@@ -37,7 +37,7 @@ def _check() -> int:
 def _retry() -> int:
     """Re-run the full install-time permission walkthrough standalone.
 
-    Same code path as the installer's step 7.5, so Garcia can re-trigger any
+    Same code path as the installer's step 7.5, so the user can re-trigger any
     dialog that got missed without reinstalling. Exits 0 when the walkthrough
     completes, 1 if it raises (e.g. the `say` binary is unavailable).
     """

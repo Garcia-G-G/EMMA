@@ -1,4 +1,4 @@
-"""Let Garcia add knowledge-dictionary entries by voice (public info only)."""
+"""Let the user add knowledge-dictionary entries by voice (public info only)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from tools.disambiguation import suggest_similar, suggestion_question
 
 @tool()
 async def remember_page(name: str, url: str, title: str = "") -> ToolResult:
-    """Recuerda una página que Garcia abre seguido.
+    """Recuerda una página que the user abre seguido.
 
     Úsalo cuando diga:
     - "Emma, recuerda que mi <name> es <url>"
@@ -31,7 +31,7 @@ async def remember_contact(
 ) -> ToolResult:
     """Recuerda un contacto (solo info pública — sin números de teléfono).
 
-    Úsalo cuando Garcia diga "Emma, recuerda que mi mamá es Ana, su correo es ...".
+    Úsalo cuando the user diga "Emma, recuerda que mi mamá es Ana, su correo es ...".
     """
     slug = (relation or name).lower().replace(" ", "_")
     dictionary.append_contact(
@@ -59,7 +59,7 @@ _USER_FIELDS_ES = {
 
 @tool()
 async def remember_user_profile(field: str, value: str) -> ToolResult:
-    """Guarda un dato de identidad de Garcia (quién es 'yo/mi/mis').
+    """Guarda un dato de identidad de the user (quién es 'yo/mi/mis').
 
     Úsalo cuando diga "mi usuario de GitHub es X", "me llamo Y",
     "mi LinkedIn es Z". `field` ∈ display_name, full_name, github_username,
@@ -113,10 +113,10 @@ def _canonical_app_display(category: str, app: str) -> str | None:
 
 @tool()
 async def remember_app_preference(category: str, app: str) -> ToolResult:
-    """Guarda la app preferida de Garcia para una categoría y la usa de ahí en adelante.
+    """Guarda la app preferida de the user para una categoría y la usa de ahí en adelante.
 
     Úsalo (1) la PRIMERA vez que necesites abrir algo y un tool te diga que no
-    hay editor configurado (`data.editor_unset`), después de que Garcia elija, o
+    hay editor configurado (`data.editor_unset`), después de que the user elija, o
     (2) cuando diga "cambia mi editor a X" / "usa Y para código".
 
     `category` ∈ editor, browser, terminal, music. Escribe en el diccionario —
@@ -148,7 +148,7 @@ async def remember_app_preference(category: str, app: str) -> ToolResult:
 async def remember_connection(name: str, app: str, kind: str = "connection") -> ToolResult:
     """Recuerda un recurso DENTRO de una app: conexión de TablePlus, canal, etc.
 
-    Úsalo cuando Garcia diga "Emma, recuerda la conexión <name> de TablePlus"
+    Úsalo cuando the user diga "Emma, recuerda la conexión <name> de TablePlus"
     o cuando intente abrir una conexión que aún no conozco y me dicte el
     nombre exacto. `kind` ∈ connection, channel, dm, note (19.6-B17).
     """
@@ -166,7 +166,7 @@ async def remember_connection(name: str, app: str, kind: str = "connection") -> 
 async def remember_stt_correction(wrong: str, right: str, section: str = "auto") -> ToolResult:
     """Aprende de una corrección de pronunciación/transcripción.
 
-    Úsalo cuando Garcia te corrige ('no, es X, no Y'). `wrong` es lo que
+    Úsalo cuando the user te corrige ('no, es X, no Y'). `wrong` es lo que
     entendiste, `right` lo correcto. Lo guardo para no volver a equivocarme.
 
     Las correcciones viven en la librería de vocabulario (el almacén de
@@ -194,10 +194,10 @@ async def remember_stt_correction(wrong: str, right: str, section: str = "auto")
 
 @tool()
 async def open_my_page(name: str, picked: str = "", confirmed: bool = False) -> ToolResult:
-    """Abre una de las páginas guardadas de Garcia por nombre.
+    """Abre una de las páginas guardadas de the user por nombre.
 
     Úsalo cuando diga "Emma, abre mi <name>" (GitHub, calendar, portfolio, ...).
-    Si sugerí opciones y Garcia eligió, re-llámame con `picked=<su elección>`
+    Si sugerí opciones y the user eligió, re-llámame con `picked=<su elección>`
     y confirmed=true (21-B25).
     """
     query = (picked or name or "").strip()

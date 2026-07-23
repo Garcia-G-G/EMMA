@@ -18,7 +18,7 @@ async def show_visualizer() -> ToolResult:
     in Spanish or English. Triggers include: "abre tu cerebro", "abre tu interfaz",
     "muéstrate", "muestra tu interfaz", "enséñame tu cara", "abre tu pantalla",
     "show your brain", "show your interface", "open your interface", "show yourself",
-    "open your visualizer", "show me your face/HUD". If Garcia asks to see Emma,
+    "open your visualizer", "show me your face/HUD". If the user asks to see Emma,
     her interface, her brain, her face, or her visualizer in any wording, this is
     the tool — do not refuse.
     """

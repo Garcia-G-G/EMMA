@@ -1,6 +1,6 @@
 """Local birthday store (Prompt 38-D) — ``~/.emma/birthdays.db``.
 
-A simple month/day table Garcia populates by voice ("guarda que el cumpleaños
+A simple month/day table the user populates by voice ("guarda que el cumpleaños
 de X es Y"). Read by the birthday voice tools and the proactive morning alert.
 Year is intentionally not stored — a birthday recurs every year.
 """

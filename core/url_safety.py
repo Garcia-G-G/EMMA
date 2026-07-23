@@ -2,7 +2,7 @@
 
 deep_research / summarize_page fetch URLs that come from a web search and follow
 redirects. Without a host check, a poisoned result — or a redirect — can make Emma
-GET internal addresses on Garcia's machine (localhost dev servers, 192.168.x.x
+GET internal addresses on the user's machine (localhost dev servers, 192.168.x.x
 routers, 169.254.169.254 cloud-metadata). We resolve the host and reject
 private/loopback/link-local/reserved targets BEFORE connecting, and re-validate
 every redirect hop (a benign external URL can 30x-bounce inward).

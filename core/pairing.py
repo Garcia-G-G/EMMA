@@ -87,7 +87,7 @@ async def poll_until_authorized(device_code: str, interval: int, expires_in: int
                 await kc.store(_TOKEN_LABEL, data["access_token"], kind="device_token")
                 # Persist the paired account's name so the system prompt can address
                 # the real user by name instead of the shipped default. This is why
-                # a fresh install no longer calls every stranger "Garcia".
+                # a fresh install no longer calls every stranger "the user".
                 user = data.get("user") or {}
                 name = (user.get("name") or "").strip()
                 if name:

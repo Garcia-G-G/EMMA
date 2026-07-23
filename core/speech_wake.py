@@ -7,7 +7,7 @@ when it hears the wake phrase — Emma is "always listening" and answers to
 
 Robustness trick: the recognizer runs in GRAMMAR-constrained mode — it may only
 emit one of the wake phrases or ``[unk]``, so it matches the user's accent
-against just the phrases instead of the whole dictionary. On Garcia's real
+against just the phrases instead of the whole dictionary. On the user's real
 recordings this lifted detection from 0/15 (free dictation) to 11/15.
 
 Audio path mirrors core/wake_word.py: a 16 kHz mono int16 ``RawInputStream``,

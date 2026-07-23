@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Securely wipe local wake-word voice recordings (24.7-C1).
 
-``scripts/wake_data/positive_real/*.wav`` and ``validation/*.wav`` are Garcia's
+``scripts/wake_data/positive_real/*.wav`` and ``validation/*.wav`` are the user's
 ACTUAL voice — biometric PII (Personal tier, arguably Secret). They live only on
 disk, gitignored, 0700. This deletes them after an explicit confirmation: each
 file is overwritten with random bytes before unlinking, so the audio can't be

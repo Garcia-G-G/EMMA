@@ -45,9 +45,9 @@ Blocked on Apple Developer Program enrollment. One-time setup:
 3. Generate an **app-specific password** at appleid.apple.com.
 4. Export to a gitignored `.env.sign`:
    ```sh
-   export DEVELOPER_ID_INSTALLER="Developer ID Installer: Gilberto Garcia (TEAMID)"
+   export DEVELOPER_ID_INSTALLER="Developer ID Installer: Example Developer (TEAMID)"
    export AC_TEAM_ID="TEAMID"
-   export AC_APPLE_ID="garcia@example.com"
+   export AC_APPLE_ID="developer@example.com"
    export AC_APP_PASSWORD="abcd-efgh-ijkl-mnop"
    ```
 5. Run it:

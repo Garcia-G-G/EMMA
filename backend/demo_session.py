@@ -8,7 +8,7 @@ hostile (paranoia mandate):
   HARD whitelist of exactly 4 tools (web_search / current_time / translate /
   explain_install), all implemented HERE in the backend. ZERO daemon tools run
   — the backend never imports the daemon's registry, so nothing can touch
-  Garcia's Mac. The bridge injects the session config itself and ignores any
+  the user's Mac. The bridge injects the session config itself and ignores any
   ``session.update`` the client sends, so a tampered client can't widen scope.
 - Every ``function_call`` from the model is re-validated against the whitelist
   before execution (defence-in-depth vs jailbreaks). Unknown tool → error back
@@ -90,7 +90,7 @@ def _tool_web_search(query: str, **_: Any) -> dict[str, Any]:
         return {"results": [], "note": "search failed"}
 
 
-def _tool_current_time(timezone: str = "America/Monterrey", **_: Any) -> dict[str, Any]:
+def _tool_current_time(timezone: str = "UTC", **_: Any) -> dict[str, Any]:
     try:
         from zoneinfo import ZoneInfo
 
@@ -209,7 +209,7 @@ def hash_ip(ip: str) -> str:
 
 
 def _bypass_ok(token: str | None) -> bool:
-    """Garcia's test bypass. Constant-time compare; only true when a token is set."""
+    """the user's test bypass. Constant-time compare; only true when a token is set."""
     tok = settings.DEMO_BYPASS_TOKEN
     import hmac
 

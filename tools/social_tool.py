@@ -1,7 +1,7 @@
 """Voice-triggered social posting (Prompt 26).
 
 Two paths, both confirmation-gated because the content is public:
-  * URL-scheme / web composer — opens the platform prefilled; Garcia taps Send.
+  * URL-scheme / web composer — opens the platform prefilled; the user taps Send.
     No credentials, works today. (X web intent, WhatsApp wa.me, LinkedIn feed.)
   * API / webhook — fully unattended, only when a credential is in Keychain.
     (Discord per-channel webhook; X /2/tweets if an OAuth2 user token is saved.)
@@ -40,7 +40,7 @@ _X_REAUTH = "Corre `python -m emma.setup` para configurar X (o `--only x` si sol
 # B50.1: single-flight refresh. Two posts racing on an expired token (a background
 # task + a foreground voice turn) would otherwise each POST /2/oauth2/token; the
 # second spends the one-time refresh token again → invalid_grant, breaking the
-# chain until Garcia re-runs setup. The lock serializes; the waiter then re-reads
+# chain until the user re-runs setup. The lock serializes; the waiter then re-reads
 # the now-fresh token instead of refreshing again.
 _X_REFRESH_LOCK = asyncio.Lock()
 
@@ -186,9 +186,9 @@ def _webhook_label(channel: str) -> str:
 async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
     """Publica un tweet/post en X (Twitter). SIEMPRE confirma antes de enviar.
 
-    Úsalo cuando Garcia diga "Emma, tuitea: <texto>" / "publica en X: <texto>".
+    Úsalo cuando the user diga "Emma, tuitea: <texto>" / "publica en X: <texto>".
     Si hay un token de X guardado, lo publica por API; si no, abre el composer
-    de X prellenado y Garcia le da Post.
+    de X prellenado y the user le da Post.
     """
     text = (text or "").strip()
     if not text:
@@ -198,7 +198,7 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
     # that carries a secret (API key, card, token — including inside a URL query
     # like ?api_key=…). `contains_secret` is precise: it ignores phone numbers and
     # long plain words/hashtags, so normal tweets aren't blocked. We refuse rather
-    # than auto-redact-and-post — Garcia must see it and rewrite.
+    # than auto-redact-and-post — the user must see it and rewrite.
     text = _normalize_urls(text)
     if redaction.contains_secret(text):
         return ToolResult(
@@ -225,7 +225,7 @@ async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
     token = await _valid_x_token()
     if token is None:
         # Not authorized yet. The API is the supported path (26.1); only open the
-        # unauthenticated composer if Garcia explicitly re-enabled that fallback.
+        # unauthenticated composer if the user explicitly re-enabled that fallback.
         if settings.X_USE_COMPOSER_FALLBACK:
             return await _open_x_composer(text)
         return ToolResult(
@@ -291,9 +291,9 @@ async def _open_x_composer(text: str) -> ToolResult:
 async def post_to_linkedin(text: str, confirmed: bool = False) -> ToolResult:
     """Abre el composer de LinkedIn con tu texto y lo copia al portapapeles.
 
-    Úsalo cuando Garcia diga "Emma, publica en LinkedIn: <texto>". LinkedIn no
+    Úsalo cuando the user diga "Emma, publica en LinkedIn: <texto>". LinkedIn no
     deja prellenar texto por URL de forma confiable, así que abrimos el composer
-    y copiamos el texto para que Garcia lo pegue (Cmd+V) y publique.
+    y copiamos el texto para que the user lo pegue (Cmd+V) y publique.
     """
     text = (text or "").strip()
     if not text:
@@ -331,8 +331,8 @@ async def post_to_linkedin(text: str, confirmed: bool = False) -> ToolResult:
 async def send_to_discord(channel: str, text: str, confirmed: bool = False) -> ToolResult:
     """Manda un mensaje a un canal de Discord vía webhook. SIEMPRE confirma.
 
-    Úsalo cuando Garcia diga "Emma, manda en Discord al canal X: <texto>".
-    La primera vez por canal, Garcia copia la URL del webhook (Ajustes del canal
+    Úsalo cuando the user diga "Emma, manda en Discord al canal X: <texto>".
+    La primera vez por canal, the user copia la URL del webhook (Ajustes del canal
     → Integraciones → Webhooks) y la guarda: "Emma, recuerda mi webhook de
     Discord del canal X". Sin webhook, te abro el canal para escribir a mano.
     """
@@ -398,9 +398,9 @@ def _resolve_phone(to: str) -> tuple[str | None, str]:
 async def send_whatsapp(to: str, text: str, confirmed: bool = False) -> ToolResult:
     """Abre WhatsApp con un mensaje prellenado para un contacto. SIEMPRE confirma.
 
-    Úsalo cuando Garcia diga "Emma, mándale en WhatsApp a Juan: <texto>".
+    Úsalo cuando the user diga "Emma, mándale en WhatsApp a Juan: <texto>".
     `to` puede ser un nombre de contacto (lo resuelvo en tu directorio) o un
-    número con código de país. Garcia le da Enviar.
+    número con código de país. the user le da Enviar.
     """
     to = (to or "").strip()
     text = (text or "").strip()

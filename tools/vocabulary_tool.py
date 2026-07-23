@@ -1,4 +1,4 @@
-"""Let Garcia teach Emma new words by voice."""
+"""Let the user teach Emma new words by voice."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ async def add_vocabulary_word(
 ) -> ToolResult:
     """Teach Emma how to pronounce or transcribe a new technical name.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
     - "Emma, agrega 'X' al vocabulario, se pronuncia 'Y' en español."
     - "Emma, cuando diga 'X' entiende que es 'Y'."
     - "Emma, recuerda que 'X' se dice 'Y'."

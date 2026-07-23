@@ -1,10 +1,10 @@
-"""Resolve Garcia's preferred concrete app per category.
+"""Resolve the user's preferred concrete app per category.
 
 Order of resolution:
-  1. config/dictionary.toml [apps] section (Garcia's explicit choice).
+  1. config/dictionary.toml [apps] section (the user's explicit choice).
   2. actions.environment.detect_preferred(category) (auto-detected installed
      app), mapped from its shortlist *key* to the display name.
-  3. None — caller decides whether to ask Garcia or fall back to open-by-name.
+  3. None — caller decides whether to ask the user or fall back to open-by-name.
 
 Category names accepted: "editor"/"ide"/"code", "browser", "terminal"/"shell",
 "music". Returns the display name suitable for ``open -a "<name>"`` or

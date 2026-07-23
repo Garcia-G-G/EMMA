@@ -49,7 +49,7 @@ def _auth_off(monkeypatch):
 
 
 def _login(client):
-    user = db.upsert_user("garcia@example.com", "Garcia", "google", "pid-1")
+    user = db.upsert_user("alex@example.com", "Alex", "google", "pid-1")
     client.cookies.set("emma_session", auth._serializer.dumps({"uid": user["id"]}))
 
 

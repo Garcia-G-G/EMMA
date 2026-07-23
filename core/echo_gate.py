@@ -8,7 +8,7 @@ Emma's response after 1-2 words (a self-interruption loop).
 While the bot is speaking, this filter suppresses mic audio UNLESS
 the input energy exceeds a threshold — a close-range human voice is
 significantly louder than speaker echo reflected back into the mic.
-This preserves barge-in: Garcia can interrupt Emma by speaking up,
+This preserves barge-in: the user can interrupt Emma by speaking up,
 but quiet echo from the speakers is silenced.
 
 After the bot stops speaking, a short tail period continues the gate
@@ -28,7 +28,7 @@ from pipecat.frames.frames import FilterControlFrame
 
 log = structlog.get_logger("emma.echo_gate")
 
-# Garcia's buffered over-the-opener speech is capped at 2 s of 24 kHz mono
+# the user's buffered over-the-opener speech is capped at 2 s of 24 kHz mono
 # int16 — enough for "Emma, espera" without replaying a whole monologue.
 _OPENER_BUFFER_CAP_BYTES = 2 * 24_000 * 2
 
@@ -280,7 +280,7 @@ class EchoGateFilter(BaseAudioFilter):
         phase = self._phase_provider() if self._phase_provider else None
 
         # Opener phase (22-B32): the gate is FULLY closed — Emma always
-        # finishes her first sentence. Garcia's loud speech is BUFFERED, not
+        # finishes her first sentence. the user's loud speech is BUFFERED, not
         # dropped, and dispatched right after the opener ends.
         if phase == "opener":
             rms = self._rms(audio)

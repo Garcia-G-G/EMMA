@@ -1,6 +1,6 @@
 """Long-term memory: a small fact store at ``settings.MEMORY_DB_PATH``.
 
-Facts are short, durable statements about Garcia (preferences, names,
+Facts are short, durable statements about the user (preferences, names,
 recurring patterns) written either explicitly via the
 ``remember_fact`` tool or implicitly by the reflection step at the end
 of each turn. They are read back into every turn's system prompt via
@@ -440,7 +440,7 @@ def _get_client() -> Any:
 
 
 _CONTRADICTION_PROMPT = (
-    "Two facts about the same person, Garcia:\n"
+    "Two facts about the same person, the user:\n"
     'A (older): "{old}"\n'
     'B (newer): "{new}"\n'
     "Does B CONTRADICT A — same subject and predicate, different object, so B "
@@ -657,7 +657,7 @@ async def undo_supersede(new_id: int) -> bool:
 async def _priming_facts(n: int, context: str | None) -> list[Fact]:
     """Top-N facts to prime the prompt with. When ``context`` is given (warm
     sessions carry recent turns), rank semantically by ``confidence * sim`` so a
-    paraphrase of what Garcia is talking about surfaces; otherwise — and on any
+    paraphrase of what the user is talking about surfaces; otherwise — and on any
     embedding failure — fall back to flat confidence order (Prompt 25-A)."""
     if context and context.strip():
         try:
@@ -685,9 +685,9 @@ async def priming_block(top_n: int | None = None, context: str | None = None) ->
     if not facts:
         return ""
     lines = [f"- {f.content}" for f in facts]
-    # Title-case "Garcia" (not GARCIA) so _build_instructions' name substitution
-    # catches it — an uppercase leak would ship the maker's name to every user.
-    return "WHAT YOU ALREADY KNOW ABOUT Garcia (long-term memory):\n" + "\n".join(lines)
+    # Keep the generic user label consistently cased so prompt substitution
+    # catches it and no private identity can reach another user's session.
+    return "WHAT YOU ALREADY KNOW ABOUT the user (long-term memory):\n" + "\n".join(lines)
 
 
 # ---------- embedding backfill ------------------------------------------

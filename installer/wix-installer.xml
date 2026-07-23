@@ -3,7 +3,7 @@
   WiX manifest for Emma-Windows.msi (Prompt 30, Part C2). Per-user install to
   %LOCALAPPDATA%\Emma (no admin), Start-menu shortcut, Task Scheduler auto-start,
   uninstall via Programs and Features. Code signing (Part C3) is a separate
-  signtool step on the built .msi — Garcia's EV cert (~$100/yr); see WINDOWS.md.
+  signtool step on the built .msi — the user's EV cert (~$100/yr); see WINDOWS.md.
 
   Build (on Windows, after build_windows.py):
     heat dir dist\Emma-Windows -cg EmmaFiles -dr INSTALLDIR -srd -sreg -gg -out files.wxs
@@ -12,7 +12,7 @@
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="Emma" Language="1033" Version="1.0.0"
-           Manufacturer="Garcia" UpgradeCode="6E2C1F7A-3B5D-4C9E-A1F2-EMMA00000001">
+           Manufacturer="the user" UpgradeCode="6E2C1F7A-3B5D-4C9E-A1F2-EMMA00000001">
     <Package InstallScope="perUser" InstallerVersion="500" Compressed="yes"
              Description="Emma — asistente de voz" />
     <MajorUpgrade DowngradeErrorMessage="Ya hay una versión más nueva de Emma instalada." />
@@ -39,7 +39,7 @@
         <Shortcut Id="EmmaStartMenu" Name="Emma"
                   Target="[INSTALLDIR]Emma.exe" WorkingDirectory="INSTALLDIR" />
         <RemoveFolder Id="RemoveAppShortcutFolder" On="uninstall" />
-        <RegistryValue Root="HKCU" Key="Software\Garcia\Emma" Name="installed"
+        <RegistryValue Root="HKCU" Key="Software\the user\Emma" Name="installed"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>

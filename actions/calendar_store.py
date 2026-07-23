@@ -3,7 +3,7 @@
 Binds EventKit dynamically through ``objc.loadBundle`` (pyobjc-core only; no
 ``pyobjc-framework-EventKit`` package). This replaces the AppleScript
 ``whose start date ≥ …`` scan, which was O(all events) — measured ~57 s across
-Garcia's calendars (``ERRORS-TO-FIX.md`` §1b) — with
+the user's calendars (``ERRORS-TO-FIX.md`` §1b) — with
 ``predicateForEventsWithStartDate:endDate:calendars:`` against Apple's indexed
 store (measured ~60 ms for a 7-day range, regardless of calendar size).
 

@@ -28,13 +28,13 @@ def _record(seconds: int) -> object:
 
 
 @tool(destructive=True)
-async def enroll_my_voice(name: str = "garcia", confirmed: bool = False) -> ToolResult:
+async def enroll_my_voice(name: str = "primary_user", confirmed: bool = False) -> ToolResult:
     """Aprende tu voz para reconocerte ("Emma, esta es mi voz").
 
-    Graba 5 segundos y guarda tu huella de voz como `name` (por defecto «garcia»).
+    Graba 5 segundos y guarda tu huella de voz como `name` (por defecto «primary_user»).
     Re-enrolar mejora el perfil. Pide confirmación antes de grabar.
     """
-    name = (name or "garcia").strip().lower() or "garcia"
+    name = (name or "primary_user").strip().lower() or "primary_user"
     if not speaker.enabled():
         return ToolResult(
             False, None,

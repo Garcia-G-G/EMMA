@@ -28,7 +28,7 @@ def _present(monkeypatch, profiles: int = 1) -> None:
 
 def test_gate_off_without_resemblyzer(monkeypatch) -> None:
     monkeypatch.setattr(speaker, "_available", lambda: False)
-    assert speaker.should_gate() is False  # degraded → never gate (treat as Garcia)
+    assert speaker.should_gate() is False  # degraded → never gate (treat as the user)
 
 
 def test_gate_off_with_no_profiles(monkeypatch) -> None:
@@ -48,11 +48,11 @@ def test_gate_on_when_enabled_and_enrolled(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_identify_now_returns_active_for_garcia(monkeypatch) -> None:
+async def test_identify_now_returns_active_for_alex(monkeypatch) -> None:
     _present(monkeypatch, profiles=1)
-    speaker.set_active("garcia")
-    # buffer empty → identify_now keeps the current active speaker (Garcia) → proceeds
-    assert await speaker.identify_now() == "garcia"
+    speaker.set_active("alex")
+    # buffer empty → identify_now keeps the current active speaker (the user) → proceeds
+    assert await speaker.identify_now() == "alex"
 
 
 @pytest.mark.asyncio
@@ -86,8 +86,8 @@ async def test_identify_now_degrades_silently_without_resemblyzer(monkeypatch) -
     # buffer has audio but resemblyzer missing → no exception escapes, keeps active
     monkeypatch.setattr(speaker, "_available", lambda: True)  # pass the tap guard
     speaker.feed_audio(np.ones(24000, dtype=np.int16).tobytes(), 24000)
-    speaker.set_active("garcia")
+    speaker.set_active("alex")
     import importlib.util
     if importlib.util.find_spec("resemblyzer") is not None:
         pytest.skip("resemblyzer installed")
-    assert await speaker.identify_now() == "garcia"  # SpeakerIDUnavailable → kept Garcia
+    assert await speaker.identify_now() == "alex"  # SpeakerIDUnavailable → kept the user

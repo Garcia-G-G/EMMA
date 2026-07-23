@@ -3,7 +3,7 @@
     python -m emma.memory.review            # show stats + last 20 supersessions
     python -m emma.memory.review --undo 42  # revert ONE supersession (id 42 = the replacement)
 
-Audit / safety net for Garcia's periodic review — never invoked from voice.
+Audit / safety net for the user's periodic review — never invoked from voice.
 Superseded facts are marked, never deleted, so every change here is reversible.
 """
 

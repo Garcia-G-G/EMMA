@@ -6,7 +6,7 @@ against the enrolled profiles. ``active()`` is then read by the destructive-tool
 
 Degrade rules (so the daemon never locks itself out):
   - resemblyzer not installed → ``enabled()`` is False → the tap is a no-op, the gate
-    is off, every turn is treated as Garcia (one INFO log per lifetime).
+    is off, every turn is treated as the user (one INFO log per lifetime).
   - no enrolled profile → the gate is off (fresh install can still enroll).
 """
 
@@ -60,7 +60,7 @@ def reset() -> None:
 def should_gate() -> bool:
     """Gate destructive tools only when we CAN identify (resemblyzer) AND a profile
     is enrolled — so a fresh install never locks itself out, and a daemon without
-    resemblyzer treats every turn as Garcia."""
+    resemblyzer treats every turn as the user."""
     if not (settings.SPEAKER_GATE_DESTRUCTIVE and _available()):
         return False
     try:
@@ -98,7 +98,7 @@ async def identify_now() -> str | None:
         if not _warned:
             log.info("speaker_id_disabled", hint="install resemblyzer ([speaker] extra) to enable")
             _warned = True
-        return _active  # treat as Garcia
+        return _active  # treat as the user
     try:
         name = await voice_profiles.identify(emb)
     except Exception as exc:

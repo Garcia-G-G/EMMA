@@ -78,7 +78,7 @@ def _menu_ref(parts: list[str]) -> str:
 
 @tool()
 async def app_focus(app: str) -> ToolResult:
-    """Trae `app` al frente. Úsalo cuando Garcia diga 'Emma, enfoca Cursor'."""
+    """Trae `app` al frente. Úsalo cuando the user diga 'Emma, enfoca Cursor'."""
     ok, _ = await macos.osascript_or_friendly(
         f'tell application "{macos.esc_applescript(app)}" to activate',
         timeout_s=4.0,
@@ -93,7 +93,7 @@ async def app_focus(app: str) -> ToolResult:
 async def app_keystroke(app: str, keys: str, confirmed: bool = False) -> ToolResult:
     """Manda un atajo de teclado a `app`. Formato: 'Cmd+T', 'Cmd+Shift+P', 'Escape'.
 
-    Úsalo cuando Garcia diga 'Emma, presiona Cmd+T en Cursor'.
+    Úsalo cuando the user diga 'Emma, presiona Cmd+T en Cursor'.
     """
     if not confirmed:
         return ToolResult(

@@ -20,7 +20,7 @@ async def run_shell_task(
 ) -> ToolResult:
     """Start an arbitrary shell command as a background task.
 
-    Use when Garcia wants something to keep running while he keeps doing other
+    Use when the user wants something to keep running while he keeps doing other
     things: "Emma, corre estos tests y avísame", "Emma, descarga este repo".
 
     The command runs via `/bin/zsh -lc <command>` so PATH and shell aliases are

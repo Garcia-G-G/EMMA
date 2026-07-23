@@ -11,7 +11,7 @@ from core import dictionary, vocabulary
 
 _SAMPLE = """\
 [pages.github]
-url = "https://github.com/garcia"
+url = "https://github.com/alex"
 title = "Mi GitHub"
 
 [contacts.mom]
@@ -28,12 +28,12 @@ context = "Estándar de Anthropic."
 default = "Cursor"
 
 [facts.001]
-text = "Garcia vive en Monterrey."
+text = "the user vive en San José."
 kind = "profile"
 confidence = 0.99
 
 [facts.002]
-text = "Garcia es desarrollador."
+text = "the user es desarrollador."
 kind = "profile"
 confidence = 0.9
 """
@@ -56,7 +56,7 @@ class TestLoad:
         assert {"pages", "contacts", "terms", "apps", "facts"} <= set(data)
 
     def test_find_page(self, temp_dict):
-        assert dictionary.find_page("github").url == "https://github.com/garcia"
+        assert dictionary.find_page("github").url == "https://github.com/alex"
         assert dictionary.find_page("nope") is None
 
     def test_find_contact_by_alias(self, temp_dict):
@@ -72,10 +72,10 @@ class TestLoad:
 
 class TestAppend:
     def test_append_page_roundtrips(self, temp_dict):
-        dictionary.append_page("portfolio", "https://garcia.example.com", title="Portfolio")
+        dictionary.append_page("portfolio", "https://alex.example.com", title="Portfolio")
         # File still valid TOML, entry visible after reload.
         tomllib.loads(temp_dict.read_text())
-        assert dictionary.find_page("portfolio").url == "https://garcia.example.com"
+        assert dictionary.find_page("portfolio").url == "https://alex.example.com"
 
     def test_append_contact_and_term(self, temp_dict):
         dictionary.append_contact("dad", "Luis", email="luis@example.com", relation="padre")

@@ -266,7 +266,7 @@ async def open_workspace_for_debugging(
 ) -> ToolResult:
     """Open Emma's source for live editing, then stop the running service.
 
-    Use this when Garcia says any of these (and similar phrasings):
+    Use this when the user says any of these (and similar phrasings):
 
     - "Emma, te voy a debuggear"
     - "voy a hacerte reparaciones"
@@ -340,7 +340,7 @@ async def open_workspace_for_debugging(
 async def describe_my_health() -> ToolResult:
     """Run the health check and speak the result.
 
-    Use when Garcia says:
+    Use when the user says:
 
     - "Emma, ¿cómo te sientes?"
     - "¿estás bien?"

@@ -1,8 +1,8 @@
-"""Drive Garcia's preferred terminal app to run a shell command in a real,
+"""Drive the user's preferred terminal app to run a shell command in a real,
 watchable window/tab.
 
 Difference from ``tools/shell_tool.run_shell_task``:
-  - ``run_shell_task`` runs headless in the background (Garcia walks away).
+  - ``run_shell_task`` runs headless in the background (the user walks away).
   - This opens a real terminal window he can watch.
 
 iTerm + Terminal have native AppleScript; others fall back to Terminal.
@@ -42,7 +42,7 @@ def _build_script(app: str, command: str, cwd: str | None) -> str:
 
 @tool(destructive=True)
 async def run_in_terminal(command: str, cwd: str = "", confirmed: bool = False) -> ToolResult:
-    """Abre una terminal real y corre `command` (Garcia lo ve ejecutarse).
+    """Abre una terminal real y corre `command` (the user lo ve ejecutarse).
 
     Úsalo cuando diga:
     - "Emma, corre <comando> en mi terminal"

@@ -49,11 +49,11 @@ class TestB11UserProfile:
             assert f in prof
 
     def test_set_user_field_round_trips(self, temp_dict):
-        assert dictionary.set_user_field("github_username", "gilbergarciata") is True
-        assert dictionary.user_profile()["github_username"] == "gilbergarciata"
+        assert dictionary.set_user_field("github_username", "examplehandle") is True
+        assert dictionary.user_profile()["github_username"] == "examplehandle"
         # raw TOML still parses and other sections survive
         data = tomllib.loads(temp_dict.read_text())
-        assert data["user"]["github_username"] == "gilbergarciata"
+        assert data["user"]["github_username"] == "examplehandle"
         assert "github" in data.get("pages", {})  # pages block untouched
 
     def test_unknown_field_rejected(self, temp_dict):
@@ -63,9 +63,9 @@ class TestB11UserProfile:
     async def test_remember_user_profile_tool(self, temp_dict):
         from tools.dictionary_tool import remember_user_profile
 
-        r = await remember_user_profile("github_username", "gilbergarciata")
+        r = await remember_user_profile("github_username", "examplehandle")
         assert r.success is True
-        assert dictionary.user_profile()["github_username"] == "gilbergarciata"
+        assert dictionary.user_profile()["github_username"] == "examplehandle"
         bad = await remember_user_profile("password", "x")
         assert bad.success is False
 
@@ -75,9 +75,9 @@ class TestB11UserProfile:
 
 class TestB12BiasWordsGlobal:
     def test_bias_includes_identity_contacts_glossary(self, temp_dict, temp_vocab):
-        dictionary.set_user_field("github_username", "gilbergarciata")
+        dictionary.set_user_field("github_username", "examplehandle")
         bw = vocabulary.bias_words()
-        assert "gilbergarciata" in bw  # identity
+        assert "examplehandle" in bw  # identity
         assert "Ana García" in bw and "mamá" in bw  # contact name + alias (seeded)
         assert "MCP" in bw  # glossary acronym
         assert " ".join(bw)[:500] == " ".join(bw)  # already ≤500, no slicing needed
@@ -162,7 +162,7 @@ class TestB13MyRepos:
         import tools.github_tool as gh
 
         monkeypatch.setattr(
-            gh.dictionary, "user_profile", lambda: {"github_username": "gilbergarciata"}
+            gh.dictionary, "user_profile", lambda: {"github_username": "examplehandle"}
         )
         cli, cm = _mk_client([_resp(200, [_repo("a"), _repo("b", private=True), _repo("c")])])
         with (
@@ -180,7 +180,7 @@ class TestB13MyRepos:
         import tools.github_tool as gh
 
         monkeypatch.setattr(
-            gh.dictionary, "user_profile", lambda: {"github_username": "gilbergarciata"}
+            gh.dictionary, "user_profile", lambda: {"github_username": "examplehandle"}
         )
         cli, cm = _mk_client([_resp(200, [_repo("a")])])
         with (
@@ -188,7 +188,7 @@ class TestB13MyRepos:
             patch.object(gh.httpx, "AsyncClient", return_value=cm),
         ):
             await gh.my_repos()
-        assert cli.get.call_args[0][0] == "https://api.github.com/users/gilbergarciata/repos"
+        assert cli.get.call_args[0][0] == "https://api.github.com/users/examplehandle/repos"
 
     @pytest.mark.asyncio
     async def test_empty_username_asks(self, monkeypatch):
@@ -210,14 +210,14 @@ class TestB14SearchGithubRetry:
 
         seq = [
             _resp(200, {"items": []}),  # search empty
-            _resp(200, {"login": "gilbergarciata"}),  # user exists
+            _resp(200, {"login": "examplehandle"}),  # user exists
             _resp(200, [_repo("x"), _repo("y")]),  # their repos
         ]
         _, cm = _mk_client(seq)
         with patch.object(gh.httpx, "AsyncClient", return_value=cm):
-            r = await gh.search_github("gilbergarciata")
+            r = await gh.search_github("examplehandle")
         assert len(r.data["matches"]) == 2
-        assert r.user_message.startswith("Encontré 2 repos del usuario gilbergarciata")
+        assert r.user_message.startswith("Encontré 2 repos del usuario examplehandle")
 
     @pytest.mark.asyncio
     async def test_multiword_query_no_retry(self, monkeypatch):
@@ -248,21 +248,21 @@ class TestB15RememberCorrection:
     async def test_new_entry_when_no_match(self, temp_vocab):
         from tools.dictionary_tool import remember_stt_correction
 
-        r = await remember_stt_correction("gilbert garcia ata", "gilbergarciata")
+        r = await remember_stt_correction("example handle", "examplehandle")
         assert r.success is True
-        assert vocabulary.corrections("busca gilbert garcia ata") == "busca gilbergarciata"
+        assert vocabulary.corrections("busca example handle") == "busca examplehandle"
         data = tomllib.loads(temp_vocab.read_text())
-        assert any(b.get("canonical") == "gilbergarciata" for b in data.values())
+        assert any(b.get("canonical") == "examplehandle" for b in data.values())
 
     @pytest.mark.asyncio
     async def test_appends_alias_to_existing_entry(self, temp_vocab):
         from tools.dictionary_tool import remember_stt_correction
 
-        await remember_stt_correction("gilbert garcia ata", "gilbergarciata")
-        await remember_stt_correction("gilbert ata", "gilbergarciata")  # same canonical
+        await remember_stt_correction("example handle", "examplehandle")
+        await remember_stt_correction("gilbert ata", "examplehandle")  # same canonical
         # both aliases now fold to the one canonical
-        assert vocabulary.corrections("gilbert ata") == "gilbergarciata"
-        assert vocabulary.corrections("gilbert garcia ata") == "gilbergarciata"
+        assert vocabulary.corrections("gilbert ata") == "examplehandle"
+        assert vocabulary.corrections("example handle") == "examplehandle"
 
     @pytest.mark.asyncio
     async def test_refuses_noop(self, temp_vocab):

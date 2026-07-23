@@ -1,4 +1,4 @@
-"""EMMA-APP Part 1 — the daemon must not call every stranger "Garcia".
+"""EMMA-APP Part 1 — the daemon must not call every stranger "the user".
 
 The system prompt (and the guest-refusal spoken message) must name whoever
 paired the Mac, never the maker, and must not assume a geographic origin.
@@ -27,22 +27,21 @@ def _build(profile: dict) -> str:
 
 def test_prompt_names_the_paired_user() -> None:
     instr = _build({"display_name": "Alex Rivera", "preferred_lang": "es"})
-    assert "Garcia" not in instr  # no maker name reaches the model
+    assert "the user" not in instr  # no maker name reaches the model
     assert "Alex Rivera" in instr  # the real paired user is named
-    assert "Monterrey" not in instr  # no geographic origin
+    assert "San José" not in instr  # no geographic origin
     assert "Mexican" not in instr
 
 
 def test_prompt_generic_default_when_unpaired() -> None:
     instr = _build({"preferred_lang": "es"})
-    assert "Garcia" not in instr
-    assert "Monterrey" not in instr and "Mexican" not in instr
-    assert "tu usuario" in instr  # generic stand-in, no identity
+    assert "San José" not in instr and "Mexican" not in instr
+    assert "the user" in instr  # generic stand-in, no identity
 
 
 def test_full_name_used_when_no_display_name() -> None:
     instr = _build({"full_name": "Sam Doe", "preferred_lang": "es"})
-    assert "Sam Doe" in instr and "Garcia" not in instr
+    assert "Sam Doe" in instr and "the user" not in instr
 
 
 def test_hostile_display_name_is_sanitized() -> None:

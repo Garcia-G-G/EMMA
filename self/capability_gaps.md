@@ -61,8 +61,8 @@ PY
   the note wasn't there yet.)
 
 ### 4. GitHub repo lookups returned nothing  ·  `not_found` ×2 + `reported_failure`
-- **What happened:** searches for `garcia_g_g/feedback-mind` /
-  `garcia_g_g feedback-mind` found nothing; one variant hit
+- **What happened:** searches for `example_user/feedback-mind` /
+  `example_user feedback-mind` found nothing; one variant hit
   `422 The listed users and repositories cannot be searched…`.
 - **Root cause:** mixed — the repo may be private/nonexistent, and the query
   built an invalid `user:` qualifier (422). Note: a prior commit already added

@@ -52,7 +52,7 @@ async def send_imessage(
     """Envía un iMessage a `recipient`. Pide confirmación antes de enviar.
 
     `recipient` puede ser número/correo O el nombre de un contacto guardado
-    ('mi mamá'). Si sugerí contactos parecidos y Garcia eligió, re-llámame
+    ('mi mamá'). Si sugerí contactos parecidos y the user eligió, re-llámame
     con `picked=<su elección>` (21-B25).
     """
     from tools.contact_resolve import resolve_recipient

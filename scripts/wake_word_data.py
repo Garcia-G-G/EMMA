@@ -23,7 +23,7 @@ import argparse
 import wave
 from pathlib import Path
 
-# Phrases to cover Garcia's Mexican-Spanish pronunciation as well as English.
+# Phrases to cover the user's Mexican-Spanish pronunciation as well as English.
 DEFAULT_PHRASES = ["hey emma", "oye emma", "hola emma"]
 # Piper voices (downloaded on first use). Mix en + es for accent robustness.
 DEFAULT_VOICES = ["en_US-amy-medium", "es_MX-claude-high", "es_ES-davefx-medium"]

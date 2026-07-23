@@ -4,7 +4,7 @@
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V21",
-  "text": "Hey Emma, enséñame los repos de gilbergarciata.",
+  "text": "Hey Emma, enséñame los repos de examplehandle.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "087b64b8e02916dd": {
@@ -220,7 +220,7 @@
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V22",
-  "text": "Hey Emma, enséñame los repos de gilbert garcia ata.",
+  "text": "Hey Emma, enséñame los repos de example handle.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "39866a51ccf3eb95": {
@@ -516,7 +516,7 @@
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V55",
-  "text": "Hey Emma, busca los repos de gilbergaciata en GitHub.",
+  "text": "Hey Emma, busca los repos de examplehandl en GitHub.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "76cabce955823fdb": {
@@ -748,7 +748,7 @@
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V30",
-  "text": "Hey Emma, mis repos de guilber garciata.",
+  "text": "Hey Emma, mis repos de example handle.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "cfc0e4a206cec9a2": {
@@ -828,7 +828,7 @@
   "lang": "en",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A04",
-  "text": "Hey Jarvis. Hey Emma, search the web for the weather in Monterrey tomorrow.",
+  "text": "Hey Jarvis. Hey Emma, search the web for the weather in San José tomorrow.",
   "voice_id": "iVwieylcLv7bwfinSNdw"
  },
  "e49ce86f8b2b95f3": {
@@ -836,7 +836,7 @@
   "lang": "en",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A04",
-  "text": "Hey Emma, search the web for the weather in Monterrey tomorrow.",
+  "text": "Hey Emma, search the web for the weather in San José tomorrow.",
   "voice_id": "iVwieylcLv7bwfinSNdw"
  },
  "e9bde06475090860": {
@@ -852,7 +852,7 @@
   "lang": "es",
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "V23",
-  "text": "Hey Emma, enséñame los repos de gilbergaciata.",
+  "text": "Hey Emma, enséñame los repos de examplehandl.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "ed5853ac3fa6251e": {

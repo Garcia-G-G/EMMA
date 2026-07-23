@@ -146,7 +146,7 @@ def test_priming_block_excludes_vault_ref(tmp_path) -> None:
         ms.MEMORY_PRIMING_TOP_N = 10
 
         async def t() -> None:
-            await long_term.remember("Garcia likes coffee", kind="pref")
+            await long_term.remember("the user likes coffee", kind="pref")
             await long_term.remember("ignored", kind="fact", vault_ref="fact_zzz")
             pb = await long_term.priming_block()
             assert "coffee" in pb

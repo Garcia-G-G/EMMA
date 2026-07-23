@@ -234,7 +234,7 @@ def test_demo_config_exact_key_set(client):
 def test_daily_report_aggregates_no_pii(client, monkeypatch):
     # E2: auth-gated; returns counts/cost only, never IPs.
     from backend import auth
-    user = db.upsert_user("g@example.com", "Garcia", "google", "p1")
+    user = db.upsert_user("g@example.com", "the user", "google", "p1")
     client.cookies.set("emma_session", auth._serializer.dumps({"uid": user["id"]}))
     d = client.get("/demo/admin/daily-report").json()
     assert set(d) >= {"sessions_24h", "cost_usd_24h", "daily_ceiling_usd"}

@@ -110,7 +110,7 @@ def _headers() -> dict[str, str]:
 async def search_github(query: str, limit: int = 5) -> ToolResult:
     """Search GitHub public repositories by name or keyword.
 
-    Use when Garcia says any of:
+    Use when the user says any of:
     - "Emma, busca el repo X en GitHub"
     - "Emma, búscame un repo de Y"
     - "Emma, ¿hay un proyecto open source de Z?"
@@ -178,7 +178,7 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
                                 matches, f"Encontré {len(matches)} repos del usuario {q}:"
                             )
                 # 21-B25: before giving up, check whether the query is a
-                # mistranscription of Garcia's OWN username (the most common
+                # mistranscription of the user's OWN username (the most common
                 # case: "gilbergaciata" → his handle). One mechanism — the
                 # transversal suggest_similar — never bespoke fuzzy logic.
                 from core import dictionary
@@ -209,7 +209,7 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
 
 @tool(returns_untrusted_content=True)
 async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all") -> ToolResult:
-    """Lista los repos de Garcia (los suyos, no search). Para 'mis repos',
+    """Lista los repos de the user (los suyos, no search). Para 'mis repos',
     'los repos que tengo', 'el repo que hice de X'.
 
     Usa /user/repos (autenticado: públicos + privados) o /users/<usuario>/repos
@@ -232,7 +232,7 @@ async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all
             "sort": sort,
             "per_page": per_page,
             "visibility": vis,
-            "affiliation": "owner",  # Garcia's own repos, not orgs he collaborates on
+            "affiliation": "owner",  # the user's own repos, not orgs he collaborates on
         }
     else:
         url = f"{_API_ROOT}/users/{username}/repos"
@@ -265,7 +265,7 @@ async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all
 
 @tool(returns_untrusted_content=True)
 async def get_repo_url(query: str) -> ToolResult:
-    """Resolve a repo query to its top clone URL. Used when Garcia chains
+    """Resolve a repo query to its top clone URL. Used when the user chains
     'busca X y clónalo' in one breath."""
     res = await search_github(query, limit=1)
     if not res.success or not (res.data and res.data.get("matches")):

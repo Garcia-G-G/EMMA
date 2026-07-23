@@ -27,7 +27,7 @@ async def look_at_screen(question: str = "") -> ToolResult:
     apps sin árbol de accesibilidad, etc.
 
     Úsalo cuando describe_screen no alcance ("no veo el contenido"), o cuando
-    Garcia diga "mira la pantalla", "toma una captura y léela", "¿qué dice esa
+    the user diga "mira la pantalla", "toma una captura y léela", "¿qué dice esa
     imagen?". Todo es local: la captura se procesa en el Mac y se borra; nunca
     se sube a la nube. Si pasas `question`, responde a esa pregunta sobre lo leído.
     """

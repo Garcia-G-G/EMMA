@@ -43,9 +43,9 @@ def test_record_and_recent_roundtrip() -> None:
 
 
 def test_secret_args_are_sanitized() -> None:
-    ep._record_sync("login", {"user": "garcia", "password": "hunter2", "token": "re_abc"}, None, "", None)
+    ep._record_sync("login", {"user": "alex", "password": "hunter2", "token": "re_abc"}, None, "", None)
     r = ep._recent_sync(3600, 10)[0]
-    assert "garcia" in str(r.args)
+    assert "alex" in str(r.args)
     assert "hunter2" not in str(r.args)
     assert "password" not in r.args and "token" not in r.args
 
