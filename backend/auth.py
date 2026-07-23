@@ -20,7 +20,7 @@ from backend.config import settings
 from backend.schemas import MeResponse
 
 router = APIRouter()
-_COOKIE = "emma_session"
+_LEGACY_COOKIE = "emma_session"
 _MAX_AGE = 30 * 86400
 _serializer = URLSafeTimedSerializer(settings.SESSION_SECRET, salt="emma-session")
 
@@ -45,22 +45,38 @@ if settings.GITHUB_OAUTH_CLIENT_ID:
     )
 
 
+def _cookie_name() -> str:
+    return (
+        "__Host-emma_session"
+        if settings.PUBLIC_URL.lower().startswith("https://")
+        else _LEGACY_COOKIE
+    )
+
+
 def set_session_cookie(response: Response, uid: int) -> None:
     """Set the signed, HttpOnly, SameSite=Lax, Secure-on-HTTPS 30-day session cookie."""
+    cookie_name = _cookie_name()
     response.set_cookie(
-        _COOKIE, _serializer.dumps({"uid": uid}),
+        cookie_name, _serializer.dumps({"uid": uid}),
         max_age=_MAX_AGE, httponly=True,
         secure=settings.PUBLIC_URL.lower().startswith("https"), samesite="lax",
     )
+    if cookie_name != _LEGACY_COOKIE:
+        response.delete_cookie(
+            _LEGACY_COOKIE, path="/", httponly=True, secure=True, samesite="lax"
+        )
+    response.headers["Cache-Control"] = "no-store"
 
 
 def clear_session_cookie(response: Response) -> None:
     """Delete the session cookie with the SAME attributes it was set with — a
     samesite/secure/path mismatch can leave the cookie in place in some browsers."""
-    response.delete_cookie(
-        _COOKIE, path="/", httponly=True,
-        secure=settings.PUBLIC_URL.lower().startswith("https"), samesite="lax",
-    )
+    secure = settings.PUBLIC_URL.lower().startswith("https")
+    for cookie_name in {_cookie_name(), _LEGACY_COOKIE}:
+        response.delete_cookie(
+            cookie_name, path="/", httponly=True, secure=secure, samesite="lax",
+        )
+    response.headers["Cache-Control"] = "no-store"
 
 
 def login_user(response: Response, email: str, name: str, provider: str, provider_id: str) -> dict[str, Any]:
@@ -71,7 +87,7 @@ def login_user(response: Response, email: str, name: str, provider: str, provide
 
 
 async def current_user(request: Request) -> dict[str, Any] | None:
-    raw = request.cookies.get(_COOKIE)
+    raw = request.cookies.get(_cookie_name()) or request.cookies.get(_LEGACY_COOKIE)
     if not raw:
         return None
     try:
