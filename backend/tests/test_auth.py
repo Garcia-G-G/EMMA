@@ -6,15 +6,17 @@ password hashing is stdlib pbkdf2, email is regex-validated, reset email logs (n
 
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 
 os.environ.setdefault("DATABASE_URL", tempfile.mktemp(suffix=".db"))
 
 import pytest
+from fastapi import Response
 from fastapi.testclient import TestClient
 
-from backend import auth_local, db
+from backend import auth, auth_local, db, passwords
 from backend.app import app
 from backend.config import settings
 from backend.passwords import hash_password, password_problem, verify_password
@@ -46,6 +48,35 @@ def test_hash_roundtrips_and_is_salted():
     assert hash_password("correcthorse9") != stored
 
 
+def test_new_hash_uses_current_work_factor():
+    assert hash_password("correcthorse9").split("$")[1] == "600000"
+
+
+def test_legacy_hash_needs_rehash():
+    assert hasattr(passwords, "password_needs_rehash")
+    salt = b"0123456789abcdef"
+    digest = hashlib.pbkdf2_hmac("sha256", b"correcthorse9", salt, 240_000)
+    legacy = f"pbkdf2_sha256$240000${salt.hex()}${digest.hex()}"
+
+    assert verify_password("correcthorse9", legacy)
+    assert passwords.password_needs_rehash(legacy)
+
+
+def test_overlong_password_is_rejected_before_pbkdf2(monkeypatch):
+    called = False
+
+    def fail_if_called(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("PBKDF2 should not run")
+
+    monkeypatch.setattr(hashlib, "pbkdf2_hmac", fail_if_called)
+    password = "ab12" * 300
+    assert password_problem(password)
+    assert not verify_password(password, "pbkdf2_sha256$240000$00$00")
+    assert not called
+
+
 def test_password_problem_rejects_weak():
     assert password_problem("short")  # < 8 chars
     assert password_problem("aaaaaaaa")  # < 4 unique chars
@@ -62,6 +93,46 @@ def test_register_sets_cookie_and_creates_local_user(client):
     assert "emma_session" in r.cookies
     row = db.get_user_by_email("ana@b.com")  # stored lowercased
     assert row and row["provider"] == "local" and row["password_hash"]
+
+
+def test_production_cookie_uses_host_prefix_and_secure_attributes(monkeypatch):
+    monkeypatch.setattr(settings, "PUBLIC_URL", "https://api.example.test")
+    response = Response()
+
+    auth.set_session_cookie(response, 42)
+
+    headers = response.headers.getlist("set-cookie")
+    header = headers[0]
+    assert "__Host-emma_session=" in header
+    assert "HttpOnly" in header
+    assert "Secure" in header
+    assert "Path=/" in header
+    assert "samesite=lax" in header.lower()
+    assert any(
+        item.startswith("emma_session=") and "Max-Age=0" in item
+        for item in headers
+    )  # clear the legacy cookie during migration
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_cross_origin_cookie_mutation_is_rejected(client):
+    client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
+    response = client.post(
+        "/api/me/email",
+        headers={"Origin": "https://attacker.example"},
+        json={"email": "new@b.com"},
+    )
+    assert response.status_code == 403
+
+
+def test_same_origin_cookie_mutation_succeeds(client):
+    client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
+    response = client.post(
+        "/api/me/email",
+        headers={"Origin": "http://localhost"},
+        json={"email": "new@b.com"},
+    )
+    assert response.status_code == 200
 
 
 def test_register_persists_name_for_greeting(client):
@@ -105,6 +176,22 @@ def test_login_succeeds_then_whoami(client):
     assert who.status_code == 200 and who.json()["user"]["email"] == "a@b.com"
 
 
+def test_login_upgrades_legacy_hash(client):
+    salt = b"0123456789abcdef"
+    digest = hashlib.pbkdf2_hmac("sha256", b"correcthorse9", salt, 240_000)
+    legacy = f"pbkdf2_sha256$240000${salt.hex()}${digest.hex()}"
+    user = db.create_local_user("legacy@example.test", legacy)
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "legacy@example.test", "password": "correcthorse9"},
+    )
+
+    assert response.status_code == 200
+    upgraded = db.get_user(user["id"])["password_hash"]
+    assert upgraded.split("$")[1] == "600000"
+
+
 def test_login_wrong_password_is_constant_401(client):
     client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
     client.cookies.clear()
@@ -113,6 +200,24 @@ def test_login_wrong_password_is_constant_401(client):
     # no account-enumeration: same status + same body for "bad password" and "no such user"
     assert miss.status_code == nouser.status_code == 401
     assert miss.json()["detail"] == nouser.json()["detail"]
+
+
+def test_login_missing_user_still_runs_password_verification(client, monkeypatch):
+    calls: list[str] = []
+
+    def fake_verify(_password: str, stored: str) -> bool:
+        calls.append(stored)
+        return False
+
+    monkeypatch.setattr(auth_local, "verify_password", fake_verify)
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "missing@example.test", "password": "wrong12345"},
+    )
+
+    assert response.status_code == 401
+    assert len(calls) == 1
+    assert calls[0].startswith("pbkdf2_sha256$")
 
 
 def test_logout_clears_cookie(client):

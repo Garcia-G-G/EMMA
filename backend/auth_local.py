@@ -25,7 +25,12 @@ from backend import db
 from backend.auth import clear_session_cookie, current_user, set_session_cookie
 from backend.config import settings
 from backend.netutil import client_ip as _client_ip
-from backend.passwords import hash_password, password_problem, verify_password
+from backend.passwords import (
+    hash_password,
+    password_needs_rehash,
+    password_problem,
+    verify_password,
+)
 
 log = structlog.get_logger("emma.auth")
 router = APIRouter()
@@ -36,6 +41,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _LOGIN_FAILS: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=16))
 _LOGIN_MAX_FAILS = 5
 _LOGIN_WINDOW_S = 300
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
 
 
 def _too_many_fails(ip: str, now: float | None = None) -> bool:
@@ -100,11 +106,14 @@ async def login(body: Credentials, request: Request, response: Response) -> dict
         raise HTTPException(429, "Demasiados intentos. Espera unos minutos.")
     user = db.get_user_by_email(str(body.email).lower())
     # Same error + a real hash check on the miss path → no user-enumeration timing leak.
-    ok = bool(user and user.get("password_hash")
-              and verify_password(body.password, user["password_hash"]))
+    stored_hash = user.get("password_hash") if user else None
+    ok = verify_password(body.password, stored_hash or _DUMMY_PASSWORD_HASH)
+    ok = bool(user and stored_hash and ok)
     if not ok:
         _record_fail(ip)
         raise HTTPException(401, "Correo o contraseña incorrectos.")
+    if password_needs_rehash(user["password_hash"]):
+        db.set_password(user["id"], hash_password(body.password))
     set_session_cookie(response, user["id"])
     return _public_user(user)
 

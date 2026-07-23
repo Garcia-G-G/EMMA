@@ -37,6 +37,7 @@ from backend import (
 from backend import session as session_mod
 from backend.auth import current_user, require_admin, require_user
 from backend.config import assert_secure_secrets, settings
+from backend.request_security import browser_mutation_allowed
 
 assert_secure_secrets()  # fail loud if a prod (HTTPS) host is still on the dev signing keys
 
@@ -58,6 +59,15 @@ app.add_middleware(
     CORSMiddleware, allow_origins=_CORS_ORIGINS,
     allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"], allow_credentials=True,
 )
+
+
+@app.middleware("http")
+async def _protect_cookie_mutations(request: Request, call_next):
+    if not browser_mutation_allowed(request):
+        return JSONResponse({"detail": "Origen no permitido."}, status_code=403)
+    return await call_next(request)
+
+
 # 24.6-D3: Secure cookie whenever we're served over HTTPS (prod). Local http
 # dev (PUBLIC_URL=http://localhost) keeps it off so the session still works.
 _HTTPS_ONLY = settings.PUBLIC_URL.lower().startswith("https")

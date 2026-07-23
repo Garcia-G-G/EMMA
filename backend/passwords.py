@@ -14,8 +14,9 @@ import hmac
 import os
 
 _ALGO = "pbkdf2_sha256"
-_ITERS = 240_000  # OWASP-recommended floor for PBKDF2-SHA256 (2023+)
+_ITERS = 600_000  # Current OWASP floor for PBKDF2-HMAC-SHA256.
 _SALT_BYTES = 16
+_MAX_PASSWORD_CHARS = 1024
 
 
 def hash_password(password: str) -> str:
@@ -26,6 +27,8 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored: str) -> bool:
     """Constant-time check of ``password`` against a stored ``hash_password`` value."""
+    if not isinstance(password, str) or len(password) > _MAX_PASSWORD_CHARS:
+        return False
     try:
         algo, iters_s, salt_hex, hash_hex = stored.split("$")
         if algo != _ALGO:
@@ -38,7 +41,16 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def password_problem(password: str) -> str | None:
+def password_needs_rehash(stored: str) -> bool:
+    """True when a valid stored hash uses an obsolete algorithm/work factor."""
+    try:
+        algo, iters_s, _salt_hex, _hash_hex = stored.split("$")
+        return algo != _ALGO or int(iters_s) < _ITERS
+    except (ValueError, AttributeError):
+        return True
+
+
+def password_problem(password: str | None) -> str | None:
     """A Spanish reason the password is too weak, or None if acceptable.
 
     Deliberately lenient (length + not-all-same) — NIST guidance favors length
@@ -46,6 +58,8 @@ def password_problem(password: str) -> str | None:
     """
     if not password or len(password) < 8:
         return "La contraseña debe tener al menos 8 caracteres."
+    if len(password) > _MAX_PASSWORD_CHARS:
+        return f"La contraseña no puede superar {_MAX_PASSWORD_CHARS} caracteres."
     if len(set(password)) < 4:
         return "Esa contraseña es demasiado simple."
     return None
