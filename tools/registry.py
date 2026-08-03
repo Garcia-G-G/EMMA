@@ -12,7 +12,7 @@ from typing import Any
 import structlog
 
 import tools
-from tools.base import RegisteredTool, ToolResult, get_registry
+from tools.base import RegisteredTool, ToolNameCollisionError, ToolResult, get_registry
 
 log = structlog.get_logger("emma.tools.registry")
 
@@ -30,6 +30,11 @@ def _discover() -> None:
             continue
         try:
             importlib.import_module(f"tools.{module_info.name}")
+        except ToolNameCollisionError:
+            # Never swallow this one. Two tools claiming a name means one is
+            # silently gone; degrading it to "that module failed to import"
+            # would hide the very failure the check exists to surface.
+            raise
         except Exception as exc:
             log.error("tool_module_import_failed", module=module_info.name, error=str(exc))
     _discovered = True

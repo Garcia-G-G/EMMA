@@ -52,8 +52,12 @@ async def current_page_text() -> ToolResult:
 
 
 @tool()
-async def open_url(url: str) -> ToolResult:
-    """Abre `url` en una pestaña nueva de Safari."""
+async def open_url_safari(url: str) -> ToolResult:
+    """Abre `url` en una pestaña nueva de Safari, específicamente.
+
+    Para "abre <url>" a secas usa `open_url`, que respeta el navegador
+    preferido. Este es para cuando the user pide Safari por nombre.
+    """
     u = macos.esc_applescript(url)
     script = (
         'tell application "Safari"\n'
