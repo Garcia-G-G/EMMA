@@ -20,6 +20,7 @@ from typing import Any
 
 import structlog
 
+from tools import availability
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.postman")
@@ -31,6 +32,11 @@ def _newman_path() -> str | None:
     return shutil.which("newman") or (
         "/opt/homebrew/bin/newman" if Path("/opt/homebrew/bin/newman").exists() else None
     )
+
+
+def available() -> bool:
+    """``postman_run`` shells out to newman; without it the tool can only fail."""
+    return availability.has_binary("newman") or availability.has_path("/opt/homebrew/bin/newman")
 
 
 def _resolve_collection(name: str) -> tuple[str | None, list[str]]:

@@ -182,7 +182,7 @@ def _webhook_label(channel: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@tool(destructive=True)
+@tool(destructive=True, available=lambda: bool(settings.X_CLIENT_ID))
 async def post_to_x(text: str, confirmed: bool = False) -> ToolResult:
     """Publica un tweet/post en X (Twitter). SIEMPRE confirma antes de enviar.
 

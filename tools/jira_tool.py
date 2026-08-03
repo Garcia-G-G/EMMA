@@ -17,6 +17,11 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.jira")
 
+def available() -> bool:
+    """Same three settings ``_configured()`` requires — base URL, email, token."""
+    return bool(settings.JIRA_BASE_URL and settings.JIRA_EMAIL and settings.JIRA_API_TOKEN)
+
+
 
 def _configured() -> bool:
     return bool(settings.JIRA_BASE_URL and settings.JIRA_EMAIL and settings.JIRA_API_TOKEN)

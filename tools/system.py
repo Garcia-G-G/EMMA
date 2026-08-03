@@ -9,6 +9,7 @@ import structlog
 
 from actions import macos
 from config.settings import settings
+from tools import availability
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.system")
@@ -55,7 +56,7 @@ def unmute() -> ToolResult:
     return ToolResult(True, None, "Sonido restaurado.", False)
 
 
-@tool()
+@tool(available=lambda: availability.has_binary("brightness"))
 def set_brightness(percent: int) -> ToolResult:
     """Set the display brightness. `percent` is 0-100.
 

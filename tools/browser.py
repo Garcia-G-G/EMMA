@@ -24,9 +24,19 @@ from typing import Any
 import structlog
 
 from config.settings import settings
+from tools import availability
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.browser")
+
+def available() -> bool:
+    """Chromium is a separate ~150 MB download that install.sh never performs.
+
+    Without the binary every tool here fails at ``_ensure_context``, so on a
+    clean install these five tools are pure token cost.
+    """
+    return availability.has_chromium()
+
 
 _PROFILE_DIR = settings.EMMA_HOME / "playwright-profile"
 

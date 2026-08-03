@@ -17,6 +17,11 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.notion")
 
+def available() -> bool:
+    """The Notion API call authenticates with NOTION_API_KEY (:30)."""
+    return bool(settings.NOTION_API_KEY)
+
+
 _BASE = "https://api.notion.com/v1"
 _VERSION = "2022-06-28"
 

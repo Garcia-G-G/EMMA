@@ -28,6 +28,11 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.github")
 
+def available() -> bool:
+    """Every call here authenticates with GITHUB_TOKEN (:103, :228)."""
+    return bool(settings.GITHUB_TOKEN)
+
+
 _API = "https://api.github.com/search/repositories"
 _API_ROOT = "https://api.github.com"
 _TIMEOUT = 8.0
