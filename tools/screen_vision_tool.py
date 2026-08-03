@@ -25,20 +25,30 @@ log = structlog.get_logger("emma.tools.screen_vision")
 
 _NO_WINDOW = "No veo una ventana enfocada ahora mismo."
 
-# Apps whose AX tree is sparse BY DESIGN — a terminal or a blank document has
-# almost nothing for AX to expose, so a thin read there is expected, not a
-# failure. We surface `thin_by_design=True` so the LLM does NOT chain a wasteful
-# screenshot fallback for them. (27.3 — a classifier of expected-thinness, not a
-# per-app routing branch.)
+# Apps whose AX tree is thin BY DESIGN, so a thin read is the expected answer
+# and chaining to a screenshot would waste a capture. Terminals draw their own
+# text; canvas apps have no text tree to expose (27.4 Part A).
+#
+# Deliberately NOT here: Slack, Discord, Notion, Linear. They read thin but
+# their AX still gives genuinely useful content (channel name, page title,
+# recent messages) — marking them thin-by-design would suppress the fallback
+# exactly where it helps. They are handled by the web_content_visible routing
+# rule in the system prompt instead. Keep this set small; it is a claim that
+# AX has nothing to give, not a list of apps that read poorly.
 _THIN_BY_DESIGN_APPS = {
+    # terminals
     "terminal", "iterm", "iterm2", "alacritty", "kitty", "wezterm", "warp",
     "hyper", "ghostty", "tmux",
+    # canvas-only apps (27.4)
+    "figma", "blender", "after effects", "photoshop", "illustrator",
+    "miro", "lucidchart",
 }
 
 
 def _ax_density(
     static_texts: list[str], buttons: list[str], app: str,
     bounds: tuple[float, float, float, float] | None,
+    web_content: bool = False,
 ) -> dict[str, Any]:
     """A small content-density signal the LLM reads from `data` to decide whether
     the AX read was too thin and it should fall back to `look_at_screen` (27.3).
@@ -64,6 +74,12 @@ def _ax_density(
         "ax_static_text": n_static,
         "ax_appears_thin": appears_thin,
         "thin_by_design": (app or "").strip().lower() in _THIN_BY_DESIGN_APPS,
+        # 27.4 Part B: the focused app is hosting a WebView (a browser, an
+        # Electron app with web content, a Notion-style hybrid). When that is
+        # true and the text is still thin, the AX tree is showing the chrome
+        # and hiding the page — the read did not fail, it lied. The prompt uses
+        # this to prefer a screenshot instead of a second AX attempt.
+        "web_content_visible": bool(web_content),
     }
 
 
@@ -102,7 +118,7 @@ async def describe_screen() -> ToolResult:
     r = await sv.current_screen()
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
-    density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    density = _ax_density(r.texts, r.buttons, r.app, r.bounds, r.web_content)
     # 27.3.post: flatten the two decision flags to top-level so the system prompt
     # reads `ax_appears_thin` / `thin_by_design` directly (no `density.` drill).
     return ToolResult(
@@ -120,7 +136,7 @@ async def read_window_text() -> ToolResult:
     if r is None:
         return ToolResult(False, None, _NO_WINDOW, False)
     text = " ".join(r.texts).strip() or "(no hay texto visible para leer)"
-    density = _ax_density(r.texts, r.buttons, r.app, r.bounds)
+    density = _ax_density(r.texts, r.buttons, r.app, r.bounds, r.web_content)
     # 27.3.post: see describe_screen above.
     return ToolResult(
         True, {"screen": r.structured, "web_content": r.web_content, "density": density,
@@ -376,7 +392,7 @@ async def read_pane_text() -> ToolResult:
     if pane is None or not pane.snippet:
         return ToolResult(False, None, "No logro identificar el panel para leerlo.", False)
     snippet_lines = pane.snippet.splitlines()
-    density = _ax_density(snippet_lines, [], pane.app, pane.bounds)
+    density = _ax_density(snippet_lines, [], pane.app, pane.bounds, pane.web_content)
     # 27.3.post: see describe_screen — flatten thin flags to top level.
     return ToolResult(
         True, {"pane": _pane_data(pane), "density": density,
