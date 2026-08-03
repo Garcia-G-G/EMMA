@@ -13,6 +13,7 @@ from typing import Any
 import structlog
 
 import tools
+from config.settings import settings
 from tools.base import RegisteredTool, ToolNameCollisionError, ToolResult, get_registry
 
 log = structlog.get_logger("emma.tools.registry")
@@ -69,6 +70,32 @@ def get_tool(name: str) -> RegisteredTool | None:
     return get_registry().get(name)
 
 
+# Modules whose tools are NEVER trimmed by the budget, in priority order.
+# These are what Emma is: she sees the screen, remembers, controls the machine
+# and its apps, handles files, and owns calendar / reminders / notes. Screen
+# vision leads the list deliberately — it is the feature whose apparent
+# disappearance triggered this audit.
+_CORE_MODULES: tuple[str, ...] = (
+    "screen_vision_tool",
+    "visual_screen_tool",
+    "memory_tool",
+    "secrets_tool",
+    "lifecycle_tool",
+    "session_actions_tool",
+    "system",
+    "app_control",
+    "app_url_tool",
+    "preferences",
+    "finder_tool",
+    "file_ops_tool",
+    "file_edit",
+    "calendar_tool",
+    "reminders_tool",
+    "notes_tool",
+)
+_CORE_RANK = {m: i for i, m in enumerate(_CORE_MODULES)}
+
+
 def _module_of(entry: RegisteredTool) -> str:
     return getattr(entry.fn, "__module__", "").rsplit(".", 1)[-1]
 
@@ -98,7 +125,12 @@ def _is_available(entry: RegisteredTool) -> bool:
 
 
 def available_tools() -> list[RegisteredTool]:
-    """Registered tools that can actually run on this machine, deduped."""
+    """Registered tools that can run here, deduped, in budget-priority order.
+
+    Core modules first (``_CORE_MODULES``), then everything else grouped by
+    module. The order is what the budget trims from the tail of, so it must be
+    deliberate rather than an accident of alphabetical import order.
+    """
     _discover()
     seen: set[str] = set()
     entries: list[RegisteredTool] = []
@@ -109,7 +141,14 @@ def available_tools() -> list[RegisteredTool]:
         if _is_available(entry):
             entries.append(entry)
 
-    return entries
+    def key(e: RegisteredTool) -> tuple[int, int, str, str]:
+        mod = _module_of(e)
+        rank = _CORE_RANK.get(mod)
+        if rank is not None:
+            return (0, rank, "", e.name)
+        return (1, 0, mod, e.name)
+
+    return sorted(entries, key=key)
 
 
 def _spec(entry: RegisteredTool) -> dict[str, Any]:
@@ -126,12 +165,43 @@ def _spec(entry: RegisteredTool) -> dict[str, Any]:
 def openai_tool_specs() -> list[dict[str, Any]]:
     """Advertisable tools formatted for OpenAI's ``tools`` parameter.
 
-    Tools that cannot run here (no credential, no CLI, no browser binary) are
-    dropped. Every advertised tool costs ~60 input tokens on *every* turn
-    (measured; see _planning/notes/LAUNCH-1-VERIFY.md), so a tool that can only
-    fail is pure cost with zero capability.
+    Two reductions, in order:
+
+    1. **Availability** — tools that cannot run here (no credential, no CLI, no
+       browser binary) are dropped. Every advertised tool costs ~60 input
+       tokens on *every* turn, so a tool that can only fail is pure cost.
+    2. **Budget** — if more than ``REALTIME_TOOL_BUDGET`` survive, the tail is
+       trimmed. Core modules are never trimmed, and the drop is logged by name
+       at ERROR. It is never silent.
     """
-    return [_spec(e) for e in available_tools()]
+    entries = available_tools()
+    budget = int(settings.REALTIME_TOOL_BUDGET)
+    if budget <= 0 or len(entries) <= budget:
+        return [_spec(e) for e in entries]
+
+    core = [e for e in entries if _module_of(e) in _CORE_RANK]
+    rest = [e for e in entries if _module_of(e) not in _CORE_RANK]
+    room = budget - len(core)
+    if room < 0:
+        # The guaranteed core alone exceeds the budget. Keep all of it anyway —
+        # amputating core is worse than overshooting — and say so loudly.
+        log.error(
+            "tool_budget_below_core",
+            budget=budget,
+            core=len(core),
+            hint="raise REALTIME_TOOL_BUDGET or shrink _CORE_MODULES",
+        )
+        kept, dropped = core, rest
+    else:
+        kept, dropped = core + rest[:room], rest[room:]
+    log.error(
+        "tool_budget_exceeded",
+        budget=budget,
+        available=len(entries),
+        kept=len(kept),
+        dropped=[e.name for e in dropped],
+    )
+    return [_spec(e) for e in kept]
 
 
 def unavailable_tools() -> list[str]:

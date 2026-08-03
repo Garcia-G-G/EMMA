@@ -370,6 +370,27 @@ class Settings(BaseSettings):
     # playback tools' ends_session flag / "ya, déjalo".
     SESSION_MAX_S: int = 900
 
+    # Ceiling on how many tools are advertised in session.update. Measured
+    # against gpt-realtime-2 (_planning/notes/LAUNCH-1-VERIFY.md): every
+    # registered tool costs ~60 input tokens on EVERY turn, so 183 tools =
+    # ~11k tokens/turn before the user says a word. The server does NOT
+    # truncate — a 183-tool payload was echoed back complete and the model
+    # still selected the tool at index 127 — so this is a cost/latency guard,
+    # not a correctness one. Tools that cannot run here are already filtered
+    # before the budget applies (tools/availability.py); this only bites if
+    # availability filtering leaves more than this many. When it bites,
+    # tools/registry.py logs `tool_budget_exceeded` with every dropped name,
+    # and the _CORE_MODULES set (screen vision, memory, lifecycle, system,
+    # apps, files, calendar, reminders, notes) is never trimmed. 0 disables.
+    #
+    # 175 is a safety valve, not a trimmer: it does not bite today (a clean
+    # install advertises 159, a fully-provisioned dev box 172, and all 172 of
+    # those genuinely work). Its job is to make the NEXT batch of tools
+    # impossible to add unnoticed — crossing it fails tests/test_tool_budget.py
+    # and logs every dropped name. Raise it deliberately, with the token cost
+    # in hand, rather than reflexively.
+    REALTIME_TOOL_BUDGET: int = 175
+
     # ---- Proactive engine (Prompt 17) -------------------------------
     # Master switch + global behavior. Conservative defaults: only the
     # smallest set of proactivities is ON; everything else is opt-in.
