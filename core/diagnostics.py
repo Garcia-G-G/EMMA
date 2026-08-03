@@ -45,6 +45,19 @@ class HealthReport:
     last_error: str | None
     mic_rms: float | None
     openai_rtt_ms: int | None = None  # filled by the async probe
+    # Screen-vision permissions. None = probe unavailable/inconclusive, not a
+    # denial. Without these Emma is blind and, before LAUNCH-2, could not say so:
+    # every read tool answered "no veo una ventana enfocada" with no way to
+    # explain why.
+    ax_trusted: bool | None = None
+    ax_smoke_ok: bool | None = None
+    ax_smoke_reason: str | None = None
+    screen_recording: bool | None = None
+
+    @property
+    def screen_vision_ok(self) -> bool:
+        """AX trusted AND actually answering. Both, because they can disagree."""
+        return bool(self.ax_trusted) and bool(self.ax_smoke_ok)
 
 
 def _uptime_s() -> float | None:
@@ -156,10 +169,35 @@ def _mic_rms() -> float | None:
         return None
 
 
+def _screen_vision_perms() -> dict[str, Any]:
+    """AX trust + Screen Recording + the functional AX smoke test.
+
+    Best-effort: a probe that raises leaves the fields None (inconclusive)
+    rather than reporting a denial Emma would then announce.
+    """
+    out: dict[str, Any] = {
+        "ax_trusted": None,
+        "ax_smoke_ok": None,
+        "ax_smoke_reason": None,
+        "screen_recording": None,
+    }
+    try:
+        from core import permissions
+
+        out["ax_trusted"] = permissions.check_accessibility_ax()
+        out["screen_recording"] = permissions.check_screen_recording()
+        ok, reason = permissions.ax_smoke()
+        out["ax_smoke_ok"], out["ax_smoke_reason"] = ok, reason
+    except Exception as exc:
+        log.warning("screen_vision_perm_probe_failed", error=str(exc))
+    return out
+
+
 def gather_health_sync() -> HealthReport:
     free, total = _disk_gb()
     pct, charging = _battery()
     return HealthReport(
+        **_screen_vision_perms(),
         uptime_s=_uptime_s(),
         disk_free_gb=free,
         disk_total_gb=total,
