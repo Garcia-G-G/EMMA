@@ -30,7 +30,7 @@ unsure what to put in place, leave a TODO and ask — do not invent.
 
 ## What Emma is
 
-Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~120 tools, and maintains long-term memory in a local SQLite store.
+Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~185 tools (filtered per machine to what can actually run — see the tool-budget convention), and maintains long-term memory in a local SQLite store.
 
 ## Commands
 
@@ -145,22 +145,65 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 - **Crash reports**: Written to `~/Library/Logs/Emma/crashes/`. Rate-limited Terminal auto-open (3 per 60s). The `say` command (not the Realtime API) speaks the failure.
 - **Service lifecycle**: Runs as a launchd agent (`com.garcia.emma`). Dev mode disables the agent and opens a Terminal with resume instructions. Exit 0 = stay stopped; exit 1 = launchd restarts.
 
+## Tool budget convention (mandatory)
+
+Every tool advertised in `session.update` costs **~60 input tokens on every
+turn** (measured against gpt-realtime-2). There is **no 128-tool ceiling** in
+the Realtime API — the server echoes back all 183 tools and still selects the
+one at index 127 — so this is a cost guard, not a correctness one. Never
+"fix" a count by deleting a working tool.
+
+When adding a tool:
+1. If it needs a credential, a CLI, or a binary the installer does not
+   provide, give its module a `def available() -> bool` (or the tool a
+   `@tool(available=...)`). Probes live in `tools/availability.py` and must do
+   no slow I/O — they run on every session build.
+2. Keep the advertised count under `REALTIME_TOOL_BUDGET`
+   (`config/settings.py`). `tests/test_tool_budget.py` fails if it drifts.
+3. Names are unique per module: `tools/base.py` raises
+   `ToolNameCollisionError` when two modules claim one name.
+
 ## Permissions convention (mandatory)
 
 Every TCC permission Emma needs is requested **upfront at install time** via
-`python -m emma.permissions bootstrap` (installer step 7.5, before the
-LaunchAgent loads). No permission may surface as a surprise pop-up during use.
+`python -m emma.permissions bootstrap` (installer **step 6/8**, after the
+daemon's app bundle is built at 5.5 and before the LaunchAgent loads at 7).
+No permission may surface as a surprise pop-up during use.
+
+**Opening a Settings pane is not requesting a permission.** macOS creates the
+row only when the process calls the request API — `AXIsProcessTrustedWithOptions`
+with `kAXTrustedCheckOptionPrompt` for Accessibility,
+`CGRequestScreenCaptureAccess()` for Screen Recording. Emma shipped for months
+opening panes it had no row in, which is why screen vision never worked once.
+`_MANUAL_PANES` carries the requester per pane; a pane with `None` there
+genuinely has no request API (Full Disk Access is toggle-only; Calendars is
+requested by EventKit on first real use).
+
+**The bootstrap runs as the daemon's own binary**
+(`~/.emma/EmmaDaemon.app/Contents/MacOS/emma-daemon`), because TCC grants
+belong to an executable. Asking from one binary and reading the screen from
+another means the grant belongs to someone else.
+
+**Probe the permission, not a proxy for it.** `check_accessibility_ax()` reads
+`AXIsProcessTrusted`. The old `check_accessibility()` shelled out to osascript
+and asked System Events for a process list — an *Automation* grant — and
+returned True with AX fully denied; it survives, honestly named, as
+`check_system_events_automation()`. Prefer a functional check where one is
+cheap: `permissions.ax_smoke()` catches trusted-but-dead, which the TCC read
+alone cannot.
 
 When adding a tool or feature that needs a new permission:
 1. Add the app/pane to the bootstrap list in `core/permissions.py`
-   (`_AUTOMATION_APPS` or `_MANUAL_PANES`).
-2. Add or extend the corresponding probe function (`check_*`).
+   (`_AUTOMATION_APPS` or `_MANUAL_PANES`, the latter with its requester).
+2. Add or extend the corresponding probe function (`check_*`), and wire it
+   into `preflight()` AND `emma/permissions.py:_check` — a probe with no
+   callers is how Screen Recording went unrequested for its whole life.
 3. Verify the install script re-runs cleanly end-to-end.
 4. Document the new permission in the prompt that adds the feature.
 
 Permissions covered today: Microphone, Automation (Calendar, Mail, Messages,
-Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility, Full Disk
-Access.
+Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility,
+Screen Recording, Calendars, Full Disk Access.
 
 ## Security convention (mandatory)
 
@@ -212,11 +255,19 @@ No .pkg, no notarization, no Apple Developer Program. The installer
 - Downloads the sherpa-onnx KWS wake-word model to `~/.emma/sherpa-kws`
 - Pairs interactively via `emma --first-run --pair` (RFC 8628), FOREGROUND
   and BEFORE the LaunchAgent loads so failures surface in the terminal
+- Builds `~/.emma/EmmaDaemon.app` (step 5.5) — the daemon's TCC identity. Its
+  `Contents/MacOS/emma-daemon` is a re-signed copy of the interpreter, so
+  permission grants attach to Emma rather than to the uv-managed Python every
+  uv project on the machine shares. Falls back to the venv python if the build
+  or its import smoke test fails
 - Registers a LaunchAgent labelled `com.emma.daemon` (generic, public-copy
-  safe), booting out any legacy `com.garcia.emma` agent first
+  safe) pointing at that bundle binary, booting out any legacy
+  `com.garcia.emma` agent first
 
 Uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh` — removes
 `~/.emma`, both LaunchAgent labels, the logs, and the Secret-tier Keychain
-entries (`device_token`, `OPENAI_API_KEY` under the `com.garcia.emma` service).
+entries (`device_token`, `OPENAI_API_KEY` under the `com.garcia.emma` service),
+and resets the `com.emma.daemon` TCC grants so no permission row outlives the
+app it pointed at.
 
 The installer is idempotent — re-running upgrades in place.
