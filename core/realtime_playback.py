@@ -47,6 +47,8 @@ from pipecat.transports.local.audio import (
     LocalAudioTransportParams,
 )
 
+from core.realtime_session_audit import SessionUpdateAuditMixin
+
 log = structlog.get_logger("emma.realtime_playback")
 
 _BYTES_PER_SAMPLE = 2  # 16-bit PCM
@@ -133,13 +135,17 @@ class PlaybackTrackingLocalAudioTransport(LocalAudioTransport):
         return self._output
 
 
-class TruncateAccurateRealtimeLLMService(OpenAIRealtimeLLMService):
+class TruncateAccurateRealtimeLLMService(SessionUpdateAuditMixin, OpenAIRealtimeLLMService):
     """OpenAIRealtimeLLMService with playback-accurate barge-in truncation.
 
     Truncates the barged-in item at the played position from ``playback_clock``
     (clamped to bytes actually received) instead of the wall-clock heuristic, and
     drops any trailing deltas for an item it already truncated so no audio plays
     past the interruption.
+
+    Also carries ``SessionUpdateAuditMixin`` (listed first so its overrides win):
+    it logs what the server echoed for ``session.update`` and suppresses
+    pipecat's duplicate send. See ``core/realtime_session_audit.py``.
     """
 
     def __init__(self, *args: Any, playback_clock: PlaybackClock, **kwargs: Any) -> None:
