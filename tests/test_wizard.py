@@ -13,7 +13,8 @@ def test_check_permissions_maps_and_survives_errors(monkeypatch) -> None:
     from core import permissions
 
     monkeypatch.setattr(permissions, "check_microphone", lambda: True)
-    monkeypatch.setattr(permissions, "check_accessibility", lambda: False)
+    monkeypatch.setattr(permissions, "check_accessibility_ax", lambda: False)
+    monkeypatch.setattr(permissions, "check_screen_recording", lambda: True)
     monkeypatch.setattr(permissions, "check_calendar", lambda: True)
 
     def boom() -> bool:
@@ -21,7 +22,8 @@ def test_check_permissions_maps_and_survives_errors(monkeypatch) -> None:
 
     monkeypatch.setattr(permissions, "check_automation", boom)
     assert wiz.check_permissions() == {
-        "microphone": True, "accessibility": False, "calendar": True, "automation": False,
+        "microphone": True, "accessibility": False, "screen_recording": True,
+        "calendar": True, "automation": False,
     }
 
 

@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -141,8 +142,81 @@ def check_screen_recording() -> bool:
         return False
 
 
-def check_accessibility() -> bool:
-    """Probe an AppleScript that needs Accessibility access."""
+def check_accessibility_ax() -> bool:
+    """True if THIS process is Accessibility-trusted (AXIsProcessTrusted).
+
+    The only probe that answers the question screen vision actually asks. It
+    reads the TCC decision for the running executable — no prompt, no
+    subprocess, no proxy.
+
+    Historical note, because it cost the project a whole feature: the probe
+    that used to live under the name ``check_accessibility`` shelled out to
+    ``osascript`` and asked System Events for a process list. That measures an
+    *Automation* grant against System Events, which is a different permission
+    entirely, and it returns True while AX is fully denied. Prompt 27 read
+    "granted" off it, concluded no permission work was needed
+    (``_planning/prompts/27-screen-vision-accessibility.md:11-13``), and shipped
+    a screen-vision feature that could never work. The old probe still exists,
+    correctly named, as ``check_system_events_automation``.
+    """
+    try:
+        from ApplicationServices import AXIsProcessTrusted
+
+        return bool(AXIsProcessTrusted())
+    except Exception as exc:
+        log.warning("ax_trust_probe_failed", error=str(exc))
+        return False
+
+
+def request_accessibility_trust() -> bool:
+    """Ask macOS for Accessibility trust, showing the system alert.
+
+    THE call that makes Emma exist in System Settings → Privacy & Security →
+    Accessibility. A process gets a row there only after calling
+    ``AXIsProcessTrustedWithOptions`` with the prompt option — opening the pane
+    without this shows the user a list Emma is simply not in, which is what
+    Emma did for its whole history.
+
+    Returns current trust (False on the first run: the alert is asynchronous
+    and the user has not toggled anything yet).
+    """
+    try:
+        from ApplicationServices import (
+            AXIsProcessTrustedWithOptions,
+            kAXTrustedCheckOptionPrompt,
+        )
+
+        return bool(AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True}))
+    except Exception as exc:
+        log.warning("ax_trust_request_failed", error=str(exc))
+        return False
+
+
+def request_screen_recording() -> bool:
+    """Ask macOS for Screen Recording, showing the system alert.
+
+    Same story as Accessibility: ``CGPreflightScreenCaptureAccess`` (what
+    ``check_screen_recording`` reads) never creates the row —
+    ``CGRequestScreenCaptureAccess`` does. Without it ``screencapture`` returns
+    a desktop-only image with rc==0, so ``core/visual_screen.py`` cannot even
+    tell that it failed.
+    """
+    try:
+        import Quartz
+
+        return bool(Quartz.CGRequestScreenCaptureAccess())
+    except Exception as exc:
+        log.warning("screen_recording_request_failed", error=str(exc))
+        return False
+
+
+def check_system_events_automation() -> bool:
+    """True if osascript may drive System Events (an *Automation* grant).
+
+    Used by UI-scripting paths (``tools/safari_tool.bookmark_current`` and the
+    app-control keystroke tools). Renamed from ``check_accessibility``, which
+    is what it was never measuring — see ``check_accessibility_ax``.
+    """
     try:
         proc = subprocess.run(
             [
@@ -156,7 +230,7 @@ def check_accessibility() -> bool:
         )
         return proc.returncode == 0
     except Exception as exc:
-        log.warning("accessibility_probe_failed", error=str(exc))
+        log.warning("system_events_automation_probe_failed", error=str(exc))
         return False
 
 
@@ -192,6 +266,37 @@ def check_automation() -> bool:
         return False
 
 
+def ax_smoke() -> tuple[bool, str]:
+    """Does the Accessibility API actually return anything? (ok, reason)
+
+    Measures the thing rather than a proxy. ``AXUIElementCreateApplication``
+    succeeds without any permission — it only mints a handle — so the first
+    call that can distinguish granted from denied is a real attribute read.
+
+    The tell: ``NSWorkspace`` reports a frontmost app (that needs no
+    permission) while ``frontmost_window()`` returns None (that needs AX).
+    A Mac with a focused app always has a focused window; the asymmetry is the
+    signature of a TCC denial, not of an empty desktop.
+
+    Reasons: ``ok`` | ``ax_denied`` | ``no_frontmost_app`` (screen locked, or
+    login window — inconclusive, not a denial) | ``probe_error:<x>``.
+    """
+    try:
+        from AppKit import NSWorkspace
+
+        from core import screen_vision
+
+        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if app is None:
+            return (True, "no_frontmost_app")
+        if screen_vision.frontmost_window() is not None:
+            return (True, "ok")
+        return (False, "ax_denied")
+    except Exception as exc:
+        # An import/runtime failure is not evidence of a denial.
+        return (True, f"probe_error:{exc}")
+
+
 def preflight() -> bool:
     """Run all permission checks at startup. Returns True if Emma can proceed."""
     proceed = True
@@ -205,10 +310,38 @@ def preflight() -> bool:
         )
         _open_settings("Microphone")
 
-    if not check_accessibility():
-        log.warning("accessibility_denied_or_pending")
+    # Accessibility: the real AX-trust probe, plus a functional smoke test.
+    # Both, because they can disagree: AXIsProcessTrusted reads the TCC row,
+    # the smoke test proves the API actually answers. A stale grant against a
+    # replaced binary shows up as trusted-but-dead, and that is precisely the
+    # failure that went unnoticed for the life of this feature.
+    ax_trusted = check_accessibility_ax()
+    smoke_ok, smoke_reason = ax_smoke()
+    if not ax_trusted or not smoke_ok:
+        log.error(
+            "ax_denied",
+            trusted=ax_trusted,
+            smoke=smoke_reason,
+            hint="screen vision returns 'no veo una ventana' until this is granted",
+        )
+        _say(
+            "No tengo permiso de accesibilidad, así que no puedo leer la pantalla. "
+            "Abre Configuración del Sistema, Privacidad y Seguridad, Accesibilidad, "
+            "y activa Emma."
+        )
         _open_settings("Accessibility")
-        # Not fatal - many tools still work.
+        # Not fatal — everything that isn't screen vision still works.
+    else:
+        log.info("ax_ok", smoke=smoke_reason)
+
+    if not check_screen_recording():
+        # The look_at_screen fallback silently returns a blank desktop capture
+        # without this, so it has to be visible.
+        log.error("screen_recording_denied")
+        _open_settings("ScreenCapture")
+
+    if not check_system_events_automation():
+        log.warning("system_events_automation_pending")
 
     if not check_automation():
         log.warning("automation_pending")
@@ -261,23 +394,36 @@ _AUTOMATION_QUERIES = {
 # click Allow on the dialog before triggering the next app's ping.
 _DWELL_AFTER_DIALOG_S = 4.0
 
-# Permissions Apple does not let us trigger programmatically.
-# We open the Settings pane and speak instructions.
-_MANUAL_PANES: tuple[tuple[Pane, str], ...] = (
+# Panes the user toggles by hand. Each entry is (pane, spoken instruction,
+# requester) where `requester` is the API that makes macOS CREATE the row —
+# without it the pane opens on a list Emma is not in, and there is nothing to
+# toggle. That was the bug: Accessibility and Screen Recording were "requested"
+# by opening a Settings pane and hoping. Only Full Disk Access and Calendars
+# genuinely have no request API (the first is toggle-only; the second is
+# requested by EventKit on first real use via actions/calendar_store).
+_MANUAL_PANES: tuple[tuple[Pane, str, Callable[[], bool] | None], ...] = (
     (
         "Accessibility",
-        "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas.",
+        "Necesito permiso de accesibilidad para leer la pantalla cuando me lo pidas. "
+        "Acepta la alerta y activa Emma en la lista.",
+        request_accessibility_trust,
     ),
-    ("AllFiles", "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas."),
+    (
+        "AllFiles",
+        "Necesito acceso a tu disco para leer mensajes y correos cuando me lo pidas.",
+        None,
+    ),
     (
         "ScreenCapture",
         "Necesito permiso de Grabación de pantalla para leer la pantalla con visión "
         "(captura + OCR local) cuando me lo pidas.",
+        request_screen_recording,
     ),
     (
         "Calendars",
         "Necesito acceso a Calendarios para leer tu agenda. Actívalo para Emma en "
         "Privacidad y Seguridad, Calendarios.",
+        None,
     ),
 )
 
@@ -375,13 +521,29 @@ async def bootstrap() -> dict[str, Any]:
         # to actually click Allow before the next app's ping fires.
         await asyncio.sleep(_DWELL_AFTER_DIALOG_S)
 
-    # 3. Manual panes (Accessibility, Full Disk Access)
-    for pane, instruction in _MANUAL_PANES:
+    # 3. Manual panes (Accessibility, Screen Recording, Full Disk Access, Calendars)
+    for pane, instruction, requester in _MANUAL_PANES:
         print(f"→ Manual: {pane}")
         _say(instruction)
+        if requester is not None:
+            # Fire the API that CREATES the row before opening the pane. macOS
+            # shows its own "wants to control this computer" alert here; the
+            # return is the state *before* the user answers, so False on a
+            # first run is expected, not a failure.
+            granted = requester()
+            results[pane] = "granted" if granted else "requested"
+            print(f"   {'ya estaba concedido' if granted else 'alerta mostrada'}")
+        else:
+            results[pane] = "settings_opened"
         _open_settings(pane)
-        results[pane] = "settings_opened"
         await asyncio.sleep(6)  # manual panes need a longer dwell to interact
+
+    # Re-probe the two we can actually read back, so the recap reports the
+    # user's answer rather than what we asked for.
+    results["Accessibility"] = "granted" if check_accessibility_ax() else results["Accessibility"]
+    results["ScreenCapture"] = (
+        "granted" if check_screen_recording() else results["ScreenCapture"]
+    )
 
     # Recap
     print("\n=== Resumen ===")
