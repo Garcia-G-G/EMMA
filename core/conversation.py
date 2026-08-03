@@ -101,7 +101,7 @@ from memory import episodic
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
-from tools.registry import dispatch, get_tool, openai_tool_specs
+from tools.registry import dispatch, get_tool, list_tools, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
 
@@ -1541,11 +1541,13 @@ async def build_pipeline(
 
     session_control = SessionControl()
     function_handler = _make_function_handler(session_control)
-    for spec in openai_tool_specs():
-        fn = spec.get("function", spec)
-        name = fn.get("name")
-        if name:
-            llm.register_function(name, function_handler)
+    # Register a handler for EVERY registered tool, not just the advertised
+    # subset. Availability filtering decides what the model is told about; it
+    # must not decide what Emma can execute. A model that calls an unadvertised
+    # name (stale context, a hallucinated call) then reaches the normal dispatch
+    # path and gets a real ToolResult instead of an unhandled function call.
+    for name in list_tools():
+        llm.register_function(name, function_handler)
 
     context = LLMContext(messages=_session_seed_messages(immediate_command))
     assistant_aggregator = LLMAssistantAggregator(context)
@@ -1652,7 +1654,17 @@ async def run_session(immediate_command: bool = False) -> None:
     global _active_task
     _active_task = task  # expose for the menubar "Parar" control
     runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
-    log.info("conversation_start", voice=settings.REALTIME_VOICE, tools=len(openai_tool_specs()))
+    # `advertised` is what actually goes on the wire (after availability
+    # filtering + the budget); `registered` is the whole registry. The gap is
+    # the tools that can't run on this machine. What the SERVER acknowledged is
+    # logged separately as `session_update_acked` / `session_tools_mismatch`
+    # by SessionUpdateAuditMixin — this line is only the client's side.
+    log.info(
+        "conversation_start",
+        voice=settings.REALTIME_VOICE,
+        tools=len(openai_tool_specs()),
+        registered=len(list_tools()),
+    )
     try:
         await task.queue_frame(LLMContextFrame(context=context))
         await runner.run(task)
