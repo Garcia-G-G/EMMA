@@ -63,13 +63,33 @@ def _frontmost_window_id() -> int | None:
     return None
 
 
+def _screen_recording_ok() -> bool:
+    """Screen Recording granted? Separate seam so tests can drive both branches."""
+    from core import permissions
+
+    return permissions.check_screen_recording()
+
+
 def _capture(window_id: int | None) -> bytes | None:
     """Screenshot → PNG bytes (window-scoped if id given), temp file deleted after.
 
     ``-x`` silences the shutter sound; ``-o`` drops the window shadow. Returns
-    None on any failure (e.g. Screen Recording permission not granted) — callers
-    degrade honestly rather than crash.
+    None on any failure — callers degrade honestly rather than crash.
+
+    The permission check has to come first and cannot be inferred from the exit
+    code: without Screen Recording, ``screencapture`` writes a desktop-only /
+    wallpaper-only PNG and exits **0**, so the ``rc != 0`` guard below never
+    fires. OCR then returns [] and the user is told "no encontré texto legible"
+    — a content problem — when the truth is a missing permission. Checking
+    ``CGPreflightScreenCaptureAccess`` up front is what turns that into an
+    honest failure.
     """
+    if not _screen_recording_ok():
+        log.error(
+            "screen_recording_denied",
+            hint="screencapture would return a blank desktop image with rc=0",
+        )
+        return None
     # mkstemp (not mktemp): atomic create owned 0600 by us, no TOCTOU race.
     fd, path = tempfile.mkstemp(suffix=".png")
     os.close(fd)

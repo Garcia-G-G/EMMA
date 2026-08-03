@@ -42,7 +42,10 @@ def check_permissions() -> dict[str, bool]:
 
     checks = {
         "microphone": permissions.check_microphone,
-        "accessibility": permissions.check_accessibility,
+        # Real AX trust, not the System Events Automation proxy that used to
+        # sit here and report "granted" while screen vision was stone dead.
+        "accessibility": permissions.check_accessibility_ax,
+        "screen_recording": permissions.check_screen_recording,
         "calendar": permissions.check_calendar,
         "automation": permissions.check_automation,
     }

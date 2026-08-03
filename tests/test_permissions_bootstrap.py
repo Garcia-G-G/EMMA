@@ -56,7 +56,7 @@ def test_bootstrap_pings_every_automation_app_and_opens_every_pane() -> None:
 
     # one Settings pane opened per manual permission, in order
     opened = [c.args[0] for c in open_settings.call_args_list]
-    assert opened == [pane for pane, _ in _MANUAL_PANES]
+    assert opened == [pane for pane, _, _ in _MANUAL_PANES]
 
     # spoken context fired (mic + each app + each pane + closing line)
     assert say.call_count >= len(_AUTOMATION_APPS) + len(_MANUAL_PANES)
@@ -81,7 +81,7 @@ def test_check_command_exits_zero_even_when_probes_false() -> None:
 
     with (
         patch("core.permissions.check_microphone", return_value=False),
-        patch("core.permissions.check_accessibility", return_value=False),
+        patch("core.permissions.check_accessibility_ax", return_value=False),
         patch("core.permissions.check_automation", return_value=False),
     ):
         rc = main(["check"])

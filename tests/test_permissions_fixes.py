@@ -125,7 +125,7 @@ def test_dwell_constant_is_at_least_four_seconds() -> None:
 
 def test_calendars_pane_in_manual_panes() -> None:
     """The Calendars TCC pane must be wired into the bootstrap walkthrough."""
-    panes = [pane for pane, _ in permissions._MANUAL_PANES]
+    panes = [pane for pane, _, _ in permissions._MANUAL_PANES]
     assert "Calendars" in panes
 
 

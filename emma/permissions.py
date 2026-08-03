@@ -21,9 +21,15 @@ from core import permissions
 def _check() -> int:
     """Probe each permission and print its state. Always exits 0."""
     probes = {
+        # Accessibility reads real AX trust for THIS process. It used to call a
+        # probe that asked osascript about System Events — an Automation grant —
+        # and printed "granted" while screen vision could not read a thing.
+        "Accessibility": permissions.check_accessibility_ax,
+        "ScreenRecording": permissions.check_screen_recording,
         "Microphone": permissions.check_microphone,
-        "Accessibility": permissions.check_accessibility,
         "Automation": permissions.check_automation,
+        "SystemEventsAutomation": permissions.check_system_events_automation,
+        "Calendars": permissions.check_calendar,
     }
     for name, fn in probes.items():
         try:
@@ -31,6 +37,12 @@ def _check() -> int:
         except Exception as exc:  # never fail the check command
             status = f"error: {exc}"
         print(f"{name}: {status}")
+
+    # A functional check on top of the TCC read: trusted-but-dead is possible
+    # (a grant left behind against a binary that has since been replaced), and
+    # it looks identical to healthy from the probe alone.
+    ok, reason = permissions.ax_smoke()
+    print(f"AccessibilitySmoke: {'ok' if ok else 'FAILED'} ({reason})")
     return 0
 
 
