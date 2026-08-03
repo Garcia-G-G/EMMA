@@ -248,6 +248,37 @@ def _git_info() -> dict:
         return {"branch": "unknown", "commit": "unknown"}
 
 
+def _permissions_card() -> dict:
+    """Screen-vision permissions, the pair that silently killed the feature.
+
+    Reported from the dashboard process, so it answers "does THIS process have
+    AX" — read it as an indicator of the grant's health, not of the daemon's
+    own identity when the two run as different executables.
+    """
+    try:
+        from core import permissions
+
+        ax = permissions.check_accessibility_ax()
+        rec = permissions.check_screen_recording()
+        smoke_ok, smoke_reason = permissions.ax_smoke()
+    except Exception as exc:
+        return {"ok": None, "error": str(exc)}
+    healthy = ax and smoke_ok
+    return {
+        "ok": bool(healthy and rec),
+        "accessibility": ax,
+        "accessibility_smoke": smoke_reason,
+        "screen_recording": rec,
+        "detail": (
+            "screen vision ready"
+            if healthy and rec
+            else "Accessibility missing — screen vision returns 'no veo una ventana'"
+            if not healthy
+            else "Screen Recording missing — look_at_screen captures a blank desktop"
+        ),
+    }
+
+
 def build_state() -> dict:
     emma = _emma_running()
     stats = _parse_log_events()
@@ -261,6 +292,7 @@ def build_state() -> dict:
         "issues": _known_issues(),
         "crashes": _recent_crashes(),
         "git": _git_info(),
+        "permissions": _permissions_card(),
     }
 
 

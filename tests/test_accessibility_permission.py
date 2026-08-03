@@ -283,3 +283,86 @@ def test_capture_proceeds_when_granted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(visual_screen.subprocess, "run", _run)
     assert visual_screen._capture(None) == b"PNGBYTES"
     assert ran and ran[0][0].endswith("screencapture")
+
+
+# --- Emma can say she is blind (Part 4) ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_diagnose_self_explains_a_missing_accessibility_grant() -> None:
+    """The answer to "¿por qué no ves la pantalla?" that did not exist before."""
+    from tools.diagnostics_tool import diagnose_self
+
+    with (
+        patch("core.permissions.check_accessibility_ax", return_value=False),
+        patch("core.permissions.ax_smoke", return_value=(False, "ax_denied")),
+        patch("core.permissions.check_screen_recording", return_value=True),
+    ):
+        r = await diagnose_self()
+    assert r.data["screen_vision_ok"] is False
+    assert r.data["accessibility_trusted"] is False
+    msg = r.user_message.lower()
+    assert "no puedo leer la pantalla" in msg
+    assert "accesibilidad" in msg
+
+
+@pytest.mark.asyncio
+async def test_diagnose_self_distinguishes_screen_recording() -> None:
+    from tools.diagnostics_tool import diagnose_self
+
+    with (
+        patch("core.permissions.check_accessibility_ax", return_value=True),
+        patch("core.permissions.ax_smoke", return_value=(True, "ok")),
+        patch("core.permissions.check_screen_recording", return_value=False),
+    ):
+        r = await diagnose_self()
+    msg = r.user_message.lower()
+    assert "grabación de pantalla" in msg
+    assert "no puedo leer la pantalla" not in msg  # AX is fine; only capture is not
+
+
+@pytest.mark.asyncio
+async def test_diagnose_self_stays_quiet_when_permissions_are_fine() -> None:
+    from tools.diagnostics_tool import diagnose_self
+
+    with (
+        patch("core.permissions.check_accessibility_ax", return_value=True),
+        patch("core.permissions.ax_smoke", return_value=(True, "ok")),
+        patch("core.permissions.check_screen_recording", return_value=True),
+    ):
+        r = await diagnose_self()
+    assert r.data["screen_vision_ok"] is True
+    assert "permiso" not in r.user_message.lower()
+
+
+def test_health_report_screen_vision_needs_both_signals() -> None:
+    """Trusted-but-dead must not read as healthy."""
+    from core.diagnostics import HealthReport
+
+    def _h(**kw: Any) -> HealthReport:
+        base = dict(
+            uptime_s=None, disk_free_gb=None, disk_total_gb=None, battery_pct=None,
+            charging=None, thermal=None, facts_count=None, last_reflection_ago_s=None,
+            last_error=None, mic_rms=None,
+        )
+        base.update(kw)
+        return HealthReport(**base)  # type: ignore[arg-type]
+
+    assert _h(ax_trusted=True, ax_smoke_ok=True).screen_vision_ok is True
+    assert _h(ax_trusted=True, ax_smoke_ok=False).screen_vision_ok is False
+    assert _h(ax_trusted=False, ax_smoke_ok=True).screen_vision_ok is False
+    assert _h().screen_vision_ok is False  # unprobed is not "fine"
+
+
+def test_dashboard_reports_permission_state() -> None:
+    from dashboard.server import _permissions_card
+
+    with (
+        patch("core.permissions.check_accessibility_ax", return_value=False),
+        patch("core.permissions.ax_smoke", return_value=(False, "ax_denied")),
+        patch("core.permissions.check_screen_recording", return_value=True),
+    ):
+        card = _permissions_card()
+    assert card["ok"] is False
+    assert card["accessibility"] is False
+    assert "Accessibility missing" in card["detail"]

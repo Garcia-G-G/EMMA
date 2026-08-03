@@ -49,11 +49,31 @@ async def diagnose_self() -> ToolResult:
     tail = f" Último error: {h.last_error}." if h.last_error else " Sin errores recientes."
     spoken = f"{head}. " + (", ".join(bits) + "." if bits else "") + tail
 
+    # Screen vision. Say it plainly and say what to do — this is the answer to
+    # "¿por qué no ves la pantalla?", which Emma previously had no way to give:
+    # every read tool just said "no veo una ventana enfocada" with no reason.
+    if h.ax_trusted is not None and not h.screen_vision_ok:
+        spoken += (
+            " Ahora mismo no puedo leer la pantalla: me falta el permiso de "
+            "accesibilidad. Actívame en Configuración del Sistema, Privacidad y "
+            "Seguridad, Accesibilidad."
+        )
+    elif h.screen_recording is False:
+        spoken += (
+            " Puedo leer la pantalla por accesibilidad, pero no tomar capturas: "
+            "me falta el permiso de Grabación de pantalla."
+        )
+
     data = {
         "uptime_s": h.uptime_s, "openai_rtt_ms": rtt, "mic_rms": h.mic_rms,
         "facts_count": h.facts_count, "last_reflection_ago_s": h.last_reflection_ago_s,
         "disk_free_gb": h.disk_free_gb, "battery_pct": h.battery_pct,
         "charging": h.charging, "thermal": h.thermal, "last_error": h.last_error,
+        "accessibility_trusted": h.ax_trusted,
+        "accessibility_smoke_ok": h.ax_smoke_ok,
+        "accessibility_smoke_reason": h.ax_smoke_reason,
+        "screen_recording": h.screen_recording,
+        "screen_vision_ok": h.screen_vision_ok,
     }
     return ToolResult(True, data, spoken.strip(), False)
 
