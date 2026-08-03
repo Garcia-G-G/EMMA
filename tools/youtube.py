@@ -13,6 +13,11 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.youtube")
 
+def available() -> bool:
+    """Both tools short-circuit on a missing YOUTUBE_API_KEY (:64, :146)."""
+    return bool(settings.YOUTUBE_API_KEY)
+
+
 _API = "https://www.googleapis.com/youtube/v3"
 
 

@@ -14,6 +14,15 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.speaker")
 
+
+def available() -> bool:
+    """Speaker ID needs resemblyzer, an optional ``[speaker]`` extra.
+
+    ``core.speaker._available()`` memoizes the ``find_spec`` lookup, so this is
+    a dict read after the first call.
+    """
+    return speaker.enabled()
+
 _ENROLL_SECONDS = 5
 _SR = 16000
 

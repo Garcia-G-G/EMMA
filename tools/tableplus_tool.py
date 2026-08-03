@@ -23,9 +23,19 @@ from pathlib import Path
 import structlog
 
 from core import dictionary
+from tools import availability
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.tableplus")
+
+def available() -> bool:
+    """Needs the TablePlus CLI, which ships inside the app bundle (:46-49)."""
+    return (
+        availability.has_binary("tableplus-cli")
+        or availability.has_binary("tableplus")
+        or availability.has_path("/Applications/TablePlus.app/Contents/MacOS/tableplus-cli")
+    )
+
 
 _WRITE_KEYWORDS = (
     "insert", "update", "delete", "drop", "alter", "create", "truncate",

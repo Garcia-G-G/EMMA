@@ -36,12 +36,25 @@ from actions.environment import (
     smoke_launch,
 )
 from core import dev_state, runtime
+from tools import availability
 from tools.base import ToolResult, tool
 from tools.diagnostics import health_check
 
 log = structlog.get_logger("emma.tools.dev")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def available() -> bool:
+    """Dev-machine only — never advertise these on a user install.
+
+    Both tools assume a git checkout (``:57`` shells out to ``git -C REPO_ROOT``,
+    which a release-tarball install has no ``.git`` for) and ``:123``/``:133-134``
+    drive the legacy ``com.garcia.emma`` LaunchAgent label, while installs
+    register ``com.emma.daemon``. Gating on the checkout keeps them for whoever
+    runs Emma from the repo and hides them from everyone else.
+    """
+    return availability.has_path(REPO_ROOT / ".git")
 
 _APP_NAME_BY_KEY: dict[str, str] = {
     "cursor": "Cursor",

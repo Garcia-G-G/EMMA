@@ -6,6 +6,7 @@ import importlib
 import inspect
 import json
 import pkgutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,8 @@ from tools.base import RegisteredTool, ToolNameCollisionError, ToolResult, get_r
 
 log = structlog.get_logger("emma.tools.registry")
 
-_SKIP = {"base", "registry"}
+# "base"/"registry" hold no tools. "availability" is the probe helpers.
+_SKIP = {"base", "registry", "availability"}
 _discovered = False
 
 
@@ -67,26 +69,83 @@ def get_tool(name: str) -> RegisteredTool | None:
     return get_registry().get(name)
 
 
-def openai_tool_specs() -> list[dict[str, Any]]:
-    """All registered tools formatted for OpenAI's `tools` parameter."""
+def _module_of(entry: RegisteredTool) -> str:
+    return getattr(entry.fn, "__module__", "").rsplit(".", 1)[-1]
+
+
+def _probe(fn: Any, what: str) -> bool:
+    """Run an availability predicate. A broken probe never removes a tool."""
+    try:
+        return bool(fn())
+    except Exception as exc:
+        log.warning("tool_availability_probe_failed", probe=what, error=str(exc))
+        return True
+
+
+def _is_available(entry: RegisteredTool) -> bool:
+    """Can this tool actually do anything on this machine right now?
+
+    Two gates, both cheap and re-evaluated every session: the tool's own
+    ``available=`` predicate, and its module's ``available()`` if it defines
+    one. Unavailable tools stay registered and dispatchable — they are only
+    dropped from the payload sent to the model.
+    """
+    if entry.available is not None and not _probe(entry.available, entry.name):
+        return False
+    module = sys.modules.get(getattr(entry.fn, "__module__", ""))
+    probe = getattr(module, "available", None) if module is not None else None
+    return not (callable(probe) and not _probe(probe, _module_of(entry)))
+
+
+def available_tools() -> list[RegisteredTool]:
+    """Registered tools that can actually run on this machine, deduped."""
     _discover()
     seen: set[str] = set()
-    out: list[dict[str, Any]] = []
+    entries: list[RegisteredTool] = []
     for entry in get_registry().values():
         if entry.name in seen:
             continue
         seen.add(entry.name)
-        out.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": entry.name,
-                    "description": entry.description,
-                    "parameters": entry.parameters,
-                },
-            }
-        )
-    return out
+        if _is_available(entry):
+            entries.append(entry)
+
+    return entries
+
+
+def _spec(entry: RegisteredTool) -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": entry.name,
+            "description": entry.description,
+            "parameters": entry.parameters,
+        },
+    }
+
+
+def openai_tool_specs() -> list[dict[str, Any]]:
+    """Advertisable tools formatted for OpenAI's ``tools`` parameter.
+
+    Tools that cannot run here (no credential, no CLI, no browser binary) are
+    dropped. Every advertised tool costs ~60 input tokens on *every* turn
+    (measured; see _planning/notes/LAUNCH-1-VERIFY.md), so a tool that can only
+    fail is pure cost with zero capability.
+    """
+    return [_spec(e) for e in available_tools()]
+
+
+def unavailable_tools() -> list[str]:
+    """Registered tool names filtered out as unavailable on this machine."""
+    _discover()
+    seen: set[str] = set()
+    out: list[str] = []
+    for entry in get_registry().values():
+        if entry.name in seen:
+            continue
+        seen.add(entry.name)
+        if not _is_available(entry):
+            out.append(entry.name)
+    return sorted(out)
 
 
 async def dispatch(name: str, args: dict[str, Any]) -> ToolResult:

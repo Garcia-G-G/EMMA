@@ -63,6 +63,14 @@ class RegisteredTool:
     # tabs. That text is attacker-reachable, so the function handler fences it in
     # <untrusted_content> before it reaches the model (see core/conversation.py).
     returns_untrusted_content: bool = False
+    # Optional per-tool predicate: "can this run on THIS machine right now?".
+    # Returning False keeps the tool registered and dispatchable but drops it
+    # from the session payload (tools/registry.py:openai_tool_specs), because
+    # every advertised tool costs ~60 input tokens on every turn. Must be
+    # cheap — it runs on every build_pipeline. See tools/availability.py.
+    # A module can gate all of its tools at once with a module-level
+    # ``def available() -> bool`` instead.
+    available: Callable[[], bool] | None = None
 
 
 _REGISTRY: dict[str, RegisteredTool] = {}
@@ -172,8 +180,14 @@ def tool(
     destructive: bool = False,
     aliases: tuple[str, ...] = (),
     returns_untrusted_content: bool = False,
+    available: Callable[[], bool] | None = None,
 ) -> Callable[[F], F]:
-    """Register ``fn`` in the tool registry."""
+    """Register ``fn`` in the tool registry.
+
+    ``available`` gates only whether the tool is *advertised* to the model this
+    session; the tool stays dispatchable either way. Use it when a tool needs a
+    credential or a binary its module-mates don't (see tools/availability.py).
+    """
 
     def decorator(fn: F) -> F:
         key = name or fn.__name__
@@ -185,6 +199,7 @@ def tool(
             destructive=destructive,
             aliases=aliases,
             returns_untrusted_content=returns_untrusted_content,
+            available=available,
         )
         _claim(key, entry)
         for alias in aliases:

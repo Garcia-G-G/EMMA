@@ -19,6 +19,7 @@ from openai import AsyncOpenAI
 from config.settings import settings
 from core import research_budget
 from core.redaction import redact
+from tools import availability
 from tools.base import ToolResult, tool
 from tools.web import search_results
 
@@ -106,7 +107,7 @@ async def _synthesize(query: str, triplets: list[tuple[int, dict[str, str], str]
     return (completion.choices[0].message.content or "").strip()
 
 
-@tool(returns_untrusted_content=True)
+@tool(returns_untrusted_content=True, available=availability.has_web_search)
 async def deep_research(query: str, depth: int = 3) -> ToolResult:
     """Investiga a fondo: busca, lee las mejores fuentes y sintetiza con citas.
 

@@ -9,11 +9,17 @@ from pathlib import Path
 from typing import Any
 
 from core.background import MAX_PARALLEL_TASKS, registry
+from tools import availability
 from tools.base import ToolResult, tool
 
 
 def _claude_available() -> bool:
     return shutil.which("claude") is not None
+
+
+def available() -> bool:
+    """``delegate_to_claude_code`` drives the `claude` CLI; no CLI, no tool."""
+    return availability.has_binary("claude")
 
 
 async def setup_worktree(repo: Path, branch: str) -> Path:

@@ -17,6 +17,11 @@ from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.linear")
 
+def available() -> bool:
+    """The GraphQL call authenticates with LINEAR_API_KEY (:37)."""
+    return bool(settings.LINEAR_API_KEY)
+
+
 _API = "https://api.linear.app/graphql"
 
 

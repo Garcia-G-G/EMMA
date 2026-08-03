@@ -15,6 +15,7 @@ from openai import AsyncOpenAI
 
 from config.settings import settings
 from core.redaction import redact
+from tools import availability
 from tools.base import ToolResult, tool
 
 
@@ -102,7 +103,7 @@ async def search_results(query: str, count: int = 5) -> list[dict[str, str]]:
     return []
 
 
-@tool(returns_untrusted_content=True)
+@tool(returns_untrusted_content=True, available=availability.has_web_search)
 async def search_web(query: str) -> ToolResult:
     """Search the web for `query` and return a short spoken synthesis plus the top results."""
     async with httpx.AsyncClient(timeout=settings.API_TIMEOUT_S) as client:
