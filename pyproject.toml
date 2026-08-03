@@ -98,6 +98,14 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+markers = [
+    # Exercises the REAL macOS AX / Screen Recording APIs on the running
+    # machine — no mocks. Skips loudly (never silently) when the TCC grant is
+    # missing, because a silent skip here is what let screen vision ship broken:
+    # ~50 unit tests passed against an autouse-mocked `_attr` while the live
+    # path returned None for every call. Run with `-m macos_live`.
+    "macos_live: needs a real macOS session with the TCC grants",
+]
 
 [tool.uv]
 package = false
