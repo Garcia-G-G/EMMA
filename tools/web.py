@@ -13,7 +13,6 @@ import httpx
 import structlog
 from openai import AsyncOpenAI
 
-from actions import macos
 from config.settings import settings
 from core.redaction import redact
 from tools.base import ToolResult, tool
@@ -182,16 +181,13 @@ async def search_web(query: str) -> ToolResult:
     return ToolResult(True, {"answer": answer, "results": results}, answer, False)
 
 
-@tool()
-def open_url(url: str) -> ToolResult:
-    """Open a URL in the user's default browser."""
-    if not (url.startswith("http://") or url.startswith("https://")):
-        url = "https://" + url
-    try:
-        macos.open_url(url)
-    except macos.AppleScriptError as exc:
-        return ToolResult(False, None, f"No pude abrir el navegador: {exc}", False)
-    return ToolResult(True, {"url": url}, f"Abriendo {url}.", False)
+# NOTE: `open_url` used to live here too. Three modules registered that name
+# (this one, user_browser, safari_tool); registration was silent last-write-wins
+# and alphabetical import order made THIS one win — the worst of the three
+# (synchronous, ignored the user's preferred browser, no new_window). The
+# canonical tool is now `user_browser.open_url`; Safari-specific opening is
+# `safari_tool.open_url_safari`. tools/base.py now raises on a name collision
+# so this cannot recur silently.
 
 
 @tool(returns_untrusted_content=True)

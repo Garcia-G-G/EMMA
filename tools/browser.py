@@ -8,7 +8,7 @@ Browser-detection policy (phase 06): Emma NEVER automates the user's
 real browser, regardless of preferences. Every Playwright action below
 uses the dedicated Chromium with the persistent profile at
 ``~/.emma/playwright-profile/``. "Open this URL" actions live in
-``tools/web.open_url`` and ``actions.macos.open_url`` and go through
+``tools/user_browser.open_url`` and ``actions.macos.open_url`` and go through
 ``open <url>`` so macOS routes to the user's system default. There is
 no browser-preference memory fact - behavior is determined by the
 action type, not by who the user prefers.

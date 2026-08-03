@@ -68,6 +68,17 @@ class RegisteredTool:
 _REGISTRY: dict[str, RegisteredTool] = {}
 
 
+class ToolNameCollisionError(RuntimeError):
+    """Two @tool functions claimed the same registry key.
+
+    Registration used to be silent last-write-wins, so a duplicate name meant
+    one implementation vanished with no log line and no test failure — that is
+    how three ``open_url`` tools coexisted for months with the worst of the
+    three winning on alphabetical import order. Raising turns a silent
+    capability loss into a startup error.
+    """
+
+
 def _py_type_to_schema(tp: Any) -> dict[str, Any]:
     origin = get_origin(tp)
     args = get_args(tp)
@@ -130,6 +141,31 @@ def _function_to_parameters(fn: ToolFunc) -> dict[str, Any]:
     }
 
 
+def _claim(key: str, entry: RegisteredTool) -> None:
+    """Put ``entry`` in the registry under ``key``, refusing to clobber another tool.
+
+    A name claimed by a *different module* is the bug this guards: registration
+    was silent last-write-wins, so the loser vanished with no log line and no
+    test failure — that is how three ``open_url`` tools coexisted for months
+    with alphabetical import order picking the worst one.
+
+    Re-registering from the *same* module is legitimate and overwrites in
+    place: ``core/diagnostics.py:reload_all_tools`` calls ``importlib.reload``
+    on every tool module, which re-runs each decorator against a brand-new
+    function object for the same name. Comparing modules rather than function
+    identity is what keeps hot-reload working.
+    """
+    existing = _REGISTRY.get(key)
+    if existing is not None and existing.fn.__module__ != entry.fn.__module__:
+        raise ToolNameCollisionError(
+            f"tool name {key!r} is claimed by both "
+            f"{existing.fn.__module__}.{existing.fn.__qualname__} and "
+            f"{entry.fn.__module__}.{entry.fn.__qualname__}. "
+            f"Rename one — registering both silently drops whichever imports first."
+        )
+    _REGISTRY[key] = entry
+
+
 def tool(
     name: str | None = None,
     *,
@@ -150,9 +186,9 @@ def tool(
             aliases=aliases,
             returns_untrusted_content=returns_untrusted_content,
         )
-        _REGISTRY[key] = entry
+        _claim(key, entry)
         for alias in aliases:
-            _REGISTRY[alias] = entry
+            _claim(alias, entry)
         return fn
 
     return decorator
