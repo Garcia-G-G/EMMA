@@ -197,6 +197,12 @@ def test_ax_smoke_never_reports_a_denial_on_probe_error(
 # --- preflight surfaces it --------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _isolated_boot_state(tmp_path, monkeypatch):
+    """boot_guard persists to ~/.emma — never let a test write the real one."""
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
+
+
 def test_preflight_logs_ax_denied_and_speaks_once() -> None:
     with (
         patch("core.permissions.check_microphone", return_value=True),
@@ -366,3 +372,32 @@ def test_dashboard_reports_permission_state() -> None:
     assert card["ok"] is False
     assert card["accessibility"] is False
     assert "Accessibility missing" in card["detail"]
+
+
+# --- LAUNCH-4: the notice must not repeat on every launchd restart ----------
+
+
+def test_denied_notice_is_rate_limited_across_boots() -> None:
+    """LAUNCH-2 speaks on a denial; LAUNCH-4's launchd policy restarts on every
+    non-zero exit. Together, an unthrottled _say repeats the same sentence at a
+    user who already declined, forever. It must fire once per window."""
+    calls = 0
+
+    def _count(*_a: Any, **_k: Any) -> None:
+        nonlocal calls
+        calls += 1
+
+    for _ in range(5):  # five "boots"
+        with (
+            patch("core.permissions.check_microphone", return_value=True),
+            patch("core.permissions.check_accessibility_ax", return_value=False),
+            patch("core.permissions.ax_smoke", return_value=(False, "ax_denied")),
+            patch("core.permissions.check_screen_recording", return_value=True),
+            patch("core.permissions.check_system_events_automation", return_value=True),
+            patch("core.permissions.check_automation", return_value=True),
+            patch("core.permissions.check_calendar", return_value=True),
+            patch("core.permissions._say", side_effect=_count),
+            patch("core.permissions._open_settings"),
+        ):
+            permissions.preflight()
+    assert calls == 1, f"spoke {calls} times across 5 boots — this is the loop"
