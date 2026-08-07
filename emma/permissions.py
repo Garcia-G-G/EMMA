@@ -54,8 +54,13 @@ def _check() -> int:
     print(f"  commit:      {v['commit'] or 'unknown (tarball, no install stamp)'}")
     if v.get("installed_at"):
         print(f"  installed:   {v['installed_at']}")
-    if v["stale"] is True:
-        print(f"  UP TO DATE:  NO — upstream is at {v['upstream']}. Re-run install.sh.")
+    if v["stale"] is True and v["is_checkout"]:
+        # A dev checkout is usually AHEAD of the channel, not behind it. Telling
+        # someone to re-run the installer over their own working tree would be
+        # actively wrong.
+        print(f"  differs from the release channel ({v['upstream']}) — dev checkout")
+    elif v["stale"] is True:
+        print(f"  UP TO DATE:  NO — the channel is at {v['upstream']}. Re-run install.sh.")
     elif v["stale"] is False:
         print("  up to date:  yes")
     else:
