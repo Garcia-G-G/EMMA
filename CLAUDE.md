@@ -150,7 +150,8 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 - **Confirmation flow**: Destructive tools (`destructive=True`) use `requires_confirmation=True` in their first `ToolResult`. The orchestrator re-calls with `confirmed=True` after user assent. `cancelled=True` is opt-in for cleanup on decline.
 - **Self-awareness**: `tools/self_tool.py` regenerates `self/capabilities.md` from the live tool registry at startup. The `describe_capabilities` tool reads this file.
 - **Crash reports**: Written to `~/Library/Logs/Emma/crashes/`. Rate-limited Terminal auto-open (3 per 60s). The `say` command (not the Realtime API) speaks the failure.
-- **Service lifecycle**: Runs as a launchd agent (`com.garcia.emma`). Dev mode disables the agent and opens a Terminal with resume instructions. Exit 0 = stay stopped; exit 1 = launchd restarts.
+- **Service lifecycle**: Runs as a launchd agent (`com.emma.daemon`; the legacy `com.garcia.emma` label is booted out on install). Dev mode disables the agent and opens a Terminal with resume instructions.
+- **Exit codes**: `KeepAlive{SuccessfulExit=false}` restarts on **every** non-zero exit, not just some — so **non-zero means "retry me"** and **0 means "stay down"**. `ThrottleInterval` (30 s) bounds the retry rate; `emma/__main__.py:_terminal_exit` returns non-zero for the first few attempts and then 0, so a config only a human can fix stops respawning. Anything that speaks on a failing boot must go through `core/boot_guard.py:should_speak`, or launchd will repeat it at the user forever.
 
 ## Tool budget convention (mandatory)
 

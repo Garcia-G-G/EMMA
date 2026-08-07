@@ -304,11 +304,14 @@ def preflight() -> bool:
     if not check_microphone():
         proceed = False
         log.error("microphone_denied")
-        _say(
-            "No tengo permiso para usar el micrófono. Abre Configuración del Sistema, "
-            "Privacidad y Seguridad, Micrófono, y activa Emma."
-        )
-        _open_settings("Microphone")
+        from core import boot_guard
+
+        if boot_guard.should_speak("microphone_denied"):
+            _say(
+                "No tengo permiso para usar el micrófono. Abre Configuración del Sistema, "
+                "Privacidad y Seguridad, Micrófono, y activa Emma."
+            )
+            _open_settings("Microphone")
 
     # Accessibility: the real AX-trust probe, plus a functional smoke test.
     # Both, because they can disagree: AXIsProcessTrusted reads the TCC row,
@@ -324,12 +327,20 @@ def preflight() -> bool:
             smoke=smoke_reason,
             hint="screen vision returns 'no veo una ventana' until this is granted",
         )
-        _say(
-            "No tengo permiso de accesibilidad, así que no puedo leer la pantalla. "
-            "Abre Configuración del Sistema, Privacidad y Seguridad, Accesibilidad, "
-            "y activa Emma."
-        )
-        _open_settings("Accessibility")
+        # Rate-limited ACROSS restarts. This runs on every boot, and launchd
+        # restarts the daemon on any non-zero exit — so an unthrottled _say here
+        # repeats the same sentence at a user who already declined, forever.
+        # Same discipline as the crash-report path's rate-limited Terminal
+        # auto-open (CLAUDE.md), not a second invented mechanism.
+        from core import boot_guard
+
+        if boot_guard.should_speak("ax_denied"):
+            _say(
+                "No tengo permiso de accesibilidad, así que no puedo leer la pantalla. "
+                "Abre Configuración del Sistema, Privacidad y Seguridad, Accesibilidad, "
+                "y activa Emma."
+            )
+            _open_settings("Accessibility")
         # Not fatal — everything that isn't screen vision still works.
     else:
         log.info("ax_ok", smoke=smoke_reason)

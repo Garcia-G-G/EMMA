@@ -1644,7 +1644,11 @@ async def run_session(immediate_command: bool = False) -> None:
             present=bool(_cred),
             length=len(_cred or ""),
         )
-        raise SystemExit(2)  # non-zero exit; launchd KeepAlive treats as real failure
+        # NOTE: KeepAlive{SuccessfulExit=false} restarts on EVERY non-zero exit
+        # (the old comment here claimed the opposite). The plist's
+        # ThrottleInterval bounds the retry rate; emma/__main__._terminal_exit
+        # decides when to stop retrying altogether.
+        raise SystemExit(2)
 
     # 22.1-B35.3: repeated zombies mean OpenAI is degraded — back off instead
     # of hammering reconnects. Transient; never an exit.

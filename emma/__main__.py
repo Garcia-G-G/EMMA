@@ -14,7 +14,6 @@ import logging
 import logging.handlers
 import os
 import signal
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,7 +22,7 @@ from typing import Any
 import structlog
 
 from config.settings import settings
-from core import orchestrator, permissions
+from core import boot_guard, orchestrator, permissions
 from core.crash_handler import handle_crash
 from core.redaction import redaction_processor
 
@@ -32,6 +31,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Background tasks (e.g. the opt-in dashboard) kept alive for the process lifetime.
 _bg_tasks: list[asyncio.Task[Any]] = []
+
+
+def _report_bg_failure(task: asyncio.Task[Any]) -> None:
+    """Surface a background task's exception instead of letting it vanish."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        structlog.get_logger("emma").error(
+            "background_task_failed", task=task.get_name(), error=f"{type(exc).__name__}: {exc}"
+        )
 
 
 def _setup_logging(debug: bool) -> None:
@@ -49,10 +59,17 @@ def _setup_logging(debug: bool) -> None:
     file_handler.setFormatter(logging.Formatter("%(message)s"))
     handlers.append(file_handler)
 
-    if debug:
-        console = logging.StreamHandler(sys.stderr)
-        console.setFormatter(logging.Formatter("%(message)s"))
-        handlers.append(console)
+    # stderr ALWAYS, not just in debug. launchd already captures it to
+    # StandardErrorPath, so this costs nothing and buys the thing whose absence
+    # cost an entire investigation: with only the file handler attached, every
+    # structlog line after configure() went to ~/Library/Logs/Emma/emma.log and
+    # NOWHERE else. stdout.log stopped mid-boot — not where the process died,
+    # but where logging changed destination — and the operator had no way to
+    # know the real log existed. A daemon's logs belong where whoever is
+    # debugging it is already looking.
+    console = logging.StreamHandler(sys.stderr)
+    console.setFormatter(logging.Formatter("%(message)s"))
+    handlers.append(console)
 
     root = logging.getLogger()
     for h in list(root.handlers):
@@ -60,6 +77,10 @@ def _setup_logging(debug: bool) -> None:
     for h in handlers:
         root.addHandler(h)
     root.setLevel(level)
+
+    # Printed, not logged: this must be readable even if structlog itself is
+    # misconfigured, and it is the pointer that was missing from stdout/stderr.
+    print(f"[emma] logging to {LOG_DIR / 'emma.log'}", file=sys.stderr, flush=True)
 
     structlog.configure(
         processors=[
@@ -106,6 +127,18 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+async def _spawn(*args: str) -> int:
+    """Run a short command without blocking the event loop. Never raises."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+        )
+        return await asyncio.wait_for(proc.wait(), timeout=30.0)
+    except Exception as exc:
+        structlog.get_logger("emma").warning("spawn_failed", cmd=args[0], error=str(exc))
+        return -1
+
+
 def _run_pairing(log: structlog.BoundLogger) -> int:
     """Foreground device pairing for install.sh step 7 (CLIENT-INSTALL-PHASE-3).
 
@@ -127,20 +160,18 @@ def _run_pairing(log: structlog.BoundLogger) -> int:
         print(f"\n  Código de vinculación: {code}")
         print(f"  Abre:                    {uri}\n")
         spoken = " ".join(code.replace("-", " guion "))
-        subprocess.run(
-            ["say", "-v", "Paulina",
-             f"Tu código de vinculación es: {spoken}. Ábrelo en tu navegador"],
-            check=False,
+        # await, don't block: these run on the event loop (4i). An audio
+        # pipeline that stalls its loop is audible, and `say` here is seconds long.
+        await _spawn(
+            "say", "-v", "Paulina",
+            f"Tu código de vinculación es: {spoken}. Ábrelo en tu navegador",
         )
-        subprocess.run(["open", uri], check=False)
+        await _spawn("open", uri)
         result = await pairing.poll_until_authorized(
             info["device_code"], int(info.get("interval", 5)), int(info.get("expires_in", 900))
         )
         if result:
-            subprocess.run(
-                ["say", "-v", "Paulina", "Emma vinculada. Ya puedes usarme"],
-                check=False,
-            )
+            await _spawn("say", "-v", "Paulina", "Emma vinculada. Ya puedes usarme")
             print("\n  ✓ Vinculada exitosamente.\n")
             return 0
         print("\n  ✗ Vinculación no completada (código expiró o fue rechazado).\n")
@@ -150,21 +181,57 @@ def _run_pairing(log: structlog.BoundLogger) -> int:
     return asyncio.run(do_pair())
 
 
-def _credential_preflight(log: structlog.BoundLogger) -> int | None:
-    """Fast startup credential check. Returns exit code 2 on a bad key, else None.
+def _looks_managed() -> bool:
+    """Managed mode, resolved the resilient way (see settings._is_managed)."""
+    return settings._is_managed()
 
-    A missing or malformed OpenAI key can never produce a working session, so
-    we fail fast — before probing permissions, opening the mic, or waiting for
-    a wake word — instead of looping on reconnect. Exit code 2 is distinct from
-    0 (success) and 1 (generic), so launchd's SuccessfulExit=false policy treats
-    it as a real failure rather than a retry case.
 
-    Managed/client mode (EMMA_REQUIRE_PAIRING) is exempt: there is no local sk- key
-    to validate — the credential is the paired device bearer, resolved from Keychain
-    AFTER the app pairs this Mac (which happens post-boot, see orchestrator._ensure_
-    paired). Failing here would stop the daemon from ever booting to show onboarding.
+def _terminal_exit(log: structlog.BoundLogger, kind: str, hint: str) -> int:
+    """Exit code for a boot that failed for a reason a restart won't fix.
+
+    Exit-code semantics, corrected. `KeepAlive{SuccessfulExit=false}` means
+    "restart whenever the exit was NOT successful" — i.e. EVERY non-zero code.
+    The old comments here claimed exit 2 was treated as a real failure and not
+    retried; that is backwards, and with no ThrottleInterval it produced a
+    10-second respawn loop forever.
+
+    So: non-zero means "retry me" (now throttled to >=30s by the plist), and
+    0 means "stay down". We return non-zero for the first few attempts, because
+    plenty of these are transient — a Keychain still unlocking at login looks
+    identical to a broken one — and then 0 once the streak proves otherwise,
+    so a genuinely broken config stops burning CPU and stops talking.
     """
-    if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes"):
+    n = boot_guard.record_failure(kind)
+    if boot_guard.should_stay_down(kind):
+        log.error(
+            "boot_failed_terminal", kind=kind, consecutive=n, hint=hint,
+            action="exiting 0 so launchd stops retrying; fix the above and run "
+                   "`launchctl kickstart -k gui/$(id -u)/com.emma.daemon`",
+        )
+        return 0
+    log.error("boot_failed_retryable", kind=kind, consecutive=n, hint=hint)
+    return 1
+
+
+def _credential_preflight(log: structlog.BoundLogger) -> int | None:
+    """Fast startup credential check. Returns an exit code on a bad key, else None.
+
+    A missing or malformed OpenAI key can never produce a working session, so we
+    fail fast — before probing permissions, opening the mic, or waiting for a
+    wake word — instead of looping on reconnect. The exit code comes from
+    ``_terminal_exit``: retryable at first, then 0 to stay down.
+
+    Managed/client mode is exempt: there is no local sk- key to validate — the
+    credential is the paired device bearer, resolved from Keychain AFTER the app
+    pairs this Mac (post-boot, see orchestrator._ensure_paired). Failing here
+    would stop the daemon from ever booting to show onboarding.
+
+    The exemption is deliberately NOT gated on the env var alone. A managed
+    daemon whose EMMA_REQUIRE_PAIRING went missing would otherwise die on a
+    credential it is never supposed to have — one absent environment variable
+    should not be able to kill the daemon (LAUNCH-4 Part 1).
+    """
+    if _looks_managed():
         return None
     from core.conversation import _looks_like_openai_key
 
@@ -175,7 +242,10 @@ def _credential_preflight(log: structlog.BoundLogger) -> int | None:
             present=bool(settings.OPENAI_API_KEY),
             length=len(settings.OPENAI_API_KEY or ""),
         )
-        return 2
+        return _terminal_exit(
+            log, "credentials",
+            "set OPENAI_API_KEY in .env (BYOK), or pair this Mac for managed mode",
+        )
     return None
 
 
@@ -236,7 +306,11 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         from dashboard import server as dashboard
 
         # Keep a reference so the task isn't garbage-collected mid-run.
-        _bg_tasks.append(asyncio.create_task(dashboard.start()))  # type: ignore[no-untyped-call]
+        _dash = asyncio.create_task(dashboard.start())  # type: ignore[no-untyped-call]
+        # Retrieve the result: a create_task whose exception nobody reads fails
+        # silently, and this task owns the app's only route to the daemon.
+        _dash.add_done_callback(_report_bg_failure)
+        _bg_tasks.append(_dash)
         log.info("dashboard_started", port=settings.DASHBOARD_PORT)
 
         # Spawn + supervise the menubar UI (EMMA-APP). It needs the control channel
@@ -313,6 +387,14 @@ def main() -> int:
         simulate_crash=args.simulate_crash,
         test_mode=settings.EMMA_TEST_MODE,
     )
+    # WHICH code is this? A stale ~/.emma/src tarball — months old, missing the
+    # managed-mode exemption — burned two investigations, because every check
+    # made was against the repo rather than the installation. Log it at boot so
+    # the first line of any future triage answers that question. Local only; a
+    # daemon must not need GitHub reachable to start.
+    from core import version as _version
+
+    log.info("version", **_version.boot_line())
 
     # Credential pre-flight FIRST: fail fast on a bad OpenAI key (exit 2) before
     # any permission probe, mic open, or wake-word wait.
@@ -329,10 +411,14 @@ def main() -> int:
         permissions.harden_local_files()
 
     if not permissions.preflight():
-        log.error("permissions_preflight_failed")
-        # Don't exit hard - the user is being asked to grant. Let launchd retry
-        # on the next start once permissions are granted.
-        return 1
+        # The user is being asked to grant something. Retry a few times (the
+        # plist throttles to >=30s), then stay down rather than restarting
+        # forever — and note that preflight SPEAKS on a denial, so an
+        # unthrottled loop would repeat that sentence at the user indefinitely.
+        return _terminal_exit(
+            log, "permissions",
+            "grant the permission in System Settings → Privacy & Security",
+        )
 
     orchestrator.preflight()
 
