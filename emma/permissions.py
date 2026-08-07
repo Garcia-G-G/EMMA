@@ -43,6 +43,23 @@ def _check() -> int:
     # it looks identical to healthy from the probe alone.
     ok, reason = permissions.ax_smoke()
     print(f"AccessibilitySmoke: {'ok' if ok else 'FAILED'} ({reason})")
+
+    # Which code is answering these questions? A months-old installed tarball
+    # will happily report healthy permissions for features it does not contain.
+    from core import version
+
+    v = asyncio.run(version.staleness())
+    print(f"\nSource: {v['source']}")
+    print(f"  fingerprint: {v['fingerprint']}")
+    print(f"  commit:      {v['commit'] or 'unknown (tarball, no install stamp)'}")
+    if v.get("installed_at"):
+        print(f"  installed:   {v['installed_at']}")
+    if v["stale"] is True:
+        print(f"  UP TO DATE:  NO — upstream is at {v['upstream']}. Re-run install.sh.")
+    elif v["stale"] is False:
+        print("  up to date:  yes")
+    else:
+        print("  up to date:  unknown (offline, or no recorded commit to compare)")
     return 0
 
 

@@ -94,8 +94,41 @@ def test_credential_preflight_skipped_in_managed_mode(monkeypatch):
     assert emma_main._credential_preflight(structlog.get_logger("test")) is None
 
 
-def test_credential_preflight_still_guards_byok(monkeypatch):
-    # Dev/BYOK daemon (flag unset) with a bad key still fails fast (exit 2).
+def test_credential_preflight_still_guards_byok(monkeypatch, tmp_path):
+    """A BYOK daemon with a MALFORMED key still fails fast.
+
+    The key must be present-but-wrong. An EMPTY key no longer reaches this
+    branch: settings._is_managed() now treats "no local key at all" as managed,
+    because a BYOK daemon by definition has one (LAUNCH-4 Part 1 — managed mode
+    must not hinge on a single environment variable). See the test below.
+    """
     monkeypatch.delenv("EMMA_REQUIRE_PAIRING", raising=False)
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))  # keep boot_guard out of ~/.emma
+    monkeypatch.setattr(emma_main.settings, "OPENAI_API_KEY", "not-a-real-key")
+    # Non-zero = "retry me" (launchd restarts on EVERY non-zero code); the exit
+    # only becomes 0 once the streak proves a restart cannot fix it.
+    assert emma_main._credential_preflight(structlog.get_logger("test")) == 1
+
+
+def test_no_local_key_parks_instead_of_exiting(monkeypatch, tmp_path):
+    """The fragility fix: one missing env var must not kill the daemon.
+
+    A managed daemon whose EMMA_REQUIRE_PAIRING went missing used to die on a
+    credential it is never supposed to have. Now "no OPENAI_API_KEY" is itself
+    enough to resolve managed mode, so it parks and shows onboarding.
+    """
+    monkeypatch.delenv("EMMA_REQUIRE_PAIRING", raising=False)
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
     monkeypatch.setattr(emma_main.settings, "OPENAI_API_KEY", "")
-    assert emma_main._credential_preflight(structlog.get_logger("test")) == 2
+    assert emma_main._credential_preflight(structlog.get_logger("test")) is None
+
+
+def test_repeated_failures_eventually_stay_down(monkeypatch, tmp_path):
+    """Non-zero forever is the respawn loop. Exit 0 is how it stops."""
+    monkeypatch.delenv("EMMA_REQUIRE_PAIRING", raising=False)
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
+    monkeypatch.setattr(emma_main.settings, "OPENAI_API_KEY", "not-a-real-key")
+    log = structlog.get_logger("test")
+    codes = [emma_main._credential_preflight(log) for _ in range(6)]
+    assert codes[0] == 1, "the first failure must be retryable (it may be transient)"
+    assert codes[-1] == 0, "a persistent failure must stop launchd retrying"

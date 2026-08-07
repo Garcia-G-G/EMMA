@@ -7,6 +7,7 @@ import asyncio
 import structlog
 
 from core import diagnostics as diag
+from core import version as _version
 from tools.base import ToolResult, tool
 
 log = structlog.get_logger("emma.tools.diagnostics")
@@ -74,6 +75,9 @@ async def diagnose_self() -> ToolResult:
         "accessibility_smoke_reason": h.ax_smoke_reason,
         "screen_recording": h.screen_recording,
         "screen_vision_ok": h.screen_vision_ok,
+        # Which code is running. A stale installed tarball answers every other
+        # question in this dict confidently and wrongly.
+        **{f"source_{k}": v for k, v in _version.report().items()},
     }
     return ToolResult(True, data, spoken.strip(), False)
 

@@ -29,7 +29,11 @@ from core import events_bus
 
 log = structlog.get_logger("emma.dashboard")
 
-EMMA_LOG = Path("/tmp/emma_session.log")
+# The log the daemon actually writes (emma/__main__.py:_setup_logging). This was
+# /tmp/emma_session.log, which NOTHING in the tree ever wrote — so every session
+# and cost stat on this dashboard was permanently zero on an installed machine,
+# and looked like "Emma has done nothing" rather than "this file doesn't exist".
+EMMA_LOG = Path.home() / "Library" / "Logs" / "Emma" / "emma.log"
 EMMA_HOME = Path.home() / ".emma"
 MEMORY_DB = EMMA_HOME / "memory.db"
 CRASH_DIR = Path.home() / "Library/Logs/Emma/crashes"
@@ -573,6 +577,11 @@ async def dispatch_control(msg: dict) -> dict:
                     **(await _pair_poll(str(msg.get("device_code", "")),
                                         int(msg.get("interval", 5)),
                                         int(msg.get("expires_in", 600))))}
+        elif cmd == "version":
+            from core import version as _v
+
+            return {"type": "control_result", "ok": True, "cmd": cmd,
+                    **(await _v.staleness()), **_control_status()}
         elif cmd == "unpair":
             from core import pairing
 
@@ -687,7 +696,21 @@ async def start():
     # Loopback-only (EMMA-APP Part 3): the control socket accepts trusted-because-
     # local commands (unmute, shutdown), so it must never be reachable off-box.
     # The local UI + browser reach it fine over 127.0.0.1/localhost.
-    httpd = http.server.HTTPServer(("127.0.0.1", PORT), DashHandler)
+    # EMMA_DASHBOARD is the control channel the app pairs this Mac through, so a
+    # bind failure means onboarding is permanently impossible. It used to raise
+    # OSError inside a fire-and-forget create_task, where the exception was never
+    # retrieved and died silently — the most expensive way to fail.
+    try:
+        httpd = http.server.HTTPServer(("127.0.0.1", PORT), DashHandler)
+    except OSError as exc:
+        log.error(
+            "dashboard_bind_failed", port=PORT, error=str(exc),
+            impact="the app cannot reach the daemon; pairing and onboarding are "
+                   "unavailable until this port is free",
+            hint="another Emma daemon or a standalone dashboard/server.py is running",
+        )
+        events_bus.publish("state", state="dashboard_unavailable")
+        raise
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     async with serve(ws_router, "127.0.0.1", PORT + 1):
