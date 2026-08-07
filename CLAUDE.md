@@ -279,3 +279,27 @@ and resets the `com.emma.daemon` TCC grants so no permission row outlives the
 app it pointed at.
 
 The installer is idempotent — re-running upgrades in place.
+
+### Release policy (LAUNCH-4 finding 4g/4h — decided)
+
+`install.sh` fetches `main` from the **public** `theemmafamily/emma`. That is a
+different branch from the one you develop and test on, so **a green local test
+run describes code no user is running.** At the time of writing local `main` was
+**28 commits ahead** of the public head.
+
+- **Local `main` is not a release.** Publishing is an explicit push to the
+  public repo. Until that happens, every fix is invisible to users, including
+  the ones they are actively hitting.
+- **Verify the INSTALLATION, never the repo.** `git merge-base --is-ancestor
+  <commit> public/main` answers a question nobody asked. Run
+  `python -m emma.permissions check` and read the `Source:` block, or
+  `grep` the feature in `~/.emma/src` — that is the code that runs.
+- **`_landing/` stays out of this repo.** It is 472 MB, carries
+  `worker/node_modules`, and is **already a git repository of its own** where
+  `install.sh` and `uninstall.sh` are tracked. (The audit's premise that
+  install.sh is "outside version control" is wrong; what is true is that the
+  two repos are versioned independently, so plist/source drift between them is
+  invisible.) The mitigation is not a merge — it is that the daemon no longer
+  trusts the plist: `settings._is_managed()` resolves managed mode without the
+  env var, and `core/version.py` states which source is running at every boot.
+
