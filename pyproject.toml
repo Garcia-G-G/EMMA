@@ -98,6 +98,14 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+# Deselect the live-macOS tests by default: they read the REAL desktop (which app
+# is frontmost, whether it has a focused window), so inside a full-suite run they
+# fail intermittently as focus churns — observed during LAUNCH-7 while browser
+# automation was switching windows. A flaky test teaches people to ignore
+# failures, which is the opposite of why these exist. Run them deliberately:
+#     .venv/bin/python -m pytest -m macos_live
+# A CLI -m overrides this one, so that command selects exactly them.
+addopts = "-m 'not macos_live'"
 markers = [
     # Exercises the REAL macOS AX / Screen Recording APIs on the running
     # machine — no mocks. Skips loudly (never silently) when the TCC grant is

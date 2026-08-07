@@ -50,6 +50,13 @@ Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. Sh
 # Run a single test
 .venv/bin/python -m pytest tests/test_memory.py::TestLongTerm::test_remember_and_recall -v
 
+# Live macOS tests (real Accessibility / Screen Recording — deselected by default
+# because they read the live desktop; run with an ordinary app in front)
+.venv/bin/python -m pytest tests/ -m macos_live
+
+# Backend tests (separate deps: pip install -r backend/requirements.txt pytest pytest-asyncio)
+python -m pytest backend/tests -q
+
 # Lint
 .venv/bin/ruff check .
 

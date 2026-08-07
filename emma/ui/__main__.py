@@ -87,6 +87,9 @@ _ICON_FOR_STATE = {
     "speaking": "waveform.circle.fill",
     "snoozing": "moon",
     "muted": "mic.slash",
+    # Out of minutes: she is alive and listening but cannot answer until the
+    # user tops up. A distinct glyph, because "en espera" would be a lie.
+    "out_of_minutes": "exclamationmark.circle",
 }
 # Daemon state words -> our icon buckets. Unknown states fall back to idle.
 _STATE_BUCKET = {
@@ -97,6 +100,7 @@ _STATE_BUCKET = {
     "responding": "speaking",
     "snoozing": "snoozing",
     "muted": "muted",
+    "out_of_minutes": "out_of_minutes",
 }
 _ESTADO_LABEL = {
     "idle": "En espera",
@@ -105,6 +109,7 @@ _ESTADO_LABEL = {
     "speaking": "Hablando",
     "snoozing": "Durmiendo",
     "muted": "Micrófono apagado",
+    "out_of_minutes": "Sin minutos",
 }
 
 

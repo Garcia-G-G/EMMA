@@ -165,6 +165,69 @@ async def _detect_immediate_speech(window_s: float = 1.0) -> bool:
     return False
 
 
+# Don't nag: once we've said "you're out", stay quiet until minutes come back.
+_out_of_minutes = False
+
+
+def out_of_minutes() -> bool:
+    """True while the paired account has no minutes left (read by the app)."""
+    return _out_of_minutes
+
+
+async def _check_out_of_minutes() -> bool:
+    """After a session, ask the backend whether the minutes ran out. Speak once.
+
+    Deliberately NOT driven by the WebSocket close code. The proxy calls
+    ``ws.close(code=4402, reason="balance_zero")`` at
+    ``backend/realtime_proxy.py:109,119`` — both BEFORE ``ws.accept()`` at
+    ``:144``, so the handshake is rejected outright and the code never reaches
+    the client; and a mid-session cut closes at ``:231`` with no code at all,
+    which ``_ZOMBIE_MARKERS`` would read as an ordinary zombie. Until LAUNCH-6
+    fixes that ordering, a close code cannot tell "out of minutes" from "bad
+    token" — so we ask the balance route instead, which is authoritative and
+    needs no close code at all.
+
+    Best-effort and cheap: one GET per session end, managed mode only, never
+    fatal. Returns True when it published the out-of-minutes state.
+    """
+    global _out_of_minutes
+    if not settings._is_managed():
+        return False
+    try:
+        from core import pairing
+
+        client = await pairing.authed_client()
+        async with client as c:
+            r = await asyncio.wait_for(c.get("/api/device/balance"), timeout=8.0)
+            if r.status_code != 200:
+                return False
+            left = float(r.json().get("total_left_min") or 0.0)
+    except Exception as exc:  # offline / unpaired — never block the wake loop
+        log.debug("balance_check_skipped", error=str(exc))
+        return False
+
+    if left > 0:
+        if _out_of_minutes:
+            log.info("minutes_restored", left_min=left)
+        _out_of_minutes = False
+        return False
+    if _out_of_minutes:
+        return True  # already announced; stay quiet, keep the state
+    _out_of_minutes = True
+    log.error("out_of_minutes", left_min=left)
+    events_bus.publish("state", state="out_of_minutes")
+    # `say`, not the Realtime API: the session that would have spoken this is
+    # exactly the one that just got cut off.
+    with contextlib.suppress(Exception):
+        proc = await asyncio.create_subprocess_exec(
+            "say", "-v", "Mónica",
+            "Se acabaron tus minutos gratis del mes. Abre la app para conseguir más.",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=15.0)
+    return True
+
+
 async def _one_session() -> None:
     """Wake → Pipecat session → return. One iteration of the main loop."""
     global _last_turn_id, _last_session_end_mono
@@ -178,7 +241,13 @@ async def _one_session() -> None:
             gap = time.monotonic() - _last_session_end_mono
             if gap > _LOOPBACK_WATCHDOG_S:
                 log.error("daemon_stuck", reason="slow_loopback_to_wake", gap_s=round(gap, 1))
-        events_bus.publish("state", state="waiting_for_wake")
+        # Keep the out-of-minutes state visible across loop iterations. She stays
+        # listening (so she recovers the moment minutes are topped up), but the
+        # menubar and the app must not flip back to a reassuring "en espera"
+        # while she can't actually answer.
+        events_bus.publish(
+            "state", state="out_of_minutes" if _out_of_minutes else "waiting_for_wake"
+        )
         # Park before opening the wake stream while muted (indefinite, mic off) or
         # snoozed (timed). Both keep the RawInputStream closed, so the mic is
         # genuinely released — the macOS mic indicator stays off during either.
@@ -229,6 +298,8 @@ async def _one_session() -> None:
         duration_s = round(time.monotonic() - t_wake, 1)
         log.info("session_close", duration_s=int(duration_s))
         events_bus.publish("session_ended", id=turn_id, duration_s=duration_s)
+        if await _check_out_of_minutes():
+            return  # state already published; skip the waiting_for_wake reset
         events_bus.publish("state", state="waiting_for_wake")
     finally:
         _last_session_end_mono = time.monotonic()

@@ -527,7 +527,12 @@ function renderFacts() {
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
 
-/* ---- Uso / Cuenta ---------------------------------------------------- */
+/* ---- Uso / Cuenta ----------------------------------------------------
+   OUT is the daemon's verdict, and it outranks a balance read: the daemon
+   checks the authoritative balance route after a session, so if it says the
+   minutes are gone, a read that comes back empty (offline, unpaired) must not
+   quietly clear the alarm. Only a real balance with minutes left does that. */
+let OUT = false;
 async function loadBalance() {
   const r = await control({ cmd: "balance" });
   const b = r && r.balance;
@@ -542,9 +547,9 @@ async function loadBalance() {
     $("#u-left").textContent = "—";
     $("#u-meter").className = "meter";
     $("#u-meter").querySelector("i").style.width = "0%";
-    $("#btn-buy").hidden = true;
-    $("#uso-pip").hidden = true;
-    $("#u-outbox").hidden = true;
+    $("#btn-buy").hidden = !OUT;
+    $("#uso-pip").hidden = !OUT;
+    $("#u-outbox").hidden = !OUT;
     $("#u-stale").hidden = true;
     return;
   }
@@ -557,10 +562,11 @@ async function loadBalance() {
   const meter = $("#u-meter");
   meter.querySelector("i").style.width = pct + "%";
   meter.className = "meter" + (left <= 0 ? " out" : pct < 20 ? " low" : "");
-  const scarce = left <= 0 || pct < 20;
+  if (left > 0) OUT = false;             // a real balance is the only thing that clears it
+  const scarce = left <= 0 || pct < 20 || OUT;
   $("#btn-buy").hidden = !scarce;
   $("#uso-pip").hidden = !scarce;
-  $("#u-outbox").hidden = left > 0;
+  $("#u-outbox").hidden = left > 0 && !OUT;
   $("#c-plan").textContent = b.plan || "—";
   if (b.email) $("#c-email").textContent = b.email;
   // Offline: show what we last knew, labelled with when — never an error page.
@@ -570,8 +576,11 @@ async function loadBalance() {
   } else { $("#u-stale").hidden = true; }
 }
 function outOfMinutes() {
+  OUT = true;
   $("#uso-pip").hidden = false;
   $("#u-outbox").hidden = false;
+  $("#btn-buy").hidden = false;
+  setState("idle");                       // she is alive, just unable to answer
   loadBalance();
 }
 
