@@ -68,45 +68,68 @@ async def start_pairing() -> dict[str, Any]:
         return info
 
 
-async def poll_until_authorized(device_code: str, interval: int, expires_in: int) -> dict[str, Any] | None:
-    """Step 3 — poll until the user authorizes on the web, or the code expires."""
-    deadline = time.monotonic() + expires_in
+async def poll_once(device_code: str) -> tuple[str, dict[str, Any] | None]:
+    """One non-blocking exchange attempt. Returns (status, data).
+
+    Status is one of ``paired`` | ``pending`` | ``slow_down`` | ``expired`` |
+    ``denied`` | ``network_error``. The app's onboarding drives its own loop off
+    this so it can render progress and offer a retry, instead of disappearing
+    into ``poll_until_authorized``'s blocking sleep for up to 10 minutes.
+
+    On success the token is persisted to Keychain BEFORE returning, so a crash
+    between here and the caller cannot lose a pairing the server already spent.
+    """
     async with httpx.AsyncClient(timeout=15.0) as c:
-        while time.monotonic() < deadline:
-            await asyncio.sleep(interval)
-            try:
-                r = await c.post(f"{_BACKEND}/api/device/token",
-                                 json={"device_code": device_code},
-                                 headers={"User-Agent": _USER_AGENT})
-            except httpx.HTTPError as e:
-                log.warning("pairing_poll_network_error", error=str(e))
-                continue
-            if r.status_code == 200:
-                data: dict[str, Any] = r.json()
-                # Persist to Keychain BEFORE returning so a crash here can't lose it.
-                await kc.store(_TOKEN_LABEL, data["access_token"], kind="device_token")
-                # Persist the paired account's name so the system prompt can address
-                # the real user by name instead of the shipped default. This is why
-                # a fresh install no longer calls every stranger "the user".
-                user = data.get("user") or {}
-                name = (user.get("name") or "").strip()
-                if name:
-                    with contextlib.suppress(Exception):
-                        dictionary.set_user_field("display_name", name)
-                log.info("device_paired", user=user.get("email"))
-                return data
-            try:
-                err = (r.json().get("detail") or {}).get("error")
-            except Exception:
-                err = None
-            if err == "slow_down":
-                interval += 2
-                continue
-            if err == "authorization_pending":
-                continue
-            if err in ("expired_token", "access_denied"):
-                log.warning("pairing_aborted", reason=err)
-                return None
+        try:
+            r = await c.post(f"{_BACKEND}/api/device/token",
+                             json={"device_code": device_code},
+                             headers={"User-Agent": _USER_AGENT})
+        except httpx.HTTPError as e:
+            log.warning("pairing_poll_network_error", error=str(e))
+            return ("network_error", None)
+        if r.status_code == 200:
+            data: dict[str, Any] = r.json()
+            await kc.store(_TOKEN_LABEL, data["access_token"], kind="device_token")
+            # Persist the paired account's name so the system prompt can address
+            # the real user by name instead of the shipped default. This is why
+            # a fresh install no longer calls every stranger "the user".
+            user = data.get("user") or {}
+            name = (user.get("name") or "").strip()
+            if name:
+                with contextlib.suppress(Exception):
+                    dictionary.set_user_field("display_name", name)
+            global _token_cache
+            _token_cache = data["access_token"]  # the wake loop reads this synchronously
+            log.info("device_paired", user=user.get("email"))
+            return ("paired", data)
+        try:
+            err = (r.json().get("detail") or {}).get("error")
+        except Exception:
+            err = None
+        if err == "slow_down":
+            return ("slow_down", None)
+        if err in ("expired_token", "access_denied"):
+            log.warning("pairing_aborted", reason=err)
+            return ("expired" if err == "expired_token" else "denied", None)
+        return ("pending", None)
+
+
+async def poll_until_authorized(device_code: str, interval: int, expires_in: int) -> dict[str, Any] | None:
+    """Step 3 — poll until the user authorizes on the web, or the code expires.
+
+    The blocking variant, kept for the daemon's own path. Both share
+    ``poll_once`` so the persistence and error mapping cannot drift.
+    """
+    deadline = time.monotonic() + expires_in
+    while time.monotonic() < deadline:
+        await asyncio.sleep(interval)
+        status, data = await poll_once(device_code)
+        if status == "paired":
+            return data
+        if status == "slow_down":
+            interval += 2
+        elif status in ("expired", "denied"):
+            return None
     return None
 
 
