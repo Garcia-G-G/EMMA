@@ -158,3 +158,62 @@ def test_pending_and_pair_page_gate():
     assert r.status_code == 401 and r.json()["detail"]["error"] == "authorization_pending"
     # /pair redirects to login when not authed
     assert c.get("/pair").status_code in (302, 307)
+
+
+# --- LAUNCH-7: the daemon reads its own balance -----------------------------
+#
+# The Uso panel needs the balance, but /api/balance is cookie-authed and the
+# daemon holds only a device bearer — PAID-ONBOARDING-VERIFY recorded this as
+# the blocking backend gap. /api/device/balance closes it.
+
+
+def _paired_token(c) -> str:
+    """Register a user and walk the full pairing handshake; return the bearer."""
+    c.post("/api/auth/register", json={"email": "bal@e.com", "password": "correcthorse9"})
+    info = c.post("/api/device/code").json()
+    c.post("/api/device/authorize",
+           json={"user_code": info["user_code"], "device_name": "Mac Uso"})
+    return c.post("/api/device/token",
+                  json={"device_code": info["device_code"]}).json()["access_token"]
+
+
+def test_device_balance_requires_a_bearer():
+    c = _client()
+    assert c.get("/api/device/balance").status_code == 401
+
+
+def test_device_balance_rejects_a_garbage_bearer():
+    c = _client()
+    r = c.get("/api/device/balance", headers={"Authorization": "Bearer " + "x" * 40})
+    assert r.status_code == 401
+
+
+def test_device_balance_matches_the_cookie_route():
+    """One computation, two auth paths — they must never drift apart."""
+    c = _client()
+    token = _paired_token(c)
+    device = c.get("/api/device/balance", headers={"Authorization": f"Bearer {token}"})
+    assert device.status_code == 200
+    cookie = c.get("/api/balance")  # same client still holds the session cookie
+    assert cookie.status_code == 200
+    assert device.json() == cookie.json()
+
+
+def test_device_balance_has_the_fields_uso_renders():
+    c = _client()
+    token = _paired_token(c)
+    d = c.get("/api/device/balance", headers={"Authorization": f"Bearer {token}"}).json()
+    for k in ("plan", "total_left_min", "used_this_month_min", "baseline_total_min"):
+        assert k in d, k
+    assert d["plan"] == "free"
+
+
+def test_revoked_device_loses_balance_access():
+    """Unpairing this Mac must actually cut the daemon off."""
+    c = _client()
+    token = _paired_token(c)
+    hdr = {"Authorization": f"Bearer {token}"}
+    assert c.get("/api/device/balance", headers=hdr).status_code == 200
+    dev_id = c.get("/api/devices").json()[0]["id"]
+    assert c.delete(f"/api/devices/{dev_id}").status_code == 200
+    assert c.get("/api/device/balance", headers=hdr).status_code == 401
