@@ -13,6 +13,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -126,8 +127,12 @@ def _memory_facts() -> list[dict]:
     try:
         conn = sqlite3.connect(str(MEMORY_DB))
         conn.row_factory = sqlite3.Row
+        # `id` matters: the Memoria panel deletes by row id, so a fact whose text
+        # repeats (or contains anything sqlite would need escaped) still deletes
+        # exactly the row the user pointed at.
         rows = conn.execute(
-            "SELECT content, kind, confidence, source FROM facts ORDER BY confidence DESC, last_seen_at DESC LIMIT 30"
+            "SELECT id, content, kind, confidence, source, last_seen_at FROM facts "
+            "ORDER BY confidence DESC, last_seen_at DESC LIMIT 200"
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -408,6 +413,76 @@ def _control_status() -> dict:
     }
 
 
+# Last balance the backend served, kept so Uso can degrade to a stale-but-labelled
+# number instead of an error page when the network is down (LAUNCH-7 Part 3).
+_last_balance: dict | None = None
+_last_balance_at: float | None = None
+
+
+async def _device_balance() -> dict:
+    """Uso's data, via the device bearer. Never raises; degrades with a timestamp.
+
+    Reads GET /api/device/balance — the route added for exactly this, because
+    /api/balance is cookie-authed and the daemon has no cookie.
+    """
+    global _last_balance, _last_balance_at
+    from core import pairing
+
+    try:
+        client = await pairing.authed_client()
+    except Exception as exc:  # not paired yet
+        return {"ok": False, "reason": "unpaired", "error": str(exc),
+                "balance": _last_balance, "stale_at": _last_balance_at}
+    try:
+        async with client as c:
+            r = await c.get("/api/device/balance")
+            r.raise_for_status()
+            _last_balance = r.json()
+            _last_balance_at = time.time()
+            return {"ok": True, "balance": _last_balance, "stale_at": None}
+    except Exception as exc:
+        # Offline / backend down: show what we last knew, labelled with when.
+        log.warning("device_balance_failed", error=str(exc))
+        return {"ok": False, "reason": "offline", "error": str(exc),
+                "balance": _last_balance, "stale_at": _last_balance_at}
+
+
+async def _pair_start() -> dict:
+    """Onboarding step 2 — mint a device code for the browser hand-off."""
+    from core import pairing
+
+    try:
+        info = await pairing.start_pairing()
+    except Exception as exc:
+        log.warning("pair_start_failed", error=str(exc))
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "user_code": info.get("user_code"),
+        "device_code": info.get("device_code"),
+        "interval": int(info.get("interval", 5)),
+        "expires_in": int(info.get("expires_in", 600)),
+        # The app opens this in the SYSTEM BROWSER, never in the WebView: it is
+        # the full web auth stack (Google/GitHub OAuth included) and a password
+        # must never be typed into a window Emma controls.
+        "verify_url": f"https://theemmafamily.com/pair?code={info.get('user_code', '')}",
+    }
+
+
+async def _pair_poll(device_code: str, interval: int, expires_in: int) -> dict:
+    """One non-blocking exchange attempt, so the UI can show progress + retry."""
+    from core import pairing
+
+    if not device_code:
+        return {"ok": False, "status": "denied", "error": "device_code required"}
+    status, data = await pairing.poll_once(device_code)
+    out: dict = {"ok": status == "paired", "status": status,
+                 "interval": interval, "expires_in": expires_in}
+    if status == "paired" and data:
+        out["user"] = (data.get("user") or {}).get("email")
+    return out
+
+
 async def dispatch_control(msg: dict) -> dict:
     """Execute one UI control command against the live daemon (EMMA-APP Part 3).
 
@@ -448,6 +523,61 @@ async def dispatch_control(msg: dict) -> dict:
                 "type": "control_result", "ok": True, "cmd": cmd,
                 "granted": bool(granted), **_control_status(),
             }
+        elif cmd == "set_personality":
+            # Writes the [personality] block in config/dictionary.toml. The system
+            # prompt is built ONCE per session (_build_instructions at session
+            # start), so this lands on the NEXT wake, never mid-conversation. The
+            # panel says so; `applies` carries it back so the UI can't drift from
+            # the truth.
+            from core import dictionary
+
+            field = str(msg.get("field", ""))
+            ok = dictionary.set_personality_field(field, int(msg.get("value", 3)))
+            return {
+                "type": "control_result", "ok": ok, "cmd": cmd, "field": field,
+                "profile": dictionary.personality_profile(),
+                "applies": "next_wake",
+                **_control_status(),
+            }
+        elif cmd == "personality":
+            from core import dictionary
+
+            return {
+                "type": "control_result", "ok": True, "cmd": cmd,
+                "profile": dictionary.personality_profile(),
+                "applies": "next_wake", **_control_status(),
+            }
+        elif cmd == "forget":
+            # Real deletion from memory.db, not a UI filter — the Memoria panel is
+            # the thing that makes Emma trustworthy, so "delete" has to mean it.
+            from memory import long_term
+
+            target: str | int = msg.get("id") if msg.get("id") is not None else str(msg.get("content", ""))
+            removed = await long_term.forget(target)
+            return {
+                "type": "control_result", "ok": removed > 0, "cmd": cmd,
+                "removed": removed, **_control_status(),
+            }
+        elif cmd == "facts":
+            return {
+                "type": "control_result", "ok": True, "cmd": cmd,
+                "facts": _memory_facts(), **_control_status(),
+            }
+        elif cmd == "balance":
+            return {"type": "control_result", "ok": True, "cmd": cmd,
+                    **(await _device_balance()), **_control_status()}
+        elif cmd == "pair_start":
+            return {"type": "control_result", "cmd": cmd, **(await _pair_start())}
+        elif cmd == "pair_poll":
+            return {"type": "control_result", "cmd": cmd,
+                    **(await _pair_poll(str(msg.get("device_code", "")),
+                                        int(msg.get("interval", 5)),
+                                        int(msg.get("expires_in", 600))))}
+        elif cmd == "unpair":
+            from core import pairing
+
+            await pairing.revoke_local()
+            return {"type": "control_result", "ok": True, "cmd": cmd, **_control_status()}
         elif cmd == "status":
             pass  # just report state below
         else:
