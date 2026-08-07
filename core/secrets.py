@@ -151,7 +151,7 @@ async def bootstrap_from_env(env_path: Path) -> dict[str, list[str]]:
     value is gone from both ``.env`` and Keychain. The final write happens once,
     after every credential has been verified, so the file is all-or-nothing.
     """
-    original_text = env_path.read_text()
+    original_text = await asyncio.to_thread(env_path.read_text)
     moved: list[str] = []
     skipped: list[str] = []
     out_lines: list[str] = []
@@ -171,11 +171,11 @@ async def bootstrap_from_env(env_path: Path) -> dict[str, list[str]]:
                 await store(key, value, kind="env_credential")
                 readback = await retrieve(key)
             except Exception:
-                env_path.write_text(original_text)  # restore (it was untouched)
+                await asyncio.to_thread(env_path.write_text, original_text)  # restore
                 log.error("bootstrap_store_failed", field=key)
                 raise
             if readback != value:
-                env_path.write_text(original_text)  # leave .env intact
+                await asyncio.to_thread(env_path.write_text, original_text)  # .env intact
                 log.error("bootstrap_readback_failed", field=key)
                 raise RuntimeError(
                     f"Keychain readback mismatch for {key}; .env left intact (no value blanked)."
@@ -186,6 +186,6 @@ async def bootstrap_from_env(env_path: Path) -> dict[str, list[str]]:
             skipped.append(key)
             out_lines.append(line)
 
-    env_path.write_text("\n".join(out_lines) + "\n")
+    await asyncio.to_thread(env_path.write_text, "\n".join(out_lines) + "\n")
     log.info("env_bootstrap", moved=moved, skipped=skipped)
     return {"moved": moved, "skipped": skipped}
