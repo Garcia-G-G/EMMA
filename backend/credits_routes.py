@@ -13,7 +13,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 
 from backend import db, metering
-from backend.auth import require_user
+from backend.auth import require_device, require_user
 from backend.config import BUNDLES, bundle_per_min_usd, plan_caps, settings
 
 router = APIRouter(tags=["credits"])
@@ -32,9 +32,15 @@ async def _json_body(request: Request) -> dict[str, Any]:
     return body
 
 
-@router.get("/api/balance")
-async def get_balance(request: Request) -> dict[str, Any]:
-    user = await require_user(request)
+def _balance_payload(user: dict[str, Any]) -> dict[str, Any]:
+    """The balance a caller sees, independent of HOW they authenticated.
+
+    Extracted so the cookie route (`/api/balance`, the web dashboard) and the
+    device-bearer route (`/api/device/balance`, the daemon's Uso panel) can
+    never drift apart. The daemon genuinely could not read its own balance
+    before this: it holds a device token, and `require_user` only understands
+    the session cookie.
+    """
     plan = user.get("plan", "free")
     cap = plan_caps(plan)
     baseline_total_s = int(cap.get("monthly_seconds", 0) or 0)
@@ -63,6 +69,26 @@ async def get_balance(request: Request) -> dict[str, Any]:
         "auto_refill_bundle": (bal and bal["auto_refill_bundle_key"]) or "regular",
         "has_payment_method": bool(bal and bal["default_payment_method"]),
     }
+
+
+@router.get("/api/balance")
+async def get_balance(request: Request) -> dict[str, Any]:
+    return _balance_payload(await require_user(request))
+
+
+@router.get("/api/device/balance")
+async def get_device_balance(request: Request) -> dict[str, Any]:
+    """Same balance, authenticated by the daemon's device bearer.
+
+    LAUNCH-7's Uso panel reads this. It is a read-only projection of the user
+    the device is paired to — no billing action is ever reachable from a device
+    token; buying minutes happens in the browser against the cookie session.
+    """
+    device = await require_device(request)
+    user = db.get_user(int(device["user_id"]))
+    if not user:
+        raise HTTPException(401, "device is paired to a user that no longer exists")
+    return _balance_payload(user)
 
 
 @router.get("/api/bundles")
