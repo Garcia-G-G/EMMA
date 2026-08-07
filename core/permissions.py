@@ -390,9 +390,76 @@ _AUTOMATION_QUERIES = {
     "Terminal": "count windows",
 }
 
-# After _say returns (speech finished), give the user this long to actually
-# click Allow on the dialog before triggering the next app's ping.
-_DWELL_AFTER_DIALOG_S = 4.0
+# Bootstrap waits on the USER, not a timer: after triggering a dialog it polls the
+# permission's own probe and advances the instant the grant lands, up to a generous
+# ceiling (then it auto-skips — the grant can be given later; bootstrap is
+# idempotent). A real system alert now appears per permission (LAUNCH-2), so the old
+# fixed 4s/6s dwells were too short to read and act on ("hace el proceso muy rápido").
+_GRANT_CEILING_S = 120.0
+_NO_PROBE_DWELL_S = 25.0  # panes with no read-back probe (Full Disk Access): fixed wait
+_POLL_S = 1.0
+
+
+def _open_tty() -> Any:
+    """Open the controlling terminal for an explicit skip keypress, or None.
+
+    Under `curl … | sh`, the bootstrap's stdin is the piped script, not the user —
+    so a plain input() can't work. /dev/tty reaches the real terminal when there is
+    one; when there isn't (headless / no TTY), skip falls back to the ceiling."""
+    try:
+        return open("/dev/tty", "rb", buffering=0)
+    except Exception:
+        return None
+
+
+def _skip_pressed(tty: Any) -> bool:
+    """Non-blocking: True if the user pressed a key on the TTY (their 'skip')."""
+    if tty is None:
+        return False
+    try:
+        import select
+
+        ready, _, _ = select.select([tty], [], [], 0)
+        if ready:
+            tty.read(1)  # consume so one keypress = one skip
+            return True
+    except Exception:
+        return False
+    return False
+
+
+async def _await_grant(
+    check_fn: Callable[[], bool] | None,
+    *,
+    ceiling_s: float | None = None,
+    tty: Any = None,
+    poll_s: float | None = None,
+) -> str:
+    """Wait for the user to grant a permission. Returns 'granted' | 'skipped' | 'timeout'.
+
+    Polls ``check_fn`` (if any) and returns 'granted' the instant it passes — no
+    fixed sleep, so a fast granter isn't made to wait and a slow one isn't raced
+    past. ``check_fn=None`` (a pane with no read-back probe) waits for a skip
+    keypress or the ceiling. A keypress on the TTY skips immediately. ``ceiling_s``
+    / ``poll_s`` default to the module globals, read at call time so tests can
+    shrink them.
+    """
+    import time
+
+    ceiling_s = _GRANT_CEILING_S if ceiling_s is None else ceiling_s
+    poll_s = _POLL_S if poll_s is None else poll_s
+    deadline = time.monotonic() + ceiling_s
+    while time.monotonic() < deadline:
+        if check_fn is not None:
+            try:
+                if check_fn():
+                    return "granted"
+            except Exception:
+                pass
+        if _skip_pressed(tty):
+            return "skipped"
+        await asyncio.sleep(poll_s)
+    return "timeout"
 
 # Panes the user toggles by hand. Each entry is (pane, spoken instruction,
 # requester) where `requester` is the API that makes macOS CREATE the row —
@@ -492,66 +559,105 @@ async def _ping_microphone() -> bool:
     return check_microphone()  # reuse the existing probe
 
 
-async def bootstrap() -> dict[str, Any]:
-    """Interactive install-time permission walkthrough.
+# Probes for the panes we can read back, so the walkthrough advances the instant
+# the user grants — no fixed dwell. Full Disk Access has no probe (toggle-only).
+# Stored by NAME and resolved from the module at call time so the probe is always
+# the live function (tests patch these; a captured reference would miss the patch).
+_PANE_PROBE_NAME: dict[Pane, str | None] = {
+    "Accessibility": "check_accessibility_ax",
+    "ScreenCapture": "check_screen_recording",
+    "Calendars": "check_calendar",
+    "AllFiles": None,
+}
 
-    Prints headers, speaks one-line context in Spanish, triggers each system
-    dialog (or opens Settings for manual panes). Returns a dict of
-    {permission: status} for the final report.
+
+def _pane_probe(pane: Pane) -> Callable[[], bool] | None:
+    name = _PANE_PROBE_NAME.get(pane)
+    return globals()[name] if name else None
+
+
+async def bootstrap() -> dict[str, Any]:
+    """Interactive install-time permission walkthrough — paced by the USER.
+
+    One permission at a time: speak/print WHY Emma needs it before its dialog
+    appears, trigger the dialog, then wait on the permission's own probe and
+    advance the instant it's granted (generous ceiling, then auto-skip). Prints a
+    summary of what was and wasn't granted, and how to grant the rest later.
+    Idempotent — re-run any time (`emma.permissions retry`) to finish the rest.
+    Returns {permission: status} for the report.
     """
     results: dict[str, str] = {}
+    tty = _open_tty()
 
     print("\n=== Permisos de macOS ===")
-    print("Voy a abrir cada diálogo de permisos. Dale Allow a cada uno.\n")
+    print("Un permiso a la vez. Concédelo y sigo solo; toca una tecla para saltarlo.")
+    print("Puedes completar los que falten después con:  emma.permissions retry\n")
 
-    # 1. Microphone
-    print("→ Micrófono")
-    _say("Primero, micrófono. Dale Allow.")
-    mic_ok = await _ping_microphone()
-    results["Microphone"] = "granted" if mic_ok else "denied_or_pending"
-    await asyncio.sleep(2)
+    try:
+        # 1. Microphone — the one Emma can't work without.
+        print("→ Micrófono — para oír tu palabra clave y tus peticiones de voz.")
+        _say("Primero necesito el micrófono, para oírte. Dale Permitir.")
+        await _ping_microphone()  # first stream-open surfaces the mic prompt
+        results["Microphone"] = await _await_grant(check_microphone, tty=tty)
+        print(f"   {results['Microphone']}")
 
-    # 2. Automation (one prompt per app)
-    for app in _AUTOMATION_APPS:
-        print(f"→ Automation: {app}")
-        _say(f"Permiso para controlar {app}. Dale Allow.")
-        _, status = await _ping_automation(app)
-        results[f"Automation:{app}"] = status
-        # _say already blocked until the phrase ended; now give the user time
-        # to actually click Allow before the next app's ping fires.
-        await asyncio.sleep(_DWELL_AFTER_DIALOG_S)
+        # 2. Automation — one app at a time. The osascript consent dialog BLOCKS on
+        #    the user's answer, so this is already user-paced; we say why first.
+        for app in _AUTOMATION_APPS:
+            print(f"→ Controlar {app} — para leer y actuar en {app} cuando lo pidas.")
+            _say(f"Ahora, permiso para controlar {app}. Dale Permitir.")
+            _, status = await _ping_automation(app)
+            results[f"Automation:{app}"] = status
+            print(f"   {status}")
 
-    # 3. Manual panes (Accessibility, Screen Recording, Full Disk Access, Calendars)
-    for pane, instruction, requester in _MANUAL_PANES:
-        print(f"→ Manual: {pane}")
-        _say(instruction)
-        if requester is not None:
-            # Fire the API that CREATES the row before opening the pane. macOS
-            # shows its own "wants to control this computer" alert here; the
-            # return is the state *before* the user answers, so False on a
-            # first run is expected, not a failure.
-            granted = requester()
-            results[pane] = "granted" if granted else "requested"
-            print(f"   {'ya estaba concedido' if granted else 'alerta mostrada'}")
-        else:
-            results[pane] = "settings_opened"
-        _open_settings(pane)
-        await asyncio.sleep(6)  # manual panes need a longer dwell to interact
+        # 3. Manual panes — a real system alert appears; wait for the grant, don't
+        #    race past it. Poll the pane's probe (or a fixed dwell where none exists).
+        for pane, instruction, requester in _MANUAL_PANES:
+            print(f"→ {pane}")
+            _say(instruction)
+            if requester is not None:
+                # Fire the API that CREATES the row (AXIsProcessTrustedWithOptions /
+                # CGRequestScreenCaptureAccess) so the pane opens with Emma present.
+                requester()
+            _open_settings(pane)
+            probe = _pane_probe(pane)
+            if probe is not None:
+                results[pane] = await _await_grant(probe, tty=tty)
+            else:
+                # No read-back probe (Full Disk Access): give a fixed, generous
+                # window to toggle it, skippable with a keypress.
+                results[pane] = await _await_grant(
+                    None, ceiling_s=_NO_PROBE_DWELL_S, tty=tty
+                )
+                if results[pane] == "timeout":
+                    results[pane] = "opened_no_probe"
+            print(f"   {results[pane]}")
+    finally:
+        if tty is not None:
+            with contextlib.suppress(Exception):
+                tty.close()
 
-    # Re-probe the two we can actually read back, so the recap reports the
-    # user's answer rather than what we asked for.
-    results["Accessibility"] = "granted" if check_accessibility_ax() else results["Accessibility"]
-    results["ScreenCapture"] = (
-        "granted" if check_screen_recording() else results["ScreenCapture"]
-    )
+    # Summary — what's granted, what's still missing, and how to fix it.
+    def _ok(v: str) -> bool:
+        return v in ("granted", "dialog_shown")
 
-    # Recap
+    missing = [k for k, v in results.items() if not _ok(v)]
     print("\n=== Resumen ===")
     for k, v in results.items():
-        print(f"  {k}: {v}")
-    print(
-        "\nSi te perdiste algún diálogo, abre Configuración del Sistema → "
-        "Privacidad y Seguridad y autoriza manualmente.\n"
-    )
-    _say("Listo, permisos pedidos.")
+        mark = "✓" if _ok(v) else "•"
+        print(f"  {mark} {k}: {v}")
+    if missing:
+        print(
+            f"\nFaltan {len(missing)}: "
+            + ", ".join(m.split(':')[-1] for m in missing)
+            + ".\n  Concédelos en Configuración → Privacidad y Seguridad, o re-corre:"
+            "\n    emma.permissions retry\n"
+        )
+        _say(
+            "Terminé. Algunos permisos quedaron pendientes; puedes darlos después "
+            "desde la app o volviendo a correr la configuración."
+        )
+    else:
+        print("\nTodo concedido. ✓\n")
+        _say("Listo, todos los permisos concedidos.")
     return results

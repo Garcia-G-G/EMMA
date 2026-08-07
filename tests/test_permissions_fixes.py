@@ -115,9 +115,10 @@ def test_every_automation_app_has_a_query() -> None:
     assert not missing, f"_AUTOMATION_APPS entries without a query: {missing}"
 
 
-def test_dwell_constant_is_at_least_four_seconds() -> None:
-    """Per-app dwell must give the user >=4s to click Allow (constraint)."""
-    assert permissions._DWELL_AFTER_DIALOG_S >= 4.0
+def test_grant_ceiling_is_generous() -> None:
+    """LAUNCH-2.1: the walkthrough waits on the user, not a fixed dwell. The grant
+    ceiling must be generous enough to read a real system alert and act on it."""
+    assert permissions._GRANT_CEILING_S >= 60.0
 
 
 # --- Prompt 24: EventKit Calendars permission ------------------------------

@@ -161,6 +161,7 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         self._mute_item = self._add_item(menu, "Silenciar micrófono", "toggleMute:", "")
         self._add_item(menu, "Dormir 15 min", "sleep15:", "")
         menu.addItem_(NSMenuItem.separatorItem())
+        self._add_item(menu, "Dar acceso a la pantalla…", "grantAccessibility:", "")
         self._add_item(menu, "Apagar Emma", "shutdownEmma:", "")
         self._add_item(menu, "Salir de esta ventana", "quitUI:", "q")
         self.item.setMenu_(menu)
@@ -176,6 +177,11 @@ class EmmaBar(NSObject):  # type: ignore[misc]
 
     def sleep15_(self, _sender: Any) -> None:
         send_control({"cmd": "snooze", "minutes": 15})
+
+    def grantAccessibility_(self, _sender: Any) -> None:  # noqa: N802
+        # Re-request Accessibility from the app if it was declined (LAUNCH-2.1). The
+        # daemon runs it, so the macOS alert + the Settings row belong to Emma.
+        send_control({"cmd": "request_accessibility"})
 
     def shutdownEmma_(self, _sender: Any) -> None:  # noqa: N802
         alert = NSAlert.alloc().init()

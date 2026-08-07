@@ -62,6 +62,24 @@ async def test_mute_reaches_orchestrator() -> None:
 
 
 @pytest.mark.asyncio
+async def test_request_accessibility_runs_in_the_daemon() -> None:
+    # LAUNCH-2.1: declining Accessibility must be recoverable FROM THE APP. The
+    # daemon (as EmmaDaemon.app) makes the request, so the alert/row belong to Emma.
+    from unittest.mock import patch
+
+    from core import permissions
+
+    with (
+        patch.object(permissions, "request_accessibility_trust", return_value=False) as req,
+        patch.object(permissions, "_open_settings") as opened,
+    ):
+        res = await server.dispatch_control({"cmd": "request_accessibility"})
+    assert res["ok"] is True and res["granted"] is False
+    req.assert_called_once()
+    opened.assert_called_once_with("Accessibility")
+
+
+@pytest.mark.asyncio
 async def test_snooze_uses_given_minutes() -> None:
     res = await server.dispatch_control({"cmd": "snooze", "minutes": 15})
     assert res["ok"] is True
