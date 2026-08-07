@@ -435,6 +435,19 @@ async def dispatch_control(msg: dict) -> dict:
             from core import dev_state
 
             dev_state.shutdown_requested.set()
+        elif cmd == "request_accessibility":
+            # Recover a declined Accessibility grant FROM THE APP (LAUNCH-2.1 Item 2)
+            # — not only by re-running a shell command. This runs in the daemon,
+            # which (as EmmaDaemon.app) is the correct TCC subject, so the alert and
+            # the resulting row belong to Emma, not to whatever launched the UI.
+            from core import permissions
+
+            granted = permissions.request_accessibility_trust()
+            permissions._open_settings("Accessibility")
+            return {
+                "type": "control_result", "ok": True, "cmd": cmd,
+                "granted": bool(granted), **_control_status(),
+            }
         elif cmd == "status":
             pass  # just report state below
         else:
