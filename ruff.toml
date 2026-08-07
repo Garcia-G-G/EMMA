@@ -2,11 +2,37 @@ line-length = 100
 target-version = "py311"
 
 [lint]
-select = ["E", "F", "I", "B", "UP", "N", "RUF", "SIM"]
+# ASYNC: blocking calls inside async def. In an audio pipeline an event-loop
+# stall is audible, and LAUNCH-4 found 7 of them on the boot path itself
+# (subprocess.run inside do_pair, blocking pathlib I/O on the Keychain path).
+# Selected so that class of bug cannot come back; the remaining debt is listed
+# per-file below and should shrink, never grow.
+select = ["E", "F", "I", "B", "UP", "N", "RUF", "SIM", "ASYNC"]
 ignore = ["E501"]
 
 [lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
+# Pre-existing ASYNC debt (LAUNCH-4 4i). The BOOT path is clean — these are all
+# on tool//backend paths that run mid-session, where a brief stall is not
+# audible. Listed explicitly so a new offender fails CI instead of hiding in an
+# aggregate count. Remove entries as they are fixed; do not add new ones.
+"actions/environment.py" = ["ASYNC"]
+"backend/demo_session.py" = ["ASYNC"]
+"backend/wake_routes.py" = ["ASYNC"]
+"core/coding_agent.py" = ["ASYNC"]
+"core/url_safety.py" = ["ASYNC"]
+"core/wake_word.py" = ["ASYNC"]
+"core/x_oauth.py" = ["ASYNC"]
+"emma/setup.py" = ["ASYNC"]
+"tests/**" = ["ASYNC"]
+"tools/agents_tool.py" = ["ASYNC"]
+"tools/codex_tool.py" = ["ASYNC"]
+"tools/dictionary_tool.py" = ["ASYNC"]
+"tools/file_ops_tool.py" = ["ASYNC"]
+"tools/ide_actions.py" = ["ASYNC"]
+"tools/lifecycle_tool.py" = ["ASYNC"]
+"tools/postman_tool.py" = ["ASYNC"]
+"tools/tableplus_tool.py" = ["ASYNC"]
 
 [format]
 quote-style = "double"
