@@ -662,6 +662,16 @@ async def start():
         def log_message(self, format, *args):
             pass  # silence
 
+        def end_headers(self):
+            # Never let the app window run a cached copy of itself. The window is
+            # a WKWebView over this server, so a conditional-GET 304 after an
+            # upgrade would keep serving the OLD index.html against a NEW daemon
+            # — new control commands answering into a page that cannot call them.
+            # Caught during LAUNCH-7 browser verification, where an edited page
+            # kept behaving like the previous one.
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            super().end_headers()
+
         def _rewrite(self):
             if self.path.split("?")[0].rstrip("/") == "/visualizer":
                 self.path = "/visualizer.html"

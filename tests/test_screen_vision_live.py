@@ -16,9 +16,20 @@ covered here: `frontmost_window`, `_focused_window`, `_current_screen_sync`,
 `read_current_screen`, plus `_bounds`, `_is_secure` and `_resolve_focused_pane`.
 
 Every skip is LOUD. A skip that reads "AX denied" is a finding, not a pass.
+
+Deselected by default (see pyproject `addopts`) and run deliberately:
+
+    .venv/bin/python -m pytest tests/ -m macos_live
+
+They read the LIVE desktop — which app is frontmost and whether it has a focused
+window — so run them with an ordinary app in front. Inside a full-suite run, or
+while something else is driving the screen, focus churns and they fail for
+reasons that have nothing to do with the permission.
 """
 
 from __future__ import annotations
+
+import time
 
 import pytest
 
@@ -55,12 +66,25 @@ def test_process_is_ax_trusted() -> None:
 
 
 def test_frontmost_window_returns_a_real_snapshot() -> None:
-    """The top of the acquisition chain, against the live AX API."""
+    """The top of the acquisition chain, against the live AX API.
+
+    Retried briefly: "frontmost app" and "that app's focused window" are read a
+    moment apart, so an app activating mid-test (or one that genuinely has no
+    window open right then) yields a transient None. A real TCC denial never
+    recovers, so a short retry removes the flake without weakening the check —
+    observed failing exactly once during LAUNCH-7 while browser automation was
+    switching focus.
+    """
     _require_ax()
-    snap = sv.frontmost_window()
+    snap = None
+    for _ in range(6):
+        snap = sv.frontmost_window()
+        if snap is not None:
+            break
+        time.sleep(0.25)
     assert snap is not None, (
-        "frontmost_window() returned None while an app is focused — the exact "
-        "signature of a TCC denial (see permissions.ax_smoke)."
+        "frontmost_window() returned None for 1.5s while an app is focused — the "
+        "exact signature of a TCC denial (see permissions.ax_smoke)."
     )
     assert snap.app, "snapshot carries no app name"
     assert snap.role == sv.ROLE_WINDOW
