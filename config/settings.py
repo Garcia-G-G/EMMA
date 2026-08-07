@@ -32,6 +32,12 @@ _CREDENTIAL_FIELDS = (
 )
 
 
+# Credentials that only a BYOK/dev daemon can use. In managed mode the bearer is
+# the paired device token, so reading these at boot costs a `security` subprocess
+# each and can never change the outcome.
+_BYOK_ONLY_CREDENTIALS = frozenset({"OPENAI_API_KEY", "POSTGRES_DSN", "PICOVOICE_ACCESS_KEY"})
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -279,7 +285,21 @@ class Settings(BaseSettings):
             return self
         from core.secrets import retrieve_sync
 
-        for name in _CREDENTIAL_FIELDS:
+        # In managed mode this is NOT dormant — OPENAI_API_KEY is always blank
+        # there, so the early return never fires and every boot of every process
+        # that imports settings spawned 15 sequential `security` subprocesses,
+        # each with a 5s timeout: up to 75s of boot latency before `starting` is
+        # even logged, paid again by every `python -m emma.ui` respawn.
+        #
+        # A managed daemon's credential is the device token (core.pairing reads
+        # it directly, under its own label), so none of these 15 apply. Read the
+        # ones that still could — a managed user can absolutely have a Brave key
+        # or a GitHub token — but skip the ones that only mean anything to a BYOK
+        # daemon, and never block boot on the whole list.
+        names: tuple[str, ...] = _CREDENTIAL_FIELDS
+        if self._is_managed():
+            names = tuple(n for n in names if n not in _BYOK_ONLY_CREDENTIALS)
+        for name in names:
             if not getattr(self, name, None):
                 val = retrieve_sync(name)
                 if val:
@@ -291,8 +311,24 @@ class Settings(BaseSettings):
     # that gates orchestrator._ensure_paired — so a dev/BYOK daemon (flag unset) is
     # completely unaffected: it keeps using OPENAI_API_KEY against api.openai.com.
     def _is_managed(self) -> bool:
+        """Managed (client) mode: credentials come from a paired device token.
+
+        EMMA_REQUIRE_PAIRING is the explicit signal, but it is no longer the ONLY
+        one. A daemon that dies because a single environment variable went
+        missing is too fragile, and this exact class of failure — "is the flag
+        really in the loaded job's environment?" — consumed an entire
+        investigation (LAUNCH-4).
+
+        The fallback needs no subprocess and no Keychain read: a BYOK/dev daemon
+        ALWAYS has an OPENAI_API_KEY (that is what makes it BYOK), so a daemon
+        with no local key can only be a managed one. Worst case the flag is
+        missing on a BYOK box whose key also failed to load — and then parking
+        alive awaiting onboarding beats exiting into a restart loop.
+        """
         import os
-        return os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes")
+        if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes"):
+            return True
+        return not self.OPENAI_API_KEY
 
     def openai_api_key(self) -> str:
         """Bearer for OpenAI calls: the paired device token (managed) or the local

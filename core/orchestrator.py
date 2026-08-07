@@ -35,6 +35,11 @@ _last_turn_id: str = ""
 _last_session_end_mono: float = 0.0
 _LOOPBACK_WATCHDOG_S = 30.0
 
+# Unpaired-parking poll, ramped (LAUNCH-4 4b). Each tick spawns a `security`
+# subprocess; a flat 2s was ~43k/day on a Mac left unpaired.
+_PAIR_POLL_MIN_S = 2.0
+_PAIR_POLL_MAX_S = 30.0
+
 # Voice "duérmete N minutos" pauses wake listening until this monotonic deadline.
 # 0 = listening normally. Set by the snooze_listening tool; honored in _one_session.
 _snooze_until: float = 0.0
@@ -329,9 +334,11 @@ async def _ensure_paired() -> None:
     (there's no account yet). A dev/BYOK daemon (EMMA_REQUIRE_PAIRING unset) returns
     immediately and is unaffected. Cancellable: a shutdown unwinds the wait cleanly."""
     global _onboarding_needed
-    import os
 
-    if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() not in ("1", "true", "yes"):
+    # Same resolution as settings.openai_api_key()/_credential_preflight. If these
+    # ever disagree the daemon either parks with a usable key or, worse, runs
+    # unparked with none — so there is exactly one definition of "managed".
+    if not settings._is_managed():
         return
     from core import pairing
 
@@ -341,9 +348,23 @@ async def _ensure_paired() -> None:
 
     _onboarding_needed = True
     log.info("awaiting_onboarding")
+    # Ramp 2s -> 30s. Every tick is a `security` subprocess plus a log line, and
+    # a Mac can sit unpaired for days: at a flat 2s that was ~43k Keychain
+    # spawns/day. Stay responsive for the first minute (the user is looking at
+    # the onboarding window right now), then relax.
+    delay = _PAIR_POLL_MIN_S
     try:
         while not _shutdown.is_set():
-            if await pairing.is_paired():
+            try:
+                paired = await pairing.is_paired()
+            except Exception as exc:
+                # A locked/hung Keychain raises (core/secrets.py's 5s timeout).
+                # Uncaught, that propagated to main_loop -> handle_crash -> exit 1
+                # -> launchd restart, i.e. a locked keychain became a permanent
+                # boot loop. Degrade: keep parking and try again.
+                log.warning("pairing_probe_failed", error=str(exc), retry_in_s=delay)
+                paired = False
+            if paired:
                 await pairing.load_token_cache()
                 log.info("onboarding_complete")
                 events_bus.publish("state", state="waiting_for_wake")
@@ -351,7 +372,8 @@ async def _ensure_paired() -> None:
             # Re-publish each tick: the events bus doesn't replay to subscribers, so
             # a late/reconnecting UI still learns it should show onboarding.
             events_bus.publish("state", state="needs_onboarding")
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(delay)
+            delay = min(delay * 1.5, _PAIR_POLL_MAX_S)
     finally:
         _onboarding_needed = False
 

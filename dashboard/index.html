@@ -363,6 +363,8 @@
         <div class="between"><span class="muted">Cuenta</span><span class="mono" id="c-email">—</span></div>
         <div class="between" style="margin-top:9px"><span class="muted">Plan</span><span class="mono" id="c-plan">—</span></div>
         <div class="between" style="margin-top:9px"><span class="muted">Estado</span><span class="mono" id="c-state">—</span></div>
+        <div class="between" style="margin-top:9px"><span class="muted">Versión</span><span class="mono" id="c-ver">—</span></div>
+        <div class="stale" id="c-stale" hidden></div>
       </div>
       <div class="card">
         <div class="between">
@@ -427,7 +429,8 @@ document.querySelectorAll("nav .tab").forEach((b) => {
     document.querySelectorAll("main section").forEach((s) => { s.hidden = true; });
     $("#tab-" + b.dataset.tab).hidden = false;
     if (b.dataset.tab === "memoria") loadFacts();
-    if (b.dataset.tab === "uso" || b.dataset.tab === "cuenta") loadBalance();
+    if (b.dataset.tab === "uso") loadBalance();
+    if (b.dataset.tab === "cuenta") { loadBalance(); loadVersion(); }
   });
 });
 
@@ -575,6 +578,19 @@ async function loadBalance() {
     $("#u-stale").textContent = "Sin conexión. Último dato: " + new Date(r.stale_at * 1000).toLocaleString("es-MX");
   } else { $("#u-stale").hidden = true; }
 }
+/* Which code is running. The stale-tarball bug was invisible for months
+   because nothing anywhere said "you are not running what you think". */
+async function loadVersion() {
+  const v = await control({ cmd: "version" });
+  if (!v || !v.ok) { $("#c-ver").textContent = "—"; return; }
+  $("#c-ver").textContent = v.commit || v.fingerprint || "—";
+  const el = $("#c-stale");
+  if (v.stale === true) {
+    el.hidden = false;
+    el.textContent = "Hay una versión más nueva. Vuelve a correr el instalador para actualizar.";
+  } else { el.hidden = true; }
+}
+
 function outOfMinutes() {
   OUT = true;
   $("#uso-pip").hidden = false;
@@ -650,6 +666,7 @@ connectEvents();
 loadPersonality();
 loadFacts();
 loadBalance();
+loadVersion();
 control({ cmd: "status" }).then((r) => { if (r && r.muted) setState("muted"); });
 window.__emma_painted = true;   // the render watchdog's sentinel
 </script>
