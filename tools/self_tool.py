@@ -14,6 +14,7 @@ This module:
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 from pathlib import Path
 
@@ -74,6 +75,22 @@ def regenerate_capabilities_md() -> None:
         safe_desc = desc.replace("|", "\\|").replace("\n", " ")
         lines.append(f"| `{name}` | {safe_desc} |")
     lines.append("")
+
+    # Truly idempotent: only the `Generated:` timestamp changes between two runs
+    # with the same tool set, so rewriting every startup churned the file (a
+    # tracked artifact) on every boot. Skip the write when the TOOL CONTENT is
+    # unchanged — compare everything but the timestamp line, and keep the old file
+    # (and its timestamp) intact.
+    def _body(text_lines: list[str]) -> list[str]:
+        body = [ln for ln in text_lines if not ln.startswith("<!-- Generated:")]
+        while body and body[-1] == "":  # str.splitlines() drops the trailing blank
+            body.pop()                   # that "\n".join leaves — normalize both sides
+        return body
+
+    with contextlib.suppress(Exception):
+        if _body(CAPABILITIES_PATH.read_text().splitlines()) == _body(lines):
+            return  # nothing changed but the clock — leave the file alone
+
     try:
         CAPABILITIES_PATH.parent.mkdir(parents=True, exist_ok=True)
         CAPABILITIES_PATH.write_text("\n".join(lines))
