@@ -281,7 +281,12 @@ async def create_demo_session(
             db.record_demo_hit(iph)
         caps = plan_caps("free")
         secs = int(caps["session_seconds"])
-        cost_cents = int(caps["cost_cap_cents"])
+        # The public landing demo has its OWN budget knob (DEMO_COST_CAP_CENTS, 40¢),
+        # NOT the free daemon-trial's per-session cost cap. PAID-ONBOARDING lowered
+        # free.cost_cap_cents to 15¢ (inert for the daemon, which is gated by
+        # monthly_seconds) — inheriting it here would hard-stop a ~30¢ 60s demo at
+        # half its advertised length, degrading the conversion funnel. Decouple.
+        cost_cents = int(settings.DEMO_COST_CAP_CENTS)
         sid = db.create_session(None)
         tok = issue_token(sid, "demo", secs, None, cost_cents)
         _attempt_log(iph, "/demo/sessions", 200)
