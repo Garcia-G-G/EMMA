@@ -342,9 +342,17 @@ async def _ensure_paired() -> None:
         return
     from core import pairing
 
-    if await pairing.is_paired():
-        await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
-        return
+    try:
+        if await pairing.is_paired():
+            await pairing.load_token_cache()  # Phase 2B: managed OpenAI calls read this
+            return
+    except Exception as exc:
+        # A locked/hung Keychain at login raises here too (core/secrets.py's 5s
+        # timeout). The in-loop probe below degrades; this initial one must as well,
+        # or an uncaught raise propagates to main_loop -> handle_crash -> exit 1 ->
+        # a permanent launchd boot loop. Fall through into the park loop, which
+        # retries with backoff and completes once the Keychain unlocks.
+        log.warning("pairing_probe_failed", error=str(exc), phase="initial")
 
     _onboarding_needed = True
     log.info("awaiting_onboarding")

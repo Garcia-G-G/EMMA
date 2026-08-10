@@ -91,7 +91,11 @@ def clear(kind: str | None = None) -> None:
     """
     state = _read()
     if kind is None:
-        state = {k: v for k, v in state.items() if not k.endswith("_boot")}
+        # Forget every failure streak, but KEEP the ``said:`` speak-rate markers —
+        # a good boot must not make a declined-permission notice start repeating.
+        # (The old filter matched ``endswith("_boot")``, which no recorded kind
+        # uses — "credentials"/"permissions"/"wake_model" — so it cleared nothing.)
+        state = {k: v for k, v in state.items() if k.startswith("said:")}
     else:
         state.pop(kind, None)
     _write(state)

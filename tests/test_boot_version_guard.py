@@ -115,6 +115,24 @@ def test_streaks_are_per_kind() -> None:
     assert boot_guard.should_stay_down("permissions") is False
 
 
+def test_clear_all_forgets_streaks_but_keeps_speak_markers() -> None:
+    # A good boot calls clear() (kind=None): it must forget the real failure kinds
+    # (credentials/permissions/wake_model — none of which end in "_boot", the bug
+    # the old filter had) yet keep the "said:" speak-rate markers so a
+    # declined-permission notice doesn't start repeating after every good boot.
+    for _ in range(4):
+        boot_guard.record_failure("credentials")
+        boot_guard.record_failure("wake_model")
+    assert boot_guard.should_speak("permissions", interval_s=9_999) is True  # records said:permissions
+
+    boot_guard.clear()
+
+    assert boot_guard.should_stay_down("credentials") is False  # streak forgotten
+    assert boot_guard.should_stay_down("wake_model") is False
+    # still rate-limited → the marker survived the clear
+    assert boot_guard.should_speak("permissions", interval_s=9_999) is False
+
+
 def test_an_old_failure_is_not_part_of_the_streak(monkeypatch) -> None:
     """A user who fixed something and rebooted hours later starts fresh."""
     boot_guard.record_failure("k")
