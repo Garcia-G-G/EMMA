@@ -25,6 +25,28 @@ def _clear_shutdown():
     orchestrator._onboarding_needed = False
 
 
+def test_wake_preflight_passes_when_model_present(monkeypatch, tmp_path):
+    (tmp_path / "tokens.txt").write_text("x")
+    monkeypatch.setattr(emma_main.settings, "WAKE_WORD_ENGINE", "sherpa")
+    monkeypatch.setattr(emma_main.settings, "SHERPA_KWS_MODEL_PATH", str(tmp_path))
+    assert emma_main._wake_preflight(structlog.get_logger("t")) is None
+
+
+def test_wake_preflight_fails_terminally_when_model_missing(monkeypatch, tmp_path):
+    # Missing sherpa model → a terminal exit (int), NOT the lazy SystemExit that
+    # would escape main_loop and 30s-loop under launchd.
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))  # isolate boot_guard state
+    monkeypatch.setattr(emma_main.settings, "WAKE_WORD_ENGINE", "sherpa")
+    monkeypatch.setattr(emma_main.settings, "SHERPA_KWS_MODEL_PATH", str(tmp_path / "nope"))
+    rc = emma_main._wake_preflight(structlog.get_logger("t"))
+    assert rc in (0, 1)  # retryable (1) at first, 0 once the streak says stay-down
+
+
+def test_wake_preflight_skips_non_sherpa_engines(monkeypatch):
+    monkeypatch.setattr(emma_main.settings, "WAKE_WORD_ENGINE", "openwakeword")
+    assert emma_main._wake_preflight(structlog.get_logger("t")) is None
+
+
 @pytest.mark.asyncio
 async def test_ensure_paired_noop_when_not_managed(monkeypatch):
     monkeypatch.delenv("EMMA_REQUIRE_PAIRING", raising=False)

@@ -44,6 +44,18 @@ def _report_bg_failure(task: asyncio.Task[Any]) -> None:
         )
 
 
+def _spawn_bg(coro: Any, *, name: str) -> asyncio.Task[Any]:
+    """Create a tracked sibling task whose exception can never vanish silently.
+
+    Every long-lived background task (dashboard, UI supervisor, proactive engine,
+    conditionals watcher) must carry `_report_bg_failure`, or a raise inside it dies
+    unseen — the exact invisibility the callback exists to prevent."""
+    task = asyncio.create_task(coro, name=name)
+    task.add_done_callback(_report_bg_failure)
+    _bg_tasks.append(task)
+    return task
+
+
 def _setup_logging(debug: bool) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     level = logging.DEBUG if debug else getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
@@ -249,6 +261,29 @@ def _credential_preflight(log: structlog.BoundLogger) -> int | None:
     return None
 
 
+def _wake_preflight(log: structlog.BoundLogger) -> int | None:
+    """Fail fast (with backoff) if the shipped wake engine's model is missing.
+
+    Otherwise ``core/wake_sherpa.py`` raises ``SystemExit`` lazily on the FIRST
+    session — and ``SystemExit`` is a ``BaseException``, so it slips past
+    ``main_loop``'s ``except Exception`` and becomes a permanent 30s launchd loop
+    (the model won't reappear on its own). Route it through the same
+    ``_terminal_exit`` backoff as credentials/permissions instead. Only sherpa (the
+    default) is checked here; the other engines keep their own lazy guards.
+    """
+    engine = (settings.WAKE_WORD_ENGINE or "sherpa").strip().lower()
+    if engine != "sherpa":
+        return None
+    model = Path(settings.SHERPA_KWS_MODEL_PATH).expanduser()
+    if (model / "tokens.txt").exists():
+        return None
+    log.error("wake_model_missing", engine=engine, path=str(model))
+    return _terminal_exit(
+        log, "wake_model",
+        f"sherpa KWS model missing at {model} — re-run the installer (step 5)",
+    )
+
+
 async def _supervise_ui(log: structlog.BoundLogger) -> None:
     """Spawn the menubar UI (`python -m emma.ui`) and respawn it if it dies.
 
@@ -306,16 +341,12 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
         from dashboard import server as dashboard
 
         # Keep a reference so the task isn't garbage-collected mid-run.
-        _dash = asyncio.create_task(dashboard.start())  # type: ignore[no-untyped-call]
-        # Retrieve the result: a create_task whose exception nobody reads fails
-        # silently, and this task owns the app's only route to the daemon.
-        _dash.add_done_callback(_report_bg_failure)
-        _bg_tasks.append(_dash)
+        _spawn_bg(dashboard.start(), name="emma-dashboard")  # type: ignore[no-untyped-call]
         log.info("dashboard_started", port=settings.DASHBOARD_PORT)
 
         # Spawn + supervise the menubar UI (EMMA-APP). It needs the control channel
         # the dashboard just opened, so it rides the same opt-in flag.
-        _bg_tasks.append(asyncio.create_task(_supervise_ui(log), name="emma-ui-supervisor"))
+        _spawn_bg(_supervise_ui(log), name="emma-ui-supervisor")
         log.info("emma_ui_supervisor_spawned")
 
     # Proactive engine (Prompt 17): scheduled briefings + event triggers. Runs
@@ -323,14 +354,14 @@ async def _run_orchestrator(log: structlog.BoundLogger) -> int:
     if settings.PROACTIVE_ENABLED:
         from core.proactive import engine as proactive_engine
 
-        _bg_tasks.append(asyncio.create_task(proactive_engine.run(), name="emma-proactive"))
+        _spawn_bg(proactive_engine.run(), name="emma-proactive")
         log.info("proactive_engine_spawned")
 
     # Conditional-trigger watcher (Prompt 32): polls mail / calendar / clock and
     # fires "si X pasa, haz Y" actions once. Independent of the proactive engine.
     from core import conditionals
 
-    _bg_tasks.append(asyncio.create_task(conditionals.watch(), name="emma-conditionals"))
+    _spawn_bg(conditionals.watch(), name="emma-conditionals")
     log.info("conditionals_watcher_spawned")
 
     def _shutdown(sig: int) -> None:
@@ -420,7 +451,16 @@ def main() -> int:
             "grant the permission in System Settings → Privacy & Security",
         )
 
+    wake_rc = _wake_preflight(log)
+    if wake_rc is not None:
+        return wake_rc
+
     orchestrator.preflight()
+
+    # Booted past every stage that can hold the daemon down — forget prior failure
+    # streaks so a user who just fixed their config isn't tripped by yesterday's
+    # (boot_guard.should_stay_down only fires on a fresh streak otherwise).
+    boot_guard.clear()
 
     # Warm the environment detection cache (idempotent; uses 24h TTL).
     try:
