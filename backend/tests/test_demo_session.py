@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from backend import db, demo_session
 from backend.app import app
-from backend.config import PLAN_CAPS, settings
+from backend.config import settings
 
 
 @pytest.fixture(autouse=True)
@@ -48,9 +48,10 @@ def test_create_returns_session(client, monkeypatch):
     assert r.status_code == 200
     b = r.json()
     assert b["session_id"].startswith("") and "/demo/ws/" in b["ws_url"]
-    # The demo cost cap flows from the free plan caps (PAID-ONBOARDING lowered free
-    # to 15¢ — still ample for a 60s demo), not settings.DEMO_COST_CAP_CENTS.
-    assert b["cost_cap_cents"] == PLAN_CAPS["free"]["cost_cap_cents"]
+    # The public landing demo uses its own budget knob (DEMO_COST_CAP_CENTS), NOT
+    # the free daemon-trial's per-session cap — so lowering free.cost_cap_cents to
+    # 15¢ can't cut the ~30¢ 60s demo in half.
+    assert b["cost_cap_cents"] == settings.DEMO_COST_CAP_CENTS
     assert b["duration_seconds"] == settings.DEMO_TALK_SECONDS
     assert "token=" in b["ws_url"]  # the JWT, not raw creds
 

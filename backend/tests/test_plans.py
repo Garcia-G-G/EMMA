@@ -90,7 +90,10 @@ def test_anonymous_demo_is_free_caps(client):
     assert r.status_code == 200
     body = r.json()
     assert body["duration_seconds"] == PLAN_CAPS["free"]["session_seconds"] == 60
-    assert body["cost_cap_cents"] == PLAN_CAPS["free"]["cost_cap_cents"]
+    # The public demo's cost cap is its own knob (DEMO_COST_CAP_CENTS), decoupled
+    # from the free daemon-trial's per-session cap so the trial's 15¢ can't halve it.
+    from backend.config import settings
+    assert body["cost_cap_cents"] == settings.DEMO_COST_CAP_CENTS
 
 
 def test_pro_user_gets_pro_caps(client):
