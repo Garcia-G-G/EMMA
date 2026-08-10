@@ -145,87 +145,59 @@ def _memory_facts() -> list[dict]:
 
 
 def _wake_word_card() -> dict:
-    """Wake-word status card reflecting the live engine config (Prompt 16)."""
+    """Live wake-word status, reflecting the configured engine (shipped default: sherpa)."""
     from config.settings import settings
 
-    engine = (settings.WAKE_WORD_ENGINE or "openwakeword").lower()
+    engine = (settings.WAKE_WORD_ENGINE or "sherpa").lower()
+    if engine == "sherpa":
+        model = Path(settings.SHERPA_KWS_MODEL_PATH).expanduser()
+        present = (model / "tokens.txt").exists()
+        return {
+            "id": "WAKE",
+            "severity": "info" if present else "medium",
+            "status": "closed" if present else "open",
+            "title": 'sherpa-onnx KeywordSpotter — di "Emma"',
+            "detail": (
+                f"Engine sherpa (offline KWS, keyword list). Model at {model}."
+                if present
+                else f"WAKE_WORD_ENGINE=sherpa but the KWS model is missing at {model}. "
+                "Re-run the installer (step 5)."
+            ),
+        }
     if engine == "pvporcupine":
         ppn = Path(settings.WAKE_WORD_PATH)
         if not ppn.is_absolute():
             ppn = Path(__file__).resolve().parent.parent / ppn
-        if ppn.exists():
-            return {
-                "id": "WAKE-02",
-                "severity": "info",
-                "status": "closed",
-                "title": "Custom Picovoice 'Emma' wake word active",
-                "detail": (
-                    f"Engine pvporcupine, keyword '{settings.WAKE_WORD_NAME}', "
-                    f"sensitivity {settings.WAKE_WORD_THRESHOLD}."
-                ),
-            }
+        present = ppn.exists()
         return {
-            "id": "WAKE-02",
-            "severity": "medium",
-            "status": "open",
-            "title": "Picovoice wake word configured but model file missing",
+            "id": "WAKE",
+            "severity": "info" if present else "medium",
+            "status": "closed" if present else "open",
+            "title": "Picovoice Porcupine wake word"
+            + ("" if present else " — model missing"),
             "detail": (
-                f"WAKE_WORD_ENGINE=pvporcupine but no .ppn at {ppn}. Train 'Emma' "
-                "in the Picovoice Console and drop it at wake_words/emma.ppn."
+                f"Engine pvporcupine, keyword '{settings.WAKE_WORD_NAME}', "
+                f"sensitivity {settings.WAKE_WORD_THRESHOLD}."
+                if present
+                else f"WAKE_WORD_ENGINE=pvporcupine but no .ppn at {ppn}."
             ),
         }
+    # openwakeword (custom .onnx) or an unknown value.
     return {
-        "id": "WAKE-02",
-        "severity": "low",
-        "status": "open",
-        "title": "Using built-in hey_jarvis (openWakeWord fallback)",
-        "detail": (
-            "Default engine. Switch to the custom 'Emma' wake word by training a "
-            ".ppn in the Picovoice Console and setting WAKE_WORD_ENGINE=pvporcupine "
-            "in .env."
-        ),
+        "id": "WAKE",
+        "severity": "info",
+        "status": "closed",
+        "title": f"Wake engine: {engine}",
+        "detail": f"WAKE_WORD_ENGINE={engine}, path '{settings.WAKE_WORD_PATH}'.",
     }
 
 
 def _known_issues() -> list[dict]:
-    return [
-        {
-            "id": "AUDIO-01",
-            "severity": "critical",
-            "status": "fixed",
-            "title": "No audio output (coral or ash)",
-            "detail": "Root cause: LLMContext frame never pushed + LLMAssistantAggregator missing. Fixed both. Audio works on coral and ash.",
-        },
-        {
-            "id": "ECHO-01",
-            "severity": "high",
-            "status": "fixed",
-            "title": "Echo self-interruption on MacBook speakers",
-            "detail": "Echo gate tuned: tail=600ms, barge_in_rms=3000 (echo peaks ~1900). VAD threshold 0.7.",
-        },
-        {
-            "id": "WAKE-01",
-            "severity": "low",
-            "status": "mitigated",
-            "title": "Wake chime leaks into session",
-            "detail": "Chime now blocking + 0.8s delay. First speech_started is benign (interrupts nothing). Model recovers.",
-        },
-        {
-            "id": "MEM-01",
-            "severity": "medium",
-            "status": "partial",
-            "title": "Reflection not wired to Pipecat",
-            "detail": "Explicit remember_fact works. Priming wired into system prompt. Auto-learning needs transcript event hooks.",
-        },
-        {
-            "id": "YT-01",
-            "severity": "low",
-            "status": "open",
-            "title": "YouTube disambiguation loop",
-            "detail": "Exact creator name match added but needs live validation.",
-        },
-        _wake_word_card(),
-    ]
+    # The live wake-word status is the only "issue" card worth surfacing on a
+    # shipped install. The former hardcoded AUDIO-01/ECHO-01/WAKE-01/MEM-01/YT-01
+    # entries were dev-era telemetry — long fixed or stale (MEM-01 was already false:
+    # reflection has been wired live since 22.1) — so they're dropped, not kept lying.
+    return [_wake_word_card()]
 
 
 def _recent_crashes() -> list[dict]:
