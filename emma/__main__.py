@@ -492,5 +492,30 @@ def main() -> int:
         return handle_crash(exc, ctx, REPO_ROOT)
 
 
+def _flush_and_hard_exit(rc: int) -> None:
+    """Terminate NOW, skipping Python's interpreter finalization.
+
+    ``Py_FinalizeEx`` dlcloses native extension modules at exit, and several of ours
+    (portaudio/CoreAudio HAL, sherpa_onnx/onnxruntime, sqlite3) intermittently
+    DEADLOCK in ``dlclose``/``__cxa_finalize`` — so the daemon shuts down cleanly but
+    the PROCESS never dies: voice "apágate" or a SIGTERM then hangs forever (confirmed
+    by a `sample`: the main thread wedged in ``Py_FinalizeEx → finalize_modules →
+    dlclose``). By the time ``main`` returns, ``asyncio.run`` has closed the loop and
+    the orchestrator's cleanup has run, so nothing important is left — flush the logs
+    (``os._exit`` skips atexit + stdio buffers) and hard-exit past the hazardous
+    finalization. Same philosophy as ``core/wake_word._close_stream_background``: let
+    wedged native teardown die with the process instead of blocking on it."""
+    with contextlib.suppress(Exception):
+        logging.shutdown()
+    with contextlib.suppress(Exception):
+        sys.stdout.flush()
+        sys.stderr.flush()
+    os._exit(rc if isinstance(rc, int) else 0)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        _rc = main()
+    except SystemExit as _e:  # terminal-auth exit etc. — still hard-exit, same hazard
+        _rc = _e.code if isinstance(_e.code, int) else (1 if _e.code else 0)
+    _flush_and_hard_exit(_rc)
