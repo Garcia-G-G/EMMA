@@ -25,6 +25,19 @@ def _clear_shutdown():
     orchestrator._onboarding_needed = False
 
 
+def test_daemon_entry_hard_exits_to_dodge_dlclose_deadlock(monkeypatch):
+    # The daemon must os._exit past Py_FinalizeEx: native extension teardown
+    # (portaudio/CoreAudio HAL, sherpa_onnx, sqlite) can deadlock in dlclose, so the
+    # process "shuts down" cleanly yet never dies (voice "apágate"/SIGTERM hangs
+    # forever). Lock the contract: the exit helper calls os._exit with the code.
+    codes: list = []
+    monkeypatch.setattr("os._exit", lambda c: codes.append(c))
+    emma_main._flush_and_hard_exit(0)
+    emma_main._flush_and_hard_exit(2)
+    emma_main._flush_and_hard_exit("boom")  # non-int (e.g. SystemExit(str)) → 0
+    assert codes == [0, 2, 0]
+
+
 def test_wake_preflight_passes_when_model_present(monkeypatch, tmp_path):
     (tmp_path / "tokens.txt").write_text("x")
     monkeypatch.setattr(emma_main.settings, "WAKE_WORD_ENGINE", "sherpa")
