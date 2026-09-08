@@ -43,6 +43,7 @@ from AppKit import (
     NSWindowStyleMaskMiniaturizable,
     NSWindowStyleMaskResizable,
     NSWindowStyleMaskTitled,
+    NSWorkspace,
 )
 from Foundation import NSURL, NSURLRequest
 from PyObjCTools import AppHelper
@@ -113,6 +114,75 @@ _ESTADO_LABEL = {
 }
 
 
+class _WebUIDelegate(NSObject):  # type: ignore[misc]
+    """WKUIDelegate for the app window's web view (LAUNCH-10 Part 3).
+
+    Deliberately NOT declared with ``protocols=[objc.protocolNamed("WKUIDelegate")]``.
+    That was tried, and it makes ``conformsToProtocol_`` report True while the
+    confirm panel stops being delivered at all — worse than the bug being fixed.
+    PyObjC matches these by selector name and resolves the block signatures from
+    the WebKit metadata; ``respondsToSelector_`` confirms all three are
+    registered, and the behavior is verified end-to-end in a real WKWebView (see
+    _planning/notes/LAUNCH-10-VERIFY.md). Do not "tidy" this into a formal
+    conformance without re-running that verification.
+
+    A WKWebView with no UI delegate silently no-ops the three things the
+    onboarding flow is built out of. Nothing throws; nothing logs; the buttons
+    just do nothing:
+
+      * ``window.open(url, "_blank")`` returns null — so "Abrir el navegador",
+        both "Comprar minutos" buttons and "Abrir panel web" were all dead, and
+        the pairing hand-off had no way to reach the browser at all.
+      * ``confirm()`` returns false immediately — so "Desvincular" always read
+        as "the user said no" and silently did nothing.
+
+    WebKit routes both through this delegate, and only if one is set.
+
+    The browser rule is unchanged and deliberate: pairing goes to the SYSTEM
+    browser, never this web view. It is the full web auth stack, OAuth included,
+    and a password must never be typed into a window Emma owns.
+    """
+
+    def webView_createWebViewWithConfiguration_forNavigationAction_windowFeatures_(  # noqa: N802
+        self, _webview: Any, _config: Any, action: Any, _features: Any
+    ) -> None:
+        """`window.open` / target=_blank → hand the URL to the system browser.
+
+        Returning None (rather than a new WKWebView) tells WebKit not to open a
+        popup inside the app, which is exactly what we want: the URL leaves for
+        Safari/Chrome and the app window stays on the onboarding pane, polling.
+        """
+        url = None
+        with contextlib.suppress(Exception):
+            url = action.request().URL()
+        if url is None:
+            log.warning("webview_open_no_url")
+            return None
+        log.info("webview_open_external", url=str(url.absoluteString()))
+        NSWorkspace.sharedWorkspace().openURL_(url)
+        return None
+
+    def webView_runJavaScriptConfirmPanelWithMessage_initiatedByFrame_completionHandler_(  # noqa: N802
+        self, _webview: Any, message: str, _frame: Any, handler: Any
+    ) -> None:
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(str(message))
+        alert.addButtonWithTitle_("Continuar")
+        alert.addButtonWithTitle_("Cancelar")
+        handler(alert.runModal() == NSAlertFirstButtonReturn)
+
+    def webView_runJavaScriptAlertPanelWithMessage_initiatedByFrame_completionHandler_(  # noqa: N802
+        self, _webview: Any, message: str, _frame: Any, handler: Any
+    ) -> None:
+        # Implemented for completeness: an unhandled alert() does not merely
+        # no-op, it leaves WebKit waiting on a panel nobody will ever dismiss.
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(str(message))
+        alert.addButtonWithTitle_("OK")
+        alert.runModal()
+        handler()
+
+
 class EmmaBar(NSObject):  # type: ignore[misc]
     """The menubar status item + its window. Main-thread only."""
 
@@ -123,6 +193,7 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         self._port = port
         self._window = None
         self._webview = None
+        self._ui_delegate = None
         self._state = "idle"
         self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(
             NSVariableStatusItemLength
@@ -225,7 +296,17 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         win.setTitle_("Emma")
         win.center()
         config = WKWebViewConfiguration.alloc().init()
+        # Popups must be allowed to REACH the UI delegate. Without this the
+        # window.open below is refused before createWebView... is ever called.
+        config.preferences().setJavaScriptCanOpenWindowsAutomatically_(True)
         webview = WKWebView.alloc().initWithFrame_configuration_(rect, config)
+        # Without a UI delegate, window.open() returns null and confirm() returns
+        # false, silently — which killed the pairing hand-off, both "Comprar
+        # minutos" buttons, "Abrir panel web" and "Desvincular" (LAUNCH-10 Part 3).
+        # Held on self: WebKit keeps only a weak reference, so a delegate that
+        # falls out of scope leaves us exactly where we started.
+        self._ui_delegate = _WebUIDelegate.alloc().init()
+        webview.setUIDelegate_(self._ui_delegate)
         # Load over http://127.0.0.1, NEVER file:// — a file origin is "null" and
         # the page's WebSocket to the dashboard fails origin checks.
         webview.loadRequest_(NSURLRequest.requestWithURL_(NSURL.URLWithString_(_HTTP_URL)))
