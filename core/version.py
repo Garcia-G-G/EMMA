@@ -120,9 +120,23 @@ def report() -> dict[str, Any]:
 
 
 def boot_line() -> dict[str, Any]:
-    """The subset worth logging on every boot — small, and no network."""
+    """The subset worth logging on every boot — small, and no network.
+
+    Carries the TIER as well as the code (LAUNCH-11). With two supported tiers
+    the support question "it doesn't work" has two completely different answers,
+    and the first thing anyone reading a log needs to know is which daemon this
+    is: a BYOK one that never talks to the backend, or a managed one that does
+    nothing else.
+    """
     r = report()
-    return {k: r[k] for k in ("fingerprint", "commit", "installed_at", "source") if r[k]}
+    out = {k: r[k] for k in ("fingerprint", "commit", "installed_at", "source") if r[k]}
+    try:
+        from config.settings import settings
+
+        out["mode"] = settings.mode()
+    except Exception as exc:  # a boot line must never be the thing that fails a boot
+        log.debug("boot_line_mode_unavailable", error=str(exc))
+    return out
 
 
 async def upstream_head(timeout_s: float = 6.0) -> str | None:

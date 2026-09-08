@@ -17,6 +17,12 @@ import asyncio
 
 from core import permissions
 
+_MODE_HELP = {
+    "byok": "your own OpenAI key, direct — the backend is never contacted",
+    "managed": "paired device token via the Emma proxy",
+    "unconfigured": "no key and no pairing yet — open the app to choose a tier",
+}
+
 
 def _check() -> int:
     """Probe each permission and print its state. Always exits 0."""
@@ -46,7 +52,14 @@ def _check() -> int:
 
     # Which code is answering these questions? A months-old installed tarball
     # will happily report healthy permissions for features it does not contain.
+    from config.settings import settings as live_settings
     from core import version
+
+    # Which TIER is this daemon? With BYO-key and managed both supported, "it
+    # doesn't work" has two different answers and this is the one command that
+    # tells them apart (LAUNCH-11 Part 1).
+    mode = live_settings.mode()
+    print(f"\nMode: {mode} ({_MODE_HELP.get(mode, 'unknown')})")
 
     v = asyncio.run(version.staleness())
     print(f"\nSource: {v['source']}")

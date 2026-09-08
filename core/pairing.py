@@ -42,6 +42,14 @@ async def stored_token() -> str | None:
 _token_cache: str | None = None
 
 
+def _invalidate_mode() -> None:
+    """Tell settings to re-resolve the tier. Pairing state is one of the two
+    things mode() reads, so every mutation of it has to say so (LAUNCH-11)."""
+    from config.settings import invalidate_mode_cache
+
+    invalidate_mode_cache()
+
+
 def cached_token() -> str | None:
     global _token_cache
     if _token_cache:
@@ -56,6 +64,7 @@ async def load_token_cache() -> str | None:
     """Populate the sync token cache from Keychain. Called once at pairing/boot."""
     global _token_cache
     _token_cache = await stored_token()
+    _invalidate_mode()
     return _token_cache
 
 
@@ -100,6 +109,7 @@ async def poll_once(device_code: str) -> tuple[str, dict[str, Any] | None]:
                     dictionary.set_user_field("display_name", name)
             global _token_cache
             _token_cache = data["access_token"]  # the wake loop reads this synchronously
+            _invalidate_mode()  # unconfigured -> managed, right now
             log.info("device_paired", user=user.get("email"))
             return ("paired", data)
         try:
@@ -136,6 +146,9 @@ async def poll_until_authorized(device_code: str, interval: int, expires_in: int
 async def revoke_local() -> None:
     """Clear the token from Keychain (does NOT revoke server-side; the user does that)."""
     await kc.delete(_TOKEN_LABEL)
+    global _token_cache
+    _token_cache = None
+    _invalidate_mode()  # managed -> unconfigured (or byok, if a key is present)
 
 
 def device_name() -> str:
