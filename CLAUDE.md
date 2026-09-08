@@ -166,9 +166,18 @@ When adding a tool:
    provide, give its module a `def available() -> bool` (or the tool a
    `@tool(available=...)`). Probes live in `tools/availability.py` and must do
    no slow I/O — they run on every session build.
-2. Keep the advertised count under `REALTIME_TOOL_BUDGET`
-   (`config/settings.py`). `tests/test_tool_budget.py` fails if it drifts.
-3. Names are unique per module: `tools/base.py` raises
+2. Keep the **registered-and-available** count (`registry.available_tools()`)
+   under `REALTIME_TOOL_BUDGET` (`config/settings.py`).
+   `tests/test_tool_budget.py::test_registered_tool_count_within_budget` fails
+   if it drifts. It asserts the **pre-trim** count on purpose: `openai_tool_specs()`
+   applies the cap itself (`kept = core + rest[:room]`), so asserting on the
+   *advertised* count was true by construction for any registry — a developer
+   could add 20 tools, see green, and ship a payload 20 tools short.
+3. If the new tool should outlive the long tail when the budget does bite, rank
+   its module in `registry._PRIORITY_MODULES`. Trim order is an explicit
+   three-tier ranking — core, priority, then everything unlisted — never
+   alphabetical. Unlisted is the trim zone.
+4. Names are unique per module: `tools/base.py` raises
    `ToolNameCollisionError` when two modules claim one name.
 
 ## Permissions convention (mandatory)

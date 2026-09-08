@@ -36,14 +36,40 @@ from tools.registry import (
 # --- the cap ---------------------------------------------------------------
 
 
-def test_advertised_tool_count_within_budget() -> None:
-    """The one-line guard. If this fails, someone added tools past the budget."""
-    specs = openai_tool_specs()
-    assert len(specs) <= settings.REALTIME_TOOL_BUDGET, (
-        f"{len(specs)} tools advertised, budget is {settings.REALTIME_TOOL_BUDGET}. "
-        f"Give the new tools an available() predicate or raise REALTIME_TOOL_BUDGET "
-        f"deliberately — every tool costs ~60 input tokens on EVERY turn."
+def test_registered_tool_count_within_budget() -> None:
+    """The one-line guard. If this fails, someone added tools past the budget.
+
+    Asserts the PRE-TRIM count. ``openai_tool_specs()`` applies the cap itself
+    (``registry.py`` — ``kept = core + rest[:room]``), so asserting on its length
+    is true by construction for any registry, however large: a developer adding
+    20 tools saw green while 20 tools were silently dropped from the payload.
+    ``available_tools()`` is what the budget is actually a budget *of*.
+    """
+    entries = available_tools()
+    assert len(entries) <= settings.REALTIME_TOOL_BUDGET, (
+        f"{len(entries)} tools registered and available, budget is "
+        f"{settings.REALTIME_TOOL_BUDGET}. Give the new tools an available() "
+        f"predicate or raise REALTIME_TOOL_BUDGET deliberately — every tool "
+        f"costs ~60 input tokens on EVERY turn."
     )
+
+
+def test_the_old_advertised_count_assertion_could_never_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Why the guard above asserts pre-trim. A test that cannot fail is worse
+    than no test — it is a green light on a broken thing.
+
+    Starve the budget to just above core — the realistic drift case, where the
+    trim bites but core still fits — and the *advertised* count still satisfies
+    the old inequality, because the function under test enforces it on the way
+    out. Only the pre-trim count carries the signal.
+    """
+    core_modules = set(_CORE_MODULES)
+    n_core = len([e for e in available_tools() if registry._module_of(e) in core_modules])
+    monkeypatch.setattr(settings, "REALTIME_TOOL_BUDGET", n_core + 5)
+    assert len(openai_tool_specs()) <= settings.REALTIME_TOOL_BUDGET  # tautology
+    assert len(available_tools()) > settings.REALTIME_TOOL_BUDGET  # the real signal
 
 
 def test_budget_trims_the_tail_and_never_the_core(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,6 +91,50 @@ def test_budget_keeps_whole_core_even_when_core_alone_overflows(
     monkeypatch.setattr(settings, "REALTIME_TOOL_BUDGET", 3)
     kept = {s["function"]["name"] for s in openai_tool_specs()}
     assert kept == core_names  # overshoots the budget on purpose, never amputates core
+
+
+def test_trim_order_is_explicit_priority_not_alphabetical(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tail the budget eats must encode value, not spelling.
+
+    Non-core modules used to sort by module NAME, so with 172 of 175 used the
+    first casualties were whatever happened to be late in the alphabet —
+    ``web`` (``search_web``), ``workflow_tool``, ``youtube`` — while
+    ``birthday_tool`` survived on the strength of starting with a 'b'.
+
+    Pin the inversion directly: ``birthday_tool`` sorts before ``web``
+    alphabetically, so under the old order a tight budget kept birthdays and
+    dropped web search. It must now do the opposite.
+    """
+    ranked = [registry._module_of(e) for e in available_tools()]
+    assert "web" in ranked and "birthday_tool" in ranked, "test fixture drifted"
+    assert ranked.index("web") < ranked.index("birthday_tool"), (
+        "web search ranks below birthday reminders — the trim order is still alphabetical"
+    )
+
+
+def test_budget_keeps_the_high_value_tools_before_the_long_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With only a little room past core, the survivors are the declared priorities."""
+    core_modules = set(_CORE_MODULES)
+    core_names = {e.name for e in available_tools() if registry._module_of(e) in core_modules}
+    monkeypatch.setattr(settings, "REALTIME_TOOL_BUDGET", len(core_names) + 20)
+    kept = {s["function"]["name"] for s in openai_tool_specs()}
+
+    # The tools the priority list exists to protect.
+    for name in ("search_web", "summarize_page", "open_url"):
+        assert name in kept, f"{name} was trimmed before the long tail"
+
+
+def test_every_priority_module_is_a_real_module() -> None:
+    """A typo in the priority list would silently demote a module to the tail."""
+    known = {registry._module_of(e) for e in available_tools()}
+    unknown = [m for m in registry._PRIORITY_MODULES if m not in known]
+    assert not unknown, f"_PRIORITY_MODULES names modules that do not exist: {unknown}"
+    overlap = set(registry._PRIORITY_MODULES) & set(_CORE_MODULES)
+    assert not overlap, f"module listed in BOTH core and priority: {sorted(overlap)}"
 
 
 def test_budget_zero_disables_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:

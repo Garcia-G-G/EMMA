@@ -95,6 +95,55 @@ _CORE_MODULES: tuple[str, ...] = (
 )
 _CORE_RANK = {m: i for i, m in enumerate(_CORE_MODULES)}
 
+# Trimmable, but in a DELIBERATE order — the second tier, ranked by what Emma
+# loses most by losing it. Everything below core used to sort by module *name*,
+# which encodes no notion of value: with 172 of 175 budget used, the first
+# casualties were whatever fell late in the alphabet (`web`, `workflow_tool`,
+# `youtube`) while `birthday_tool` survived on the strength of its 'b'. That put
+# `search_web` and `open_url` — the latter guarded by a test in this very suite —
+# three tools from the cliff.
+#
+# Listing a module here is a claim that it should outlive the long tail, not that
+# it is safe. Anything unlisted forms the trim zone and is dropped first, ordered
+# by module for stability. Keep this ranked, not alphabetical.
+_PRIORITY_MODULES: tuple[str, ...] = (
+    # Answering a question at all. The single most-used non-core capability.
+    "web",
+    "url_summary_tool",
+    # The user's real browser (open_url resolves here, not to safari_tool).
+    "user_browser",
+    # Reaching people.
+    "messages_tool",
+    "mail_tool",
+    # The background-task convention's voice surface: a long-running task that
+    # can be started but never queried or cancelled is worse than no task.
+    "tasks_tool",
+    # Everyday small talk with the machine.
+    "datetime_tool",
+    "timer_tool",
+    "history_tool",
+    "self_tool",
+    # Named in the environment detection shortlist; a daily driver.
+    "music",
+    # Escape hatches and dev work.
+    "shell",
+    "shell_tool",
+    "terminal_actions",
+    "ide_actions",
+    "git_tool",
+    "dev",
+    "codex_tool",
+    "agents_tool",
+    # Secondary browser paths — real, but user_browser is the primary.
+    "safari_tool",
+    "browser",
+    # Behavioral surfaces: useful, and cheap to lose for a turn.
+    "proactive_tool",
+    "diagnostics",
+    "diagnostics_tool",
+)
+_PRIORITY_RANK = {m: i for i, m in enumerate(_PRIORITY_MODULES)}
+
 
 def _module_of(entry: RegisteredTool) -> str:
     return getattr(entry.fn, "__module__", "").rsplit(".", 1)[-1]
@@ -127,9 +176,11 @@ def _is_available(entry: RegisteredTool) -> bool:
 def available_tools() -> list[RegisteredTool]:
     """Registered tools that can run here, deduped, in budget-priority order.
 
-    Core modules first (``_CORE_MODULES``), then everything else grouped by
-    module. The order is what the budget trims from the tail of, so it must be
-    deliberate rather than an accident of alphabetical import order.
+    Three tiers, in order: ``_CORE_MODULES`` (never trimmed), then
+    ``_PRIORITY_MODULES`` (trimmable, but ranked by value), then everything else
+    grouped by module name. The order is what the budget trims from the tail of,
+    so the first two tiers are declared deliberately; only the unlisted tail
+    falls back to alphabetical, and it does so because it IS the tail.
     """
     _discover()
     seen: set[str] = set()
@@ -146,7 +197,10 @@ def available_tools() -> list[RegisteredTool]:
         rank = _CORE_RANK.get(mod)
         if rank is not None:
             return (0, rank, "", e.name)
-        return (1, 0, mod, e.name)
+        rank = _PRIORITY_RANK.get(mod)
+        if rank is not None:
+            return (1, rank, "", e.name)
+        return (2, 0, mod, e.name)
 
     return sorted(entries, key=key)
 
