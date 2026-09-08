@@ -406,8 +406,17 @@
 <script>
 "use strict";
 const PORT = location.port || "3200";
-const CONTROL = `ws://127.0.0.1:${Number(PORT) + 1}/control`;
-const EVENTS  = `ws://127.0.0.1:${Number(PORT) + 1}/events`;
+/* The control channel is authenticated (LAUNCH-11 Part 2). The token arrives in
+   the URL the app opens this page with — never embedded in the HTML, because any
+   local process can fetch that and read it. Lifted out of the address bar
+   immediately so it does not sit in history or leak via a Referer. */
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+try {
+  history.replaceState(null, "", location.pathname);
+} catch (_) { /* non-fatal: the token is per-boot anyway */ }
+const AUTH = TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : "";
+const CONTROL = `ws://127.0.0.1:${Number(PORT) + 1}/control${AUTH}`;
+const EVENTS  = `ws://127.0.0.1:${Number(PORT) + 1}/events${AUTH}`;
 const $ = (s) => document.querySelector(s);
 
 /* ---- control channel -------------------------------------------------

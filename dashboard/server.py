@@ -465,13 +465,36 @@ async def dispatch_control(msg: dict) -> dict:
     Runs only in the in-daemon dashboard (EMMA_DASHBOARD=1), where these calls hit
     the SAME orchestrator module the wake loop reads — so a menubar "unmute" click
     is the way back that voice can't provide once the mic is off. Commands arrive
-    over a loopback-only socket, so a local click is trusted-because-local (it is
-    not content Emma read); destructive intent (shutdown) is confirmed UI-side.
+    The socket is loopback-only AND token-authenticated (LAUNCH-11 Part 2), so a
+    command here came from the UI this daemon spawned rather than from any local
+    process that happened to know the port; destructive intent (shutdown) is
+    still confirmed UI-side on top of that.
+
+    Note what is NOT here and must never be: any command that READS a credential.
+    The BYO key is write-only — it goes secure-field -> Keychain inside the UI
+    process and is never asked for again. The UI gets `mode` and a masked hint.
     """
     from core import orchestrator
 
     cmd = str(msg.get("cmd", "")).strip()
     try:
+        if cmd == "mode_changed":
+            # The UI just stored or cleared a BYO key. Make the daemon re-resolve
+            # its tier now rather than at some later cache miss.
+            from config.settings import invalidate_mode_cache, settings
+
+            invalidate_mode_cache()
+            return {"ok": True, "mode": settings.mode()}
+        if cmd == "mode":
+            from config.settings import settings
+            from core import byok
+
+            return {
+                "ok": True,
+                "mode": settings.mode(),
+                # Masked, never the value — see the module note above.
+                "key_hint": await byok.installed_hint(),
+            }
         if cmd == "unmute":
             orchestrator.unmute_mic()
         elif cmd == "mute":
@@ -605,18 +628,51 @@ def _origin_ok(ws) -> bool:
     return origin in {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"}
 
 
+def _token_ok(ws) -> bool:
+    """Authenticate the client by the shared control token (LAUNCH-11 Part 2).
+
+    The Origin allowlist above stops foreign web pages. It never stopped local
+    PROCESSES — it explicitly admits any client sending no Origin, which is every
+    non-browser program on the machine (audit P1-13). The token rides in the
+    handshake query string, which is where both clients can put it: the daemon
+    hands its UI child the value through the environment, and the served page is
+    opened at a URL that carries it.
+
+    Not in the page body, deliberately: any local process can fetch
+    http://127.0.0.1:PORT/ and read whatever the HTML contains.
+    """
+    from urllib.parse import parse_qs, urlparse
+
+    from core import control_auth
+
+    request = getattr(ws, "request", None)
+    raw = getattr(request, "path", None) or "/"
+    supplied = parse_qs(urlparse(raw).query).get("token", [None])[0]
+    return control_auth.matches(supplied)
+
+
+def _socket_ok(ws) -> bool:
+    """Both gates. Origin stops a foreign page; the token stops a local process."""
+    return _origin_ok(ws) and _token_ok(ws)
+
+
 async def ws_router(ws):
     """Route the WebSocket by path: /events -> bus, /control -> UI commands, else legacy."""
     request = getattr(ws, "request", None)
     path = (getattr(request, "path", None) or "/").split("?")[0].rstrip("/")
-    # Guard EVERY socket against foreign browser origins — not just /events and
-    # /control. The legacy "/" handler streams build_state(), which includes 30
-    # memory.db facts + a live log tail; a foreign page opening ws://127.0.0.1/
-    # would otherwise exfiltrate personal memory. Native clients send no Origin.
+    # Guard EVERY socket — not just /events and /control. The legacy "/" handler
+    # streams build_state(), which includes 30 memory.db facts + a live log tail;
+    # an unauthorized client opening ws://127.0.0.1/ would otherwise exfiltrate
+    # personal memory.
     if not _origin_ok(ws):
         log.warning("ws_forbidden_origin", path=path)
         with contextlib.suppress(Exception):
             await ws.close(code=1008, reason="forbidden origin")
+        return
+    if not _token_ok(ws):
+        log.warning("ws_unauthenticated", path=path)
+        with contextlib.suppress(Exception):
+            await ws.close(code=1008, reason="unauthenticated")
         return
     if path == "/events":
         await events_handler(ws)
@@ -635,6 +691,14 @@ async def start():
     """
     import http.server
     import threading
+
+    # Mint/load the control token BEFORE the first client can connect. Resolving
+    # it lazily on the first handshake works, but leaves a window where a UI
+    # reading the fallback file finds nothing and mints a second, disagreeing
+    # token (LAUNCH-11 Part 2).
+    from core import control_auth
+
+    control_auth.token()
 
     class DashHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):

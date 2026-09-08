@@ -75,8 +75,14 @@ def test_visualizer_route_and_events_ws():
             assert "three.min.js" not in body
             assert "WebGLRenderer" not in body
 
-            # WS /events sends the init payload within 1s
-            async with websockets.connect("ws://localhost:39211/events") as ws:
+            # WS /events sends the init payload within 1s. The socket is
+            # token-authenticated now (LAUNCH-11 Part 2) — an unauthenticated
+            # client is closed with 1008, which is asserted in
+            # tests/test_control_channel.py.
+            from core import control_auth
+
+            url = f"ws://localhost:39211/events?token={control_auth.token()}"
+            async with websockets.connect(url) as ws:
                 init = json.loads(await asyncio.wait_for(ws.recv(), timeout=1.0))
             assert init["type"] == "init"
             assert "vad_threshold" in init

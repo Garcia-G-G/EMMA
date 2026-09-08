@@ -502,6 +502,13 @@ async def remember(
     content = content.strip()
     if not content:
         return -1
+    # LAUNCH-11 Part 2: scrub credential shapes BEFORE the embed call, not just
+    # before the insert. `embeddings.embed` ships this string to OpenAI, so a key
+    # that reached only the DB would still have left the machine — and reflection
+    # writes here unattended, from whatever the user happened to say out loud
+    # ("mi api key es sk-..."). vault_ref is the deliberate path for a secret;
+    # this is the guard for the accidental one.
+    content = redaction.redact(content)
     vec = await embeddings.embed(content)
 
     # Conflict-resolution (Prompt 25): if the nearest active fact is "same topic,

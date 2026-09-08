@@ -33,7 +33,10 @@ def test_redaction_positive_cases() -> None:
     assert "[REDACTED:CREDIT_CARD]" in redact("card 4111 1111 1111 1111")
     assert "[REDACTED:CURP]" in redact("CURP HEGG560427MVZRRL04")
     assert "[REDACTED:US_SSN]" in redact("ssn 123-45-6789")
-    assert "[REDACTED:API_KEY_LIKE]" in redact("key sk-proj-" + "a" * 40)
+    # LAUNCH-11 gave OpenAI keys their own, more specific label — and, more to
+    # the point, a rule that fires at any length rather than only past 32 chars.
+    assert "[REDACTED:OPENAI_KEY]" in redact("key sk-proj-" + "a" * 40)
+    assert "[REDACTED:API_KEY_LIKE]" in redact("token ghp_" + "a" * 40)
     assert "[REDACTED:PHONE_INTL]" in redact("tel +52 81 1234 5678")
 
 
@@ -75,7 +78,7 @@ def test_redaction_processor_recurses_into_nested_args() -> None:
         "error",
         {"event": "bad", "args": {"key": "sk-proj-" + "a" * 40}, "items": ["123-45-6789"]},
     )
-    assert "[REDACTED:API_KEY_LIKE]" in ev["args"]["key"]
+    assert "[REDACTED:OPENAI_KEY]" in ev["args"]["key"]
     assert "[REDACTED:US_SSN]" in ev["items"][0]
 
 

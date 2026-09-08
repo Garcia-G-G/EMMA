@@ -25,6 +25,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.redaction import redact
+
 LOG_DIR = Path.home() / "Library/Logs/Emma"
 CRASH_DIR = LOG_DIR / "crashes"
 RECENT_FILE = CRASH_DIR / "_recent.json"
@@ -70,9 +72,18 @@ def _tail_log(n: int = LOG_TAIL_LINES) -> str:
 
 
 def _format_report(exc: BaseException, context: dict[str, Any]) -> str:
+    """Build the crash report, REDACTED (LAUNCH-11 Part 2).
+
+    This file lands in ~/Library/Logs/Emma/crashes/ and the user is invited to
+    read and share it, so it is an egress path even though nothing sends it.
+    Four of its sections can carry a credential: the exception message, the
+    traceback (locals appear in some frames), the last user transcript, and the
+    log tail. Redacting the assembled document covers all four at once and
+    cannot be forgotten when a new section is added.
+    """
     ts = datetime.now(UTC).astimezone()
     tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-    return f"""# Emma crash report
+    return redact(f"""# Emma crash report
 
 - **When:** {ts.isoformat()}
 - **Emma:** 0.1.0 (phase 04)
@@ -102,7 +113,7 @@ def _format_report(exc: BaseException, context: dict[str, Any]) -> str:
 ```
 {_tail_log()}
 ```
-"""
+""")
 
 
 def _write_report(exc: BaseException, context: dict[str, Any]) -> Path:
