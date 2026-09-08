@@ -438,14 +438,20 @@ class Settings(BaseSettings):
     # availability filtering leaves more than this many. When it bites,
     # tools/registry.py logs `tool_budget_exceeded` with every dropped name,
     # and the _CORE_MODULES set (screen vision, memory, lifecycle, system,
-    # apps, files, calendar, reminders, notes) is never trimmed. 0 disables.
+    # apps, files, calendar, reminders, notes) is never trimmed, with
+    # _PRIORITY_MODULES ranked next and everything unlisted forming the trim
+    # zone — the order is explicit, never alphabetical. 0 disables.
     #
     # 175 is a safety valve, not a trimmer: it does not bite today (a clean
     # install advertises 159, a fully-provisioned dev box 172, and all 172 of
     # those genuinely work). Its job is to make the NEXT batch of tools
-    # impossible to add unnoticed — crossing it fails tests/test_tool_budget.py
-    # and logs every dropped name. Raise it deliberately, with the token cost
-    # in hand, rather than reflexively.
+    # impossible to add unnoticed — crossing it fails
+    # test_registered_tool_count_within_budget, which asserts the count BEFORE
+    # the trim. Asserting the ADVERTISED count could never fail — openai_tool_specs()
+    # enforces the cap on the way out, so the inequality held for any registry,
+    # however large (LAUNCH-10 Part 5). Crossing the budget also logs every
+    # dropped name at ERROR. Raise it deliberately, with the token cost in hand,
+    # rather than reflexively.
     REALTIME_TOOL_BUDGET: int = 175
 
     # ---- Proactive engine (Prompt 17) -------------------------------
