@@ -7,13 +7,15 @@ one source of truth.
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import sqlite3
 import time
 import uuid
 from typing import Any
 
 from backend.config import settings
+
+_log = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -169,6 +171,14 @@ _MIGRATIONS = (
     "ALTER TABLE usage_events ADD COLUMN audio_tokens INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE usage_events ADD COLUMN model TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE usage_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'realtime'",
+    # LAUNCH-10 Part 4: make double-crediting impossible at the storage layer.
+    # The old idempotency guard was SELECT-then-INSERT across two connections, so
+    # a webhook and a browser /confirm racing on the same PaymentIntent could
+    # both read "not credited" and both write. PARTIAL on purpose — a declined
+    # card logs a failure row with no intent id (dashboard_credits), and there
+    # can be many of those.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_refill_events_pi "
+    "ON refill_events(stripe_payment_intent) WHERE stripe_payment_intent IS NOT NULL",
 )
 
 
@@ -182,8 +192,19 @@ _INITIALIZED: set[str] = set()
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     for stmt in _MIGRATIONS:
-        with contextlib.suppress(sqlite3.OperationalError):  # column already exists
+        try:
             conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass  # column / index already exists
+        except sqlite3.IntegrityError:
+            # Only the UNIQUE index can land here: a legacy DB already holds
+            # duplicate stripe_payment_intent rows from the old check-then-write
+            # guard. Leaving the index uncreated beats failing every connect(),
+            # but it must not be silent — duplicates are double-credited money.
+            _log.error(
+                "migration blocked by existing duplicate rows, index NOT created: %s",
+                stmt.split(" ON ")[0],
+            )
     conn.commit()
     _INITIALIZED.add(settings.DATABASE_URL)
 
@@ -835,6 +856,49 @@ def add_seconds_to_balance(user_id: int, seconds: int) -> None:
             (seconds, time.time(), user_id),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def credit_bundle_once(
+    user_id: int,
+    bundle_key: str,
+    seconds: int,
+    amount_usd: float,
+    stripe_payment_intent: str,
+    trigger: str,
+) -> bool:
+    """Credit a purchase exactly once. Returns True if this call did the crediting.
+
+    The receipt row IS the lock. Both writes happen in one transaction on one
+    connection, and the INSERT goes first, so the unique partial index on
+    ``stripe_payment_intent`` decides the race: whoever loses gets IntegrityError
+    and no seconds are added. That replaces a SELECT-then-INSERT across two
+    connections, where a webhook and a browser /confirm could both read "not
+    credited" and both credit.
+
+    Ordering is deliberate. Adding seconds first and inserting second would
+    double-credit on a retry whose INSERT then failed.
+    """
+    ensure_user_balance(user_id)
+    conn = connect()
+    try:
+        with conn:  # commit on success, rollback on any exception
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "INSERT INTO refill_events(user_id, bundle_key, seconds_added, amount_usd, "
+                "stripe_payment_intent, trigger, status, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_id, bundle_key, seconds, amount_usd, stripe_payment_intent,
+                 trigger, "succeeded", time.time()),
+            )
+            conn.execute(
+                "UPDATE user_balance SET extra_seconds=extra_seconds+?, updated_at=? "
+                "WHERE user_id=?",
+                (seconds, time.time(), user_id),
+            )
+        return True
+    except sqlite3.IntegrityError:
+        return False  # already credited by the other path — the whole point
     finally:
         conn.close()
 

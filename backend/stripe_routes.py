@@ -26,6 +26,35 @@ _PRICE = {"pro": settings.STRIPE_PRICE_PRO,
           "power": settings.STRIPE_PRICE_POWER or settings.STRIPE_PRICE_TEAM,
           "team": settings.STRIPE_PRICE_TEAM}  # LANDING-27: pro/power (team = legacy)
 
+# Subscription statuses that mean "this person is not entitled any more".
+# past_due is deliberately absent: Stripe is still retrying, and invoice.
+# payment_failed handles the end of that cycle.
+_DEAD_SUB_STATUSES = frozenset({"canceled", "unpaid", "incomplete_expired"})
+
+# PaymentIntent purposes that credit a bundle, mapped to the refill_events
+# `trigger` they are recorded under. Both must credit — see handle_event.
+_CREDITING_PURPOSES = {"emma_auto_refill": "auto", "emma_bundle_purchase": "first_purchase"}
+
+
+def _plan_for_subscription(obj: dict[str, Any]) -> str | None:
+    """Reverse the price id on a subscription back to our plan name.
+
+    Read from `settings` at call time rather than the module-level `_PRICE`, so a
+    price id configured after import (and every test) resolves correctly.
+    """
+    try:
+        price_id = obj["items"]["data"][0]["price"]["id"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    for plan, configured in (
+        ("pro", settings.STRIPE_PRICE_PRO),
+        ("power", settings.STRIPE_PRICE_POWER),
+        ("team", settings.STRIPE_PRICE_TEAM),
+    ):
+        if configured and configured == price_id:
+            return plan
+    return None
+
 
 @router.post("/api/billing/checkout", response_model=CheckoutResponse)
 async def checkout(body: CheckoutRequest, request: Request) -> CheckoutResponse:
@@ -73,32 +102,62 @@ def handle_event(event: dict[str, Any]) -> str:
         if cust:
             db.set_plan_by_customer(cust, "free")
         return "downgraded:free"
-    if etype == "invoice.payment_failed":
-        return "payment_failed"
 
-    # DASHBOARD-CREDITS-2: off-session auto-refill completions land here (the
-    # on-session first purchase is credited by /api/bundles/confirm instead).
+    # LAUNCH-10 Part 4: a plan change made through the Stripe billing portal
+    # never reached the DB — the user upgraded, paid, and kept the old caps.
+    if etype == "customer.subscription.updated":
+        cust = obj.get("customer")
+        if not cust:
+            return "ignored"
+        status = str(obj.get("status", ""))
+        if status in _DEAD_SUB_STATUSES:
+            db.set_plan_by_customer(cust, "free")
+            return f"downgraded:free:{status}"
+        plan = _plan_for_subscription(obj)
+        if plan:
+            db.set_plan_by_customer(cust, plan)
+            return f"updated:{plan}"
+        return f"subscription_updated:{status}"
+
+    # This used to `return "payment_failed"` and do nothing, so a past_due
+    # subscriber kept full access through Stripe's entire dunning cycle and out
+    # the other side. `plan` is the entitlement (PLAN_CAPS), so the plan is what
+    # has to move — but only once Stripe has stopped retrying. A card that fails
+    # today and clears tomorrow must not cost anyone their subscription.
+    if etype == "invoice.payment_failed":
+        cust = obj.get("customer")
+        if obj.get("next_payment_attempt") is not None:
+            return "payment_failed:retrying"
+        if not cust:
+            return "payment_failed:no_customer"  # nothing to act on; never silent
+        db.set_plan_by_customer(cust, "free")
+        return "downgraded:free:dunning_exhausted"
+
+    # DASHBOARD-CREDITS-2 + LAUNCH-10 Part 4: the webhook is the SOURCE OF TRUTH
+    # for every bundle credit — auto-refill and first purchase alike.
+    #
+    # It used to gate on purpose == "emma_auto_refill" only. A first purchase
+    # carries "emma_bundle_purchase" (set at credits_routes.py buy time), so it
+    # fell straight through to `return "credited"` having credited nothing, and
+    # the ONLY path that credited it was /api/bundles/confirm, fired from the
+    # browser. Close the tab, lose Wi-Fi, or fail the 3DS redirect and the
+    # customer was charged and received nothing, with no server-side recovery.
+    # /confirm is now a latency optimization, not the mechanism.
     if etype == "payment_intent.succeeded":
         meta = obj.get("metadata") or {}
-        if meta.get("purpose") == "emma_auto_refill":
+        purpose = meta.get("purpose", "")
+        if purpose in _CREDITING_PURPOSES:
             user_id = int(meta.get("user_id", 0) or 0)
-            b = BUNDLES.get(meta.get("bundle_key", ""))
-            if user_id and b:
-                # Idempotency — trigger_auto_refill usually already credited this pi.
-                conn = db.connect()
-                try:
-                    already = conn.execute(
-                        "SELECT id FROM refill_events WHERE stripe_payment_intent=? AND status='succeeded'",
-                        (obj.get("id"),),
-                    ).fetchone()
-                finally:
-                    conn.close()
-                if not already:
-                    db.add_seconds_to_balance(user_id, int(b["seconds"]))
-                    db.append_refill_event(
-                        user_id, meta["bundle_key"], int(b["seconds"]), b["usd"],
-                        obj.get("id"), "auto", "succeeded",
-                    )
+            bundle_key = meta.get("bundle_key", "")
+            b = BUNDLES.get(bundle_key)
+            pi_id = obj.get("id")
+            if user_id and b and pi_id:
+                # Idempotent by DB constraint, not by check-then-write: whichever
+                # of the webhook and /confirm arrives second gets False here.
+                db.credit_bundle_once(
+                    user_id, bundle_key, int(b["seconds"]), float(b["usd"]),
+                    pi_id, _CREDITING_PURPOSES[purpose],
+                )
         return "credited"
 
     if etype == "payment_intent.payment_failed":

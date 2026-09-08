@@ -160,23 +160,19 @@ async def buy_bundle(request: Request) -> dict[str, Any]:
 @router.post("/api/bundles/confirm")
 async def confirm_bundle(request: Request) -> dict[str, Any]:
     """Called after the client confirms the PaymentIntent (Stripe.js). Verifies status
-    server-side and credits the balance. Idempotent — a retry of the same
-    payment_intent_id no-ops (guarded by the refill_events row)."""
+    server-side and credits the balance.
+
+    LAUNCH-10 Part 4: this is now a LATENCY OPTIMIZATION, not the mechanism. The
+    payment_intent.succeeded webhook credits the same purchase on its own, so a
+    closed tab, a dropped connection or a failed 3DS redirect no longer means
+    charged-and-nothing-delivered. Both paths go through
+    ``db.credit_bundle_once``, whose unique index on stripe_payment_intent makes
+    the race a no-op rather than a double credit."""
     user = await require_user(request)
     body = await _json_body(request)
     pi_id = (body.get("payment_intent_id") or "").strip()
     if not pi_id:
         raise HTTPException(400, "payment_intent_id required")
-
-    conn = db.connect()
-    try:
-        existing = conn.execute(
-            "SELECT id FROM refill_events WHERE stripe_payment_intent=?", (pi_id,)
-        ).fetchone()
-    finally:
-        conn.close()
-    if existing:
-        return {"ok": True, "already_credited": True}
 
     pi = stripe.PaymentIntent.retrieve(pi_id)
     if pi.status != "succeeded":
@@ -193,10 +189,11 @@ async def confirm_bundle(request: Request) -> dict[str, Any]:
     if pi.payment_method:
         db.set_default_payment_method(user["id"], pi.payment_method)
 
-    db.add_seconds_to_balance(user["id"], int(b["seconds"]))
-    db.append_refill_event(
-        user["id"], bundle_key, int(b["seconds"]), b["usd"], pi.id, "first_purchase", "succeeded"
+    credited = db.credit_bundle_once(
+        user["id"], bundle_key, int(b["seconds"]), float(b["usd"]), pi.id, "first_purchase"
     )
+    if not credited:
+        return {"ok": True, "already_credited": True}
     return {"ok": True, "seconds_added": int(b["seconds"])}
 
 
