@@ -27,6 +27,7 @@ from backend import (
     db,
     demo_session,
     device_pairing,
+    license_routes,
     openai_proxy,
     realtime_proxy,
     stripe_routes,
@@ -97,6 +98,7 @@ app.include_router(auth.router)
 app.include_router(auth_local.router)
 app.include_router(account_routes.router)
 app.include_router(stripe_routes.router)
+app.include_router(license_routes.router)  # LAUNCH-11: BYO-key licence activation
 app.include_router(credits_routes.router)  # DASHBOARD-CREDITS-2: balance/bundles/auto-refill
 # app.include_router(wake_routes.router)  # disabled in Fly deploy
 app.include_router(demo_session.router)

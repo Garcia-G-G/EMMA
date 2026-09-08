@@ -305,6 +305,17 @@
       <div class="fail" id="ob-fail" hidden></div>
     </div>
 
+    <div id="ob-license" hidden>
+      <h2>Activa tu licencia</h2>
+      <p>La recibiste al comprar Emma. Se verifica una vez; después funciona
+         aunque estés sin internet.</p>
+      <div class="actions">
+        <button class="btn" id="ob-lic-open">Escribir mi clave</button>
+        <button class="btn ghost" id="ob-lic-skip">Todavía no tengo</button>
+      </div>
+      <p class="small muted" id="ob-lic-status"></p>
+    </div>
+
     <div id="ob-ready" hidden>
       <h2>Listo</h2>
       <p>Tienes <b>90 segundos gratis</b> este mes para probarla.
@@ -709,7 +720,7 @@ let PAIR = null, pollTimer = null;
 function step(n) { document.querySelectorAll("#ob-steps i").forEach((el, i) => el.classList.toggle("on", i <= n)); }
 function showOnboarding() { $("#onb").hidden = false; $("#shell").style.filter = "blur(0)"; }
 function hideOnboarding() { $("#onb").hidden = true; if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-account", "ob-ready"];
+const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-license", "ob-account", "ob-ready"];
 function obPane(id) { OB_PANES.forEach((x) => { $("#" + x).hidden = x !== id; }); }
 
 $("#ob-start").addEventListener("click", () => { obPane("ob-choose"); step(1); });
@@ -739,9 +750,17 @@ $("#ob-key-open").addEventListener("click", askForKey);
 window.__emmaKeyStatus = (text) => { $("#ob-key-status").textContent = text || ""; };
 window.__emmaKeySaved = () => {
   $("#ob-key-status").textContent = "Listo.";
-  obPane("ob-ready"); step(2);
+  obPane("ob-license"); step(2);
   loadMode();
 };
+window.__emmaLicenseStatus = (text) => { $("#ob-lic-status").textContent = text || ""; };
+function askForLicense() {
+  try { window.webkit.messageHandlers.emma.postMessage("enter_license"); } catch (_) {}
+}
+$("#ob-lic-open").addEventListener("click", askForLicense);
+/* Skippable on purpose: the licence check fails open, so a user who has not
+   bought yet is not locked out of the thing they just configured. */
+$("#ob-lic-skip").addEventListener("click", () => { obPane("ob-ready"); step(2); });
 
 async function startManaged() {
   obPane("ob-account"); step(1);
