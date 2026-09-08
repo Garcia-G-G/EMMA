@@ -6,7 +6,11 @@ httpx>=0.27
 authlib>=1.3
 itsdangerous>=2.2
 pyjwt>=2.9
-stripe>=10.0
+# Pinned with an upper bound (LAUNCH-10 Part 4). dashboard_credits.py catches
+# stripe.error.CardError; that alias still resolves as of 15.6.1, but `>=10.0`
+# unbounded meant any unrelated `pip install` could cross a major and turn a
+# declined card into a 500. Tested against 15.6.1.
+stripe>=10.0,<16.0
 pydantic>=2.7
 python-multipart>=0.0.9
 structlog>=24.0
