@@ -7,6 +7,7 @@ will raise a pydantic ValidationError.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,6 +37,38 @@ _CREDENTIAL_FIELDS = (
 # the paired device token, so reading these at boot costs a `security` subprocess
 # each and can never change the outcome.
 _BYOK_ONLY_CREDENTIALS = frozenset({"OPENAI_API_KEY", "POSTGRES_DSN", "PICOVOICE_ACCESS_KEY"})
+
+# LAUNCH-11 Part 1: the daemon's tier.
+Mode = Literal["byok", "managed", "unconfigured"]
+
+# Only the EXPENSIVE half of resolution is memoized: the pairing probe, which
+# can spawn a `security` subprocess. The key check is a field read — free, and
+# instance-specific, so caching the whole verdict would let one Settings' tier
+# leak into the next one's. core.pairing memoizes a token it FINDS but re-reads
+# Keychain every time it does not, which is exactly the unpaired-BYOK case that
+# would otherwise pay a subprocess on all 18 _is_managed() call sites.
+_TOKEN_PROBE: bool | None = None
+
+
+def invalidate_mode_cache() -> None:
+    """Forget the pairing probe. Call after anything that changes it: a device
+    token written by pairing, a revoke, an unpair."""
+    global _TOKEN_PROBE
+    _TOKEN_PROBE = None
+
+
+def _has_device_token() -> bool:
+    """True if this Mac is paired. Safe inside a running loop, where the sync
+    Keychain read returns None rather than blocking."""
+    global _TOKEN_PROBE
+    if _TOKEN_PROBE is None:
+        try:
+            from core import pairing
+
+            _TOKEN_PROBE = bool(pairing.cached_token())
+        except Exception:  # a locked/hung Keychain must not decide the tier
+            return False
+    return _TOKEN_PROBE
 
 
 class Settings(BaseSettings):
@@ -327,29 +360,60 @@ class Settings(BaseSettings):
                     object.__setattr__(self, name, val)
         return self
 
-    # ---- CLIENT-INSTALL Phase 2B: managed vs BYOK credential resolvers -------
-    # Managed mode (client build) is gated on EMMA_REQUIRE_PAIRING — the SAME flag
-    # that gates orchestrator._ensure_paired — so a dev/BYOK daemon (flag unset) is
-    # completely unaffected: it keeps using OPENAI_API_KEY against api.openai.com.
-    def _is_managed(self) -> bool:
-        """Managed (client) mode: credentials come from a paired device token.
+    # ---- LAUNCH-11 Part 1: the tier is three-valued, resolved once -----------
+    def mode(self) -> Mode:
+        """Which tier this daemon is running: byok | managed | unconfigured.
 
-        EMMA_REQUIRE_PAIRING is the explicit signal, but it is no longer the ONLY
-        one. A daemon that dies because a single environment variable went
-        missing is too fragile, and this exact class of failure — "is the flag
-        really in the loaded job's environment?" — consumed an entire
-        investigation (LAUNCH-4).
+        "Managed" used to be inferred from the absence of a key. With two
+        SUPPORTED tiers that inference is no longer enough — a user with no key
+        and no device token is in a third state (fresh install, nothing chosen),
+        and the app has to be able to tell that apart from "managed, paired" in
+        order to ask which tier they want.
 
-        The fallback needs no subprocess and no Keychain read: a BYOK/dev daemon
-        ALWAYS has an OPENAI_API_KEY (that is what makes it BYOK), so a daemon
-        with no local key can only be a managed one. Worst case the flag is
-        missing on a BYOK box whose key also failed to load — and then parking
-        alive awaiting onboarding beats exiting into a restart loop.
+        Resolution order, and why:
+
+        1. ``EMMA_REQUIRE_PAIRING`` still wins. It is the operator's explicit
+           declaration that this is a managed install, and an install that
+           somehow also has a key on disk is managed anyway.
+        2. A key => ``byok``. Free to check, no I/O, and it is the hot path for
+           the tier this release makes primary.
+        3. Otherwise a device token decides managed vs unconfigured.
+
+        Step 3 is memoized (it can spawn a `security` subprocess, and this is
+        reached from ``_is_managed()``'s 18 call sites, some per-turn). Steps 1
+        and 2 are not — they are free, and caching them would let one Settings'
+        tier leak into the next. Anything that changes pairing state must call
+        :func:`invalidate_mode_cache`.
         """
         import os
-        if os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes"):
-            return True
-        return not self.OPENAI_API_KEY
+
+        forced = os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes")
+        if not forced and self.OPENAI_API_KEY:
+            return "byok"
+        if forced:
+            # Managed-but-not-yet-paired is still managed: the tier was chosen,
+            # the pairing just has not happened. Both park; only the word differs,
+            # and the word is what an operator reads in `permissions check`.
+            return "managed"
+        return "managed" if _has_device_token() else "unconfigured"
+
+    def _is_managed(self) -> bool:
+        """NOT BYOK — i.e. this daemon's credential does not come from a local key.
+
+        Kept for its call sites, but now DERIVED from :meth:`mode` rather than
+        from a single field. "Not BYOK" is what every one of those call sites
+        actually wanted, and it is why ``unconfigured`` answers True here: a
+        daemon that has chosen nothing yet must be exempted by
+        ``_credential_preflight`` (it has no key and is not supposed to) and must
+        be parked by ``_ensure_paired`` (it has no credential at all). Answering
+        False would send it to a wake loop it cannot serve.
+
+        A daemon that dies because one environment variable went missing is too
+        fragile — that failure consumed an entire investigation (LAUNCH-4) — so
+        the absence of a key still resolves away from BYOK without needing the
+        flag.
+        """
+        return self.mode() != "byok"
 
     def openai_api_key(self) -> str:
         """Bearer for OpenAI calls: the paired device token (managed) or the local
