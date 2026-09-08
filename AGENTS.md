@@ -98,7 +98,7 @@ The orchestrator (`core/orchestrator.py`) runs an infinite loop: wait for wake w
 
 **`memory/long_term.py`** — SQLite fact store at `~/.emma/memory.db`. Deduplicates on exact content match, bumps confidence on repeat observations. `priming_block()` returns the top-N facts formatted for injection into the system prompt.
 
-**`memory/reflection.py`** — Calls gpt-4o-mini on a short conversation window to extract durable facts about Garcia. Reflection is wired to the live session as of 22.1: the function-call/transcript path in `core/conversation.py` fires `schedule_reflection(last_turns(4))` (conversation.py:245) after a turn, so durable facts are extracted automatically in addition to explicit `remember_fact` tool calls. The DB connection runs in WAL mode with a busy timeout so this background write can't lose facts to a lock collision with an explicit `remember`.
+**`memory/reflection.py`** — Calls gpt-4o-mini on a short conversation window to extract durable facts about the user. Reflection is wired to the live session as of 22.1: the function-call/transcript path in `core/conversation.py` fires `schedule_reflection(last_turns(4))` (conversation.py:262) after a turn, so durable facts are extracted automatically in addition to explicit `remember_fact` tool calls. The DB connection runs in WAL mode with a busy timeout so this background write can't lose facts to a lock collision with an explicit `remember`.
 
 **`actions/environment.py`** — Detects installed apps (IDE, terminal, music, browser) from a hardcoded shortlist. Caches results in `~/.emma/environment_cache.json` (24h TTL). User overrides via voice ("prefiero Zed") persist as preferences in the same cache.
 
@@ -138,7 +138,7 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 
 ## Conventions
 
-- **Language**: Garcia speaks Mexican Spanish (Monterrey) and English. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn.
+- **Language**: The user speaks Mexican Spanish and English. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn.
 - **System prompt**: Lives in `core/conversation.py:_build_instructions()`. Structured sections: Role, Personality, Language, Response Length, Variety, Preambles, Tool Results, Forbidden. Memory facts appended at the end.
 - **Confirmation flow**: Destructive tools (`destructive=True`) use `requires_confirmation=True` in their first `ToolResult`. The orchestrator re-calls with `confirmed=True` after user assent. `cancelled=True` is opt-in for cleanup on decline.
 - **Self-awareness**: `tools/self_tool.py` regenerates `self/capabilities.md` from the live tool registry at startup. The `describe_capabilities` tool reads this file.
@@ -181,7 +181,7 @@ The architectural rule: **no secret-tier value ever lands in `memory.db`, in log
 
 ## Background tasks convention (mandatory)
 
-Any tool that may take more than ~3 seconds, or that fires a subprocess Garcia
+Any tool that may take more than ~3 seconds, or that fires a subprocess the user
 might want to walk away from, MUST be a background task — not a synchronous tool
 call. The pattern:
 

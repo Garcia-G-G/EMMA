@@ -184,7 +184,7 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
                             )
                 # 21-B25: before giving up, check whether the query is a
                 # mistranscription of the user's OWN username (the most common
-                # case: "gilbergaciata" → his handle). One mechanism — the
+                # case: a garbled spelling of it → their handle). One mechanism — the
                 # transversal suggest_similar — never bespoke fuzzy logic.
                 from core import dictionary
                 from tools.disambiguation import suggest_similar
