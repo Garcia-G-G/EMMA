@@ -22,6 +22,7 @@ import json
 import os
 import threading
 from typing import Any
+from urllib.parse import quote
 
 import objc
 import structlog
@@ -36,6 +37,7 @@ from AppKit import (
     NSMenu,
     NSMenuItem,
     NSObject,
+    NSSecureTextField,
     NSStatusBar,
     NSVariableStatusItemLength,
     NSWindow,
@@ -49,12 +51,20 @@ from Foundation import NSURL, NSURLRequest
 from PyObjCTools import AppHelper
 from WebKit import WKWebView, WKWebViewConfiguration
 
+from core import control_auth
+
 log = structlog.get_logger("emma.ui")
 
 _PORT = int(os.environ.get("EMMA_DASHBOARD_PORT", "3200"))
-_HTTP_URL = f"http://127.0.0.1:{_PORT}/"
-_WS_URL = f"ws://127.0.0.1:{_PORT + 1}/events"
-_CONTROL_URL = f"ws://127.0.0.1:{_PORT + 1}/control"
+# The daemon's control-channel token, handed down through the
+# environment (LAUNCH-11 Part 2). It rides in the query string of every socket
+# this process opens, and in the URL the WebView is pointed at — the page reads
+# it from location.search. It is deliberately NOT embedded in the served HTML,
+# because any local process can fetch that.
+_TOKEN = quote(control_auth.token(), safe="")
+_HTTP_URL = f"http://127.0.0.1:{_PORT}/?t={_TOKEN}"
+_WS_URL = f"ws://127.0.0.1:{_PORT + 1}/events?token={_TOKEN}"
+_CONTROL_URL = f"ws://127.0.0.1:{_PORT + 1}/control?token={_TOKEN}"
 
 
 def send_control(payload: dict[str, object]) -> None:
@@ -183,6 +193,42 @@ class _WebUIDelegate(NSObject):  # type: ignore[misc]
         handler()
 
 
+class _ScriptBridge(NSObject):  # type: ignore[misc]
+    """Page -> host process channel for actions that must NOT cross a socket.
+
+    ``WKScriptMessageHandler`` is a direct call from the page into the process
+    that owns the WebView. It is authenticated by construction — nothing else
+    can post to it — which is exactly what entering an API key needs, and
+    exactly what the loopback control channel could not offer before it was
+    given a token (audit P1-13).
+
+    The key therefore travels: secure text field -> this process -> Keychain.
+    It never enters the page, never enters a WebSocket frame, and never reaches
+    the daemon.
+    """
+
+    def initWithBar_(self, bar: Any) -> Any:  # noqa: N802
+        self = objc.super(_ScriptBridge, self).init()
+        if self is None:
+            return None
+        self._bar = bar
+        return self
+
+    def userContentController_didReceiveScriptMessage_(  # noqa: N802
+        self, _controller: Any, message: Any
+    ) -> None:
+        try:
+            action = str(message.body())
+        except Exception:
+            return
+        if action == "enter_key":
+            self._bar.promptForKey_(None)
+        elif action == "clear_key":
+            self._bar.clearKey_(None)
+        else:
+            log.warning("ui_unknown_script_message", action=action[:40])
+
+
 class EmmaBar(NSObject):  # type: ignore[misc]
     """The menubar status item + its window. Main-thread only."""
 
@@ -194,6 +240,7 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         self._window = None
         self._webview = None
         self._ui_delegate = None
+        self._bridge = None
         self._state = "idle"
         self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(
             NSVariableStatusItemLength
@@ -237,6 +284,9 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         self._mute_item = self._add_item(menu, "Silenciar micrófono", "toggleMute:", "")
         self._add_item(menu, "Dormir 15 min", "sleep15:", "")
         menu.addItem_(NSMenuItem.separatorItem())
+        # A second, always-available entry point for the key — the onboarding
+        # fork is the first, but someone who skipped it must not have to reinstall.
+        self._add_item(menu, "Mi API key de OpenAI…", "promptForKey:", "")
         self._add_item(menu, "Dar acceso a la pantalla…", "grantAccessibility:", "")
         self._add_item(menu, "Apagar Emma", "shutdownEmma:", "")
         self._add_item(menu, "Salir de esta ventana", "quitUI:", "q")
@@ -296,6 +346,10 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         win.setTitle_("Emma")
         win.center()
         config = WKWebViewConfiguration.alloc().init()
+        # Page -> host bridge for the API key (LAUNCH-11 Part 2). Held on self:
+        # WKUserContentController keeps only a weak reference to the handler.
+        self._bridge = _ScriptBridge.alloc().initWithBar_(self)
+        config.userContentController().addScriptMessageHandler_name_(self._bridge, "emma")
         # Popups must be allowed to REACH the UI delegate. Without this the
         # window.open below is refused before createWebView... is ever called.
         config.preferences().setJavaScriptCanOpenWindowsAutomatically_(True)
@@ -315,6 +369,98 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         self._window = win
         self._webview = webview
+
+    # ---- BYO key (LAUNCH-11 Part 2) ---------------------------------------
+    def promptForKey_(self, _sender: Any) -> None:  # noqa: N802
+        """Native secure input. The key goes field -> Keychain, nothing between.
+
+        Deliberately NOT an HTML field: the page would have to hand the value to
+        this process somehow, and every available route (the loopback control
+        socket, a fetch to the daemon) puts a Secret-tier value on an IPC channel
+        for no benefit. An NSSecureTextField also gets the OS behaviours for free
+        — no screen-capture of the contents, no autofill, no spellcheck upload.
+        """
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("Tu API key de OpenAI")
+        alert.setInformativeText_(
+            "Se guarda en el Keychain de tu Mac. Emma nunca la envía a sus "
+            "servidores: las llamadas van directo de tu Mac a OpenAI.\n\n"
+            "Tú le pagas a OpenAI por lo que uses. Emma no puede decirte cuánto "
+            "gastaste — eso lo ves en tu panel de OpenAI."
+        )
+        field = NSSecureTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 340, 24))
+        field.setPlaceholderString_("sk-…")
+        alert.setAccessoryView_(field)
+        alert.addButtonWithTitle_("Guardar")
+        alert.addButtonWithTitle_("Cancelar")
+        alert.window().setInitialFirstResponder_(field)
+
+        if alert.runModal() != NSAlertFirstButtonReturn:
+            return
+        key = str(field.stringValue()).strip()
+        field.setStringValue_("")  # do not leave it in the view's buffer
+        if not key:
+            return
+        self._set_key_status("Verificando con OpenAI…")
+        threading.Thread(target=lambda: self._validate_and_store(key), daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _validate_and_store(self, key: str) -> None:
+        """Off the main thread: validate direct with OpenAI, then store."""
+        from core import byok
+
+        async def _run() -> tuple[bool, str]:
+            ok, msg = await byok.validate(key)
+            if ok:
+                await byok.store(key)
+            return ok, msg
+
+        try:
+            ok, msg = asyncio.run(_run())
+        except Exception as exc:
+            # Never include the exception text verbatim — it can carry the key.
+            log.warning("byok_store_failed", error_type=type(exc).__name__)
+            ok, msg = False, "No pude guardar la key. Intenta de nuevo."
+        AppHelper.callAfter(lambda: self._finish_key(ok, msg))
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _finish_key(self, ok: bool, msg: str) -> None:
+        self._set_key_status(msg)
+        if not ok:
+            return
+        send_control({"cmd": "mode_changed"})  # let the daemon re-resolve its tier
+        self._eval_js("window.__emmaKeySaved && window.__emmaKeySaved();")
+
+    def clearKey_(self, _sender: Any) -> None:  # noqa: N802
+        from core import byok
+
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("¿Quitar tu API key?")
+        alert.setInformativeText_(
+            "Emma dejará de usar tu key. Podrás volver a ponerla cuando quieras."
+        )
+        alert.addButtonWithTitle_("Quitar")
+        alert.addButtonWithTitle_("Cancelar")
+        if alert.runModal() != NSAlertFirstButtonReturn:
+            return
+
+        def _work() -> None:
+            with contextlib.suppress(Exception):
+                asyncio.run(byok.clear())
+            AppHelper.callAfter(lambda: self._set_key_status("Key eliminada."))
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _set_key_status(self, text: str) -> None:
+        self._eval_js(f"window.__emmaKeyStatus && window.__emmaKeyStatus({json.dumps(text)});")
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _eval_js(self, script: str) -> None:
+        if self._webview is None:
+            return
+        with contextlib.suppress(Exception):
+            self._webview.evaluateJavaScript_completionHandler_(script, None)
 
     def quitUI_(self, _sender: Any) -> None:  # noqa: N802
         # Closes the UI process only — the daemon (launchd) keeps running.

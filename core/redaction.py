@@ -96,6 +96,18 @@ def _phone_sub(m: re.Match[str]) -> str:
 
 # (type, compiled pattern, replacement) — order matters.
 _RULES: list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
+    # OpenAI key shapes, at ANY length — the BYO-key tier's whole promise is that
+    # this value stays in Keychain (LAUNCH-11 Part 2). The generic API_KEY_LIKE
+    # rule below needs a 32+ char run to fire, so a TRUNCATED key sailed straight
+    # through: "sk-abcdefgh" was returned verbatim. That is not a hypothetical
+    # shape, it is precisely what "log the first 12 chars to debug" produces, and
+    # a partial key is still a secret.
+    #
+    # Anchored on a word boundary and a real separator so ordinary text is safe:
+    # "risk-averse" and "task-runner" do not match (no \b before "sk-"), and
+    # neither does the bare token "sk" or the phrase "the sk- prefix".
+    ("OPENAI_KEY", re.compile(r"\bsk-[A-Za-z0-9_]*-?[A-Za-z0-9_\-]{6,}"),
+     "[REDACTED:OPENAI_KEY]"),
     ("CREDIT_CARD", re.compile(r"\d(?:[ -]?\d){12,18}"), _card_sub),
     ("CURP", re.compile(r"\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b"), "[REDACTED:CURP]"),
     ("RFC", re.compile(r"\b[A-Z&Ñ]{3,4}\d{6}[A-Z\d]{3}\b"), "[REDACTED:RFC]"),

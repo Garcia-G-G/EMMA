@@ -22,7 +22,7 @@ from typing import Any
 import structlog
 
 from config.settings import settings
-from core import boot_guard, orchestrator, permissions
+from core import boot_guard, control_auth, orchestrator, permissions
 from core.crash_handler import handle_crash
 from core.redaction import redaction_processor
 
@@ -301,7 +301,15 @@ async def _supervise_ui(log: structlog.BoundLogger) -> None:
         try:
             proc = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "emma.ui",
-                env={**os.environ, "EMMA_DASHBOARD_PORT": str(settings.DASHBOARD_PORT)},
+                env={
+                    **os.environ,
+                    "EMMA_DASHBOARD_PORT": str(settings.DASHBOARD_PORT),
+                    # The UI is the ONLY process allowed on the control channel.
+                    # Hand it this boot's token rather than letting it mint one:
+                    # two tokens would disagree and every command would fail
+                    # closed (LAUNCH-11 Part 2).
+                    "EMMA_CONTROL_TOKEN": control_auth.token(),
+                },
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )

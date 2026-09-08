@@ -30,10 +30,15 @@ def test_every_state_bucket_has_an_icon() -> None:
 
 
 def test_talks_only_to_loopback() -> None:
+    from urllib.parse import urlparse
+
     assert ui._HTTP_URL.startswith("http://127.0.0.1:")
     assert ui._WS_URL.startswith("ws://127.0.0.1:")
-    # WS is HTTP port + 1 (3201 by default), the events bus
-    assert ui._WS_URL.endswith("/events")
+    # WS is HTTP port + 1 (3201 by default), the events bus. The auth token
+    # (LAUNCH-11 Part 2) rides in the query string, so compare the PATH.
+    assert urlparse(ui._WS_URL).path == "/events"
+    assert urlparse(ui._CONTROL_URL).path == "/control"
+    assert "token=" in ui._WS_URL and "token=" in ui._CONTROL_URL
 
 
 def test_unknown_state_falls_back_to_idle() -> None:

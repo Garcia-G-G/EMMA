@@ -131,3 +131,89 @@ async def test_stop_active_speech_queues_interruption() -> None:
     conversation._active_task = task
     assert await conversation.stop_active_speech() is True
     assert len(task.frames) == 1  # one interruption frame queued onto the live task
+
+
+# --- LAUNCH-11 Part 2: the channel is authenticated, not just origin-checked --
+#
+# _origin_ok deliberately returns True for a client that sends NO Origin header,
+# because the native UI is such a client. That is every non-browser process on
+# the machine (audit P1-13): it could read 200 rows of personal memory, unmute a
+# deliberately muted mic, unpair the Mac, and shut Emma down. An Origin allowlist
+# stops foreign WEB PAGES; it was never authentication.
+
+
+class _TokenWS:
+    """A fake handshake carrying a path (where the token rides) and an Origin."""
+
+    def __init__(self, path: str, origin: str | None = None) -> None:
+        self.request = _FakeReq(origin)
+        self.request.path = path
+
+
+def _tok() -> str:
+    from core import control_auth
+
+    return control_auth.token()
+
+
+def test_a_client_with_no_token_is_rejected() -> None:
+    assert server._token_ok(_TokenWS("/control")) is False
+
+
+def test_a_client_with_the_wrong_token_is_rejected() -> None:
+    assert server._token_ok(_TokenWS("/control?token=not-the-token")) is False
+
+
+def test_a_client_with_the_right_token_is_accepted() -> None:
+    assert server._token_ok(_TokenWS(f"/control?token={_tok()}")) is True
+
+
+def test_origin_and_token_are_both_required() -> None:
+    """Defence in depth: the token stops local processes, the Origin check still
+    stops a foreign page that somehow learned the token."""
+    good = f"/control?token={_tok()}"
+    assert server._socket_ok(_TokenWS(good, None)) is True
+    assert server._socket_ok(_TokenWS(good, "http://127.0.0.1:3200")) is True
+    assert server._socket_ok(_TokenWS(good, "https://evil.example")) is False
+    assert server._socket_ok(_TokenWS("/control", None)) is False
+
+
+def test_the_token_file_is_not_world_readable(tmp_path, monkeypatch) -> None:
+    """It is a shared secret on a multi-process machine; 0600 is the floor."""
+    import importlib
+    import stat
+
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
+    monkeypatch.delenv("EMMA_CONTROL_TOKEN", raising=False)
+    from core import control_auth
+
+    importlib.reload(control_auth)
+    control_auth.token()
+
+    path = tmp_path / "control_token"
+    assert path.is_file()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_the_token_is_stable_within_a_process(tmp_path, monkeypatch) -> None:
+    import importlib
+
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
+    monkeypatch.delenv("EMMA_CONTROL_TOKEN", raising=False)
+    from core import control_auth
+
+    importlib.reload(control_auth)
+    assert control_auth.token() == control_auth.token()
+
+
+def test_an_injected_token_wins(tmp_path, monkeypatch) -> None:
+    """The daemon hands its UI child the token through the environment, so the
+    child must use that rather than minting one of its own."""
+    import importlib
+
+    monkeypatch.setenv("EMMA_HOME", str(tmp_path))
+    monkeypatch.setenv("EMMA_CONTROL_TOKEN", "handed-down-token")
+    from core import control_auth
+
+    importlib.reload(control_auth)
+    assert control_auth.token() == "handed-down-token"
