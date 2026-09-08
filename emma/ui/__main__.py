@@ -39,6 +39,7 @@ from AppKit import (
     NSObject,
     NSSecureTextField,
     NSStatusBar,
+    NSTextField,
     NSVariableStatusItemLength,
     NSWindow,
     NSWindowStyleMaskClosable,
@@ -225,6 +226,8 @@ class _ScriptBridge(NSObject):  # type: ignore[misc]
             self._bar.promptForKey_(None)
         elif action == "clear_key":
             self._bar.clearKey_(None)
+        elif action == "enter_license":
+            self._bar.promptForLicense_(None)
         else:
             log.warning("ui_unknown_script_message", action=action[:40])
 
@@ -287,6 +290,7 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         # A second, always-available entry point for the key — the onboarding
         # fork is the first, but someone who skipped it must not have to reinstall.
         self._add_item(menu, "Mi API key de OpenAI…", "promptForKey:", "")
+        self._add_item(menu, "Activar mi licencia…", "promptForLicense:", "")
         self._add_item(menu, "Dar acceso a la pantalla…", "grantAccessibility:", "")
         self._add_item(menu, "Apagar Emma", "shutdownEmma:", "")
         self._add_item(menu, "Salir de esta ventana", "quitUI:", "q")
@@ -430,6 +434,49 @@ class EmmaBar(NSObject):  # type: ignore[misc]
             return
         send_control({"cmd": "mode_changed"})  # let the daemon re-resolve its tier
         self._eval_js("window.__emmaKeySaved && window.__emmaKeySaved();")
+
+    def promptForLicense_(self, _sender: Any) -> None:  # noqa: N802
+        """Licence key entry. A plain field — this is a purchase token, not a
+        credential to anyone's account — but it goes through the same native
+        path so there is exactly one way into the app's secrets handling."""
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("Tu clave de licencia")
+        alert.setInformativeText_(
+            "La recibiste al comprar Emma. Se verifica una vez; después Emma "
+            "funciona aunque estés sin internet."
+        )
+        field = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 340, 24))
+        field.setPlaceholderString_("EMMA-XXXX-XXXX-XXXX")
+        alert.setAccessoryView_(field)
+        alert.addButtonWithTitle_("Activar")
+        alert.addButtonWithTitle_("Ahora no")
+        alert.window().setInitialFirstResponder_(field)
+        if alert.runModal() != NSAlertFirstButtonReturn:
+            return
+        key = str(field.stringValue()).strip()
+        if not key:
+            return
+        self._set_license_status("Verificando…")
+        threading.Thread(target=lambda: self._activate_license(key), daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _activate_license(self, key: str) -> None:
+        from core import license as lic
+
+        try:
+            _ok, msg = asyncio.run(lic.activate(key))
+        except Exception as exc:
+            log.warning("license_activate_failed", error_type=type(exc).__name__)
+            # Fail OPEN, here too: an exception in our own code must not read as
+            # "unlicensed" to the user staring at the dialog.
+            msg = "No pude verificar ahora. Emma funciona; lo reintento después."
+        AppHelper.callAfter(lambda: self._set_license_status(msg))
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _set_license_status(self, text: str) -> None:
+        self._eval_js(
+            f"window.__emmaLicenseStatus && window.__emmaLicenseStatus({json.dumps(text)});"
+        )
 
     def clearKey_(self, _sender: Any) -> None:  # noqa: N802
         from core import byok

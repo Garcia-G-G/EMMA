@@ -35,6 +35,26 @@ _DEAD_SUB_STATUSES = frozenset({"canceled", "unpaid", "incomplete_expired"})
 # `trigger` they are recorded under. Both must credit — see handle_event.
 _CREDITING_PURPOSES = {"emma_auto_refill": "auto", "emma_bundle_purchase": "first_purchase"}
 
+# LAUNCH-11 Part 4: a BYO-key purchase buys a LICENCE, not seconds. Same webhook,
+# a different fulfilment — and, like the bundle credit, the webhook is the source
+# of truth so a closed tab cannot cost someone the thing they paid for.
+_LICENSE_PURPOSE = "emma_license_purchase"
+
+
+def _issue_license(meta: dict[str, Any], pi_id: str) -> str:
+    from backend import license_routes
+
+    user_id = int(meta.get("user_id", 0) or 0)
+    plan = str(meta.get("plan", ""))
+    if not user_id or plan not in license_routes.PLANS:
+        return "ignored"
+    existing = db.license_for_payment_intent(pi_id)
+    if existing:
+        return "licensed"  # idempotent: the webhook may arrive more than once
+    key = db.generate_license_key()
+    db.create_license(user_id, plan, key, license_routes.expiry_for(plan), pi_id)
+    return "licensed"
+
 
 def _plan_for_subscription(obj: dict[str, Any]) -> str | None:
     """Reverse the price id on a subscription back to our plan name.
@@ -146,6 +166,8 @@ def handle_event(event: dict[str, Any]) -> str:
     if etype == "payment_intent.succeeded":
         meta = obj.get("metadata") or {}
         purpose = meta.get("purpose", "")
+        if purpose == _LICENSE_PURPOSE:
+            return _issue_license(meta, str(obj.get("id") or ""))
         if purpose in _CREDITING_PURPOSES:
             user_id = int(meta.get("user_id", 0) or 0)
             bundle_key = meta.get("bundle_key", "")

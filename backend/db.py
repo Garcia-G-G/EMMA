@@ -139,6 +139,36 @@ CREATE TABLE IF NOT EXISTS refill_events (
 CREATE INDEX IF NOT EXISTS ix_refill_events_user ON refill_events(user_id);
 CREATE INDEX IF NOT EXISTS ix_refill_events_created ON refill_events(created_at);
 
+-- LAUNCH-11 Part 4: BYO-key sells a LICENSE TO THE SOFTWARE, not metered usage.
+-- Separate from user_balance/refill_events, which are the managed tier's meter.
+-- No usage columns here, deliberately: a licensed daemon reports nothing.
+CREATE TABLE IF NOT EXISTS licenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_key TEXT UNIQUE NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  plan TEXT NOT NULL,                              -- monthly | annual | lifetime
+  status TEXT NOT NULL DEFAULT 'active',           -- active | refunded | revoked
+  activations_max INTEGER NOT NULL DEFAULT 3,
+  expires_at REAL,                                 -- NULL = lifetime
+  stripe_payment_intent TEXT,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_licenses_user ON licenses(user_id);
+
+-- One row per install that activated a license. install_id is an opaque random
+-- value the daemon generates and keeps; it is NOT a machine fingerprint, and
+-- exists only to bound activations so re-activating the same install is free.
+CREATE TABLE IF NOT EXISTS license_activations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id INTEGER NOT NULL REFERENCES licenses(id),
+  install_id TEXT NOT NULL,
+  device_name TEXT,
+  first_seen_at REAL NOT NULL,
+  last_seen_at REAL NOT NULL,
+  UNIQUE(license_id, install_id)
+);
+CREATE INDEX IF NOT EXISTS ix_activations_license ON license_activations(license_id);
+
 -- Held-seconds reservation per session (concurrency + idempotency). session_id
 -- is the PK so retries are safe.
 CREATE TABLE IF NOT EXISTS balance_reservations (
@@ -856,6 +886,107 @@ def add_seconds_to_balance(user_id: int, seconds: int) -> None:
             (seconds, time.time(), user_id),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ---- licenses (LAUNCH-11 Part 4) --------------------------------------------
+
+
+def create_license(
+    user_id: int, plan: str, license_key: str, expires_at: float | None,
+    stripe_payment_intent: str | None = None, activations_max: int = 3,
+) -> int:
+    conn = connect()
+    try:
+        cur = conn.execute(
+            "INSERT INTO licenses(license_key, user_id, plan, status, activations_max, "
+            "expires_at, stripe_payment_intent, created_at) VALUES(?,?,?,'active',?,?,?,?)",
+            (license_key, user_id, plan, activations_max, expires_at,
+             stripe_payment_intent, time.time()),
+        )
+        conn.commit()
+        return int(cur.lastrowid or 0)
+    finally:
+        conn.close()
+
+
+def generate_license_key() -> str:
+    """EMMA-XXXX-XXXX-XXXX. Unambiguous alphabet: no O/0, no I/1/L."""
+    import secrets as _s
+
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    groups = ["".join(_s.choice(alphabet) for _ in range(4)) for _ in range(3)]
+    return "EMMA-" + "-".join(groups)
+
+
+def license_for_payment_intent(pi_id: str) -> dict[str, Any] | None:
+    if not pi_id:
+        return None
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM licenses WHERE stripe_payment_intent=?", (pi_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_license(license_key: str) -> dict[str, Any] | None:
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM licenses WHERE license_key=?", (license_key,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def record_activation(license_id: int, install_id: str, device_name: str | None) -> tuple[bool, int]:
+    """Register this install against the license. Returns (allowed, activations_used).
+
+    Re-activating an install that is already on the license is always allowed and
+    consumes nothing — reinstalling Emma, or restoring a Mac from backup, must not
+    burn a seat. Only a NEW install counts against activations_max.
+    """
+    now = time.time()
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT id FROM license_activations WHERE license_id=? AND install_id=?",
+            (license_id, install_id),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE license_activations SET last_seen_at=?, device_name=COALESCE(?, device_name) "
+                "WHERE id=?",
+                (now, device_name, existing["id"]),
+            )
+            used = conn.execute(
+                "SELECT COUNT(*) c FROM license_activations WHERE license_id=?", (license_id,)
+            ).fetchone()["c"]
+            conn.commit()
+            return True, int(used)
+
+        lic = conn.execute(
+            "SELECT activations_max FROM licenses WHERE id=?", (license_id,)
+        ).fetchone()
+        used = conn.execute(
+            "SELECT COUNT(*) c FROM license_activations WHERE license_id=?", (license_id,)
+        ).fetchone()["c"]
+        if lic and int(used) >= int(lic["activations_max"]):
+            conn.rollback()
+            return False, int(used)
+        conn.execute(
+            "INSERT INTO license_activations(license_id, install_id, device_name, "
+            "first_seen_at, last_seen_at) VALUES(?,?,?,?,?)",
+            (license_id, install_id, device_name, now, now),
+        )
+        conn.commit()
+        return True, int(used) + 1
     finally:
         conn.close()
 
