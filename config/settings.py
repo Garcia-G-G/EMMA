@@ -280,23 +280,44 @@ class Settings(BaseSettings):
         un-migrated state) this returns immediately and never shells out to
         the `security` CLI. Only once .env has been migrated (canonical
         credential blank) do we read the Secret tier from Keychain.
+
+        Once it does run, OPENAI_API_KEY is read back before ``_is_managed()``
+        is consulted — see the comment below. That ordering is load-bearing.
         """
         if self.OPENAI_API_KEY:
             return self
         from core.secrets import retrieve_sync
 
-        # In managed mode this is NOT dormant — OPENAI_API_KEY is always blank
-        # there, so the early return never fires and every boot of every process
-        # that imports settings spawned 15 sequential `security` subprocesses,
-        # each with a 5s timeout: up to 75s of boot latency before `starting` is
-        # even logged, paid again by every `python -m emma.ui` respawn.
+        # ORDER IS THE WHOLE POINT (LAUNCH-10 Part 2). OPENAI_API_KEY resolves
+        # FIRST and unconditionally, before anything asks which mode this is.
+        #
+        # `_is_managed()` is defined as `not self.OPENAI_API_KEY`, and the early
+        # return above guarantees the field is blank by the time we get here — so
+        # deciding the mode first and reading the Keychain second made the managed
+        # branch below ALWAYS taken, for everyone. A BYOK user who ran the
+        # migration the security convention mandates (which blanks the .env line)
+        # then never got their own key back: preflight exempted them,
+        # _ensure_paired parked them forever, and the daemon booted green and
+        # silent. You cannot know the mode until the Keychain has had its say
+        # about the field that defines it.
+        val = retrieve_sync("OPENAI_API_KEY")
+        if val:
+            object.__setattr__(self, "OPENAI_API_KEY", val)
+
+        # With that settled, the fan-out guard applies to the REST. In managed
+        # mode this validator is not dormant — OPENAI_API_KEY stays blank there,
+        # so the early return never fires and every boot of every process that
+        # imports settings spawned 15 sequential `security` subprocesses, each
+        # with a 5s timeout: up to 75s of boot latency before `starting` is even
+        # logged, paid again by every `python -m emma.ui` respawn.
         #
         # A managed daemon's credential is the device token (core.pairing reads
-        # it directly, under its own label), so none of these 15 apply. Read the
-        # ones that still could — a managed user can absolutely have a Brave key
-        # or a GitHub token — but skip the ones that only mean anything to a BYOK
-        # daemon, and never block boot on the whole list.
-        names: tuple[str, ...] = _CREDENTIAL_FIELDS
+        # it directly, under its own label), so the BYOK-only ones cannot apply.
+        # Read the ones that still could — a managed user can absolutely have a
+        # Brave key or a GitHub token — but skip those, and never block boot on
+        # the whole list. Cost of the reordering: exactly one extra `security`
+        # call on a managed boot, which is what buys back a working BYOK one.
+        names = tuple(n for n in _CREDENTIAL_FIELDS if n != "OPENAI_API_KEY")
         if self._is_managed():
             names = tuple(n for n in names if n not in _BYOK_ONLY_CREDENTIALS)
         for name in names:
