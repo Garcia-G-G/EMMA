@@ -288,3 +288,42 @@ def test_the_module_exposes_no_key_getter() -> None:
         assert "get" not in name.lower() or "hint" in name.lower(), name
     assert not hasattr(byok, "get_key")
     assert not hasattr(byok, "read")
+
+
+# ---- onboarding forks, and both tiers stay reachable -----------------------
+
+
+def _page() -> str:
+    from pathlib import Path
+
+    return Path("dashboard/index.html").read_text(encoding="utf-8")
+
+
+def test_onboarding_offers_both_tiers() -> None:
+    page = _page()
+    for marker in ("ob-choose", "ob-pick-byok", "ob-pick-managed", "ob-key"):
+        assert f'id="{marker}"' in page, marker
+
+
+def test_the_byo_path_says_emma_cannot_report_usage() -> None:
+    """A user who expects spend numbers in the app and does not find them files
+    it as a bug. Say it in the choice itself, not in a footnote."""
+    page = _page()
+    assert "no puede decirte cuánto llevas gastado" in page
+
+
+def test_both_tiers_are_reachable_after_onboarding() -> None:
+    """Someone who started managed and hit the cost wall must be able to switch
+    without reinstalling — and back again."""
+    page = _page()
+    for marker in ("btn-use-byok", "btn-use-managed", "btn-drop-key"):
+        assert f'id="{marker}"' in page, marker
+
+
+def test_the_key_field_is_never_an_html_input() -> None:
+    """The page triggers a NATIVE panel; it must not collect the key itself."""
+    page = _page()
+    assert "messageHandlers.emma" in page
+    # No input element anywhere near the key pane.
+    key_pane = page.split('id="ob-key"')[1].split("</div>")[0]
+    assert "<input" not in key_pane
