@@ -191,6 +191,20 @@
     border-radius:10px; display:inline-block; margin-top:6px;
   }
   .fail { color:var(--bad); font-size:13px; margin-top:14px; }
+  /* The onboarding fork: two options presented as equals, not as an upsell and
+     a footnote. Each states its own cost and its own limitation. */
+  .tiers { display:grid; gap:12px; margin-top:20px; text-align:left; }
+  @media (min-width: 760px) { .tiers { grid-template-columns:1fr 1fr; } }
+  .tier {
+    display:flex; flex-direction:column; gap:8px; padding:18px 18px 16px;
+    background:var(--raised); border:1px solid var(--line); border-radius:12px;
+    color:inherit; font:inherit; text-align:left; cursor:pointer;
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .tier:hover, .tier:focus-visible { border-color:var(--accent); transform:translateY(-1px); }
+  .tier-t { font-weight:650; font-size:15px; }
+  .tier-d { font-size:13px; color:var(--muted); line-height:1.5; }
+  .tier-warn { font-size:12px; color:var(--muted); opacity:.85; line-height:1.5; }
   /* The manual pairing fallback: must be readable and selectable, so it is
      text with user-select on, never a link that depends on window.open. */
   .url {
@@ -223,6 +237,52 @@
       <h2>Emma vive en tu Mac</h2>
       <p>Vamos a activarla. Toma menos de un minuto.</p>
       <div class="actions"><button class="btn" id="ob-start">Empezar</button></div>
+    </div>
+
+    <!-- LAUNCH-11 Part 3: the fork. Written to be chosen from, not sold at —
+         each option says what it costs and what it gives up. -->
+    <div id="ob-choose" hidden>
+      <h2>¿Cómo quieres pagar el uso?</h2>
+      <p>Las dos opciones usan la misma Emma. Lo único que cambia es quién le paga a OpenAI.</p>
+      <div class="tiers">
+        <button class="tier" id="ob-pick-byok">
+          <span class="tier-t">Traigo mi propia key</span>
+          <span class="tier-d">
+            Le pagas a OpenAI directo por lo que uses. Tu key se guarda en el
+            Keychain de tu Mac y <b>Emma nunca la ve</b>: las llamadas van de tu
+            Mac a OpenAI, sin pasar por nosotros.
+          </span>
+          <span class="tier-warn">
+            Por eso mismo, <b>Emma no puede decirte cuánto llevas gastado</b>.
+            Eso lo ves en tu panel de OpenAI.
+          </span>
+        </button>
+        <button class="tier" id="ob-pick-managed">
+          <span class="tier-t">Que Emma se encargue</span>
+          <span class="tier-d">
+            Sin keys ni configuración. Creas tu cuenta, vinculas esta Mac y ya.
+            Empiezas con <b>90 segundos gratis</b> para probarla.
+          </span>
+          <span class="tier-warn">Aquí sí ves tus minutos y tu gasto en la app.</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- BYO key. The field itself is NATIVE (emma/ui) — a Secret-tier value
+         never goes into this page. This pane only explains and triggers. -->
+    <div id="ob-key" hidden>
+      <h2>Tu API key de OpenAI</h2>
+      <p>Se abre una ventana del sistema para que la pegues. Se guarda en tu
+         Keychain; no se escribe en esta página ni sale de tu Mac.</p>
+      <div class="actions">
+        <button class="btn" id="ob-key-open">Pegar mi key</button>
+        <span class="small muted" id="ob-key-status"></span>
+      </div>
+      <p class="small muted">
+        ¿No tienes una? Créala en <span class="url">platform.openai.com/api-keys</span>
+        y vuelve aquí.
+      </p>
+      <div class="fail" id="ob-key-fail" hidden></div>
     </div>
 
     <div id="ob-account" hidden>
@@ -384,6 +444,22 @@
         <div class="between" style="margin-top:9px"><span class="muted">Estado</span><span class="mono" id="c-state">—</span></div>
         <div class="between" style="margin-top:9px"><span class="muted">Versión</span><span class="mono" id="c-ver">—</span></div>
         <div class="stale" id="c-stale" hidden></div>
+      </div>
+      <!-- LAUNCH-11 Part 3: both tiers reachable AFTER onboarding. Someone who
+           started managed and hit the cost wall must be able to switch to their
+           own key without reinstalling, and vice versa. -->
+      <div class="card" id="c-mode-card">
+        <div class="between">
+          <div><div style="font-weight:600">Cómo se paga el uso</div>
+               <div class="small muted" id="c-mode-desc">—</div></div>
+          <span class="mono" id="c-key-hint"></span>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn ghost" id="btn-use-byok">Usar mi propia key</button>
+          <button class="btn ghost" id="btn-use-managed" hidden>Que Emma se encargue</button>
+          <button class="btn ghost" id="btn-drop-key" hidden>Quitar mi key</button>
+        </div>
+        <div class="small muted" id="c-mode-note" style="margin-top:10px"></div>
       </div>
       <div class="card">
         <div class="between">
@@ -633,9 +709,41 @@ let PAIR = null, pollTimer = null;
 function step(n) { document.querySelectorAll("#ob-steps i").forEach((el, i) => el.classList.toggle("on", i <= n)); }
 function showOnboarding() { $("#onb").hidden = false; $("#shell").style.filter = "blur(0)"; }
 function hideOnboarding() { $("#onb").hidden = true; if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-function obPane(id) { ["ob-welcome", "ob-account", "ob-ready"].forEach((x) => { $("#" + x).hidden = x !== id; }); }
+const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-account", "ob-ready"];
+function obPane(id) { OB_PANES.forEach((x) => { $("#" + x).hidden = x !== id; }); }
 
-$("#ob-start").addEventListener("click", async () => {
+$("#ob-start").addEventListener("click", () => { obPane("ob-choose"); step(1); });
+
+/* --- the fork (LAUNCH-11 Part 3) --- */
+$("#ob-pick-byok").addEventListener("click", () => {
+  obPane("ob-key"); step(1);
+  $("#ob-key-fail").hidden = true;
+  $("#ob-key-status").textContent = "";
+});
+$("#ob-pick-managed").addEventListener("click", () => startManaged());
+
+/* The field is NATIVE. This only asks the host process to show it — the key
+   never enters this page, so there is nothing here to leak. */
+function askForKey() {
+  try {
+    window.webkit.messageHandlers.emma.postMessage("enter_key");
+  } catch (_) {
+    const el = $("#ob-key-fail");
+    el.hidden = false;
+    el.textContent = "Abre Emma desde el icono de la barra de menú para pegar tu key.";
+  }
+}
+$("#ob-key-open").addEventListener("click", askForKey);
+
+/* Called by emma/ui after the native panel resolves. */
+window.__emmaKeyStatus = (text) => { $("#ob-key-status").textContent = text || ""; };
+window.__emmaKeySaved = () => {
+  $("#ob-key-status").textContent = "Listo.";
+  obPane("ob-ready"); step(2);
+  loadMode();
+};
+
+async function startManaged() {
   obPane("ob-account"); step(1);
   $("#ob-fail").hidden = true;
   const r = await control({ cmd: "pair_start" });
@@ -645,7 +753,7 @@ $("#ob-start").addEventListener("click", async () => {
   showManualUrl(r.verify_url);
   openBrowser(r.verify_url);
   startPolling();
-});
+}
 $("#ob-open").addEventListener("click", () => { if (PAIR) openBrowser(PAIR.verify_url); });
 $("#ob-done").addEventListener("click", hideOnboarding);
 
@@ -694,6 +802,38 @@ const DASH = "https://theemmafamily.com/dashboard";
 $("#btn-buy").addEventListener("click", () => openBrowser(DASH));
 $("#btn-buy2").addEventListener("click", () => openBrowser(DASH));
 $("#btn-web").addEventListener("click", () => openBrowser(DASH));
+/* --- tier, switchable after onboarding (LAUNCH-11 Part 3) --- */
+const MODE_DESC = {
+  byok: "Tu propia key de OpenAI. Las llamadas van directo de tu Mac a OpenAI.",
+  managed: "Emma se encarga. Ves tus minutos y tu gasto en esta app.",
+  unconfigured: "Todavía no eliges. Emma no puede responder hasta que lo hagas.",
+};
+const MODE_NOTE = {
+  byok: "Emma no puede decirte cuánto llevas gastado — eso lo ves en tu panel de OpenAI.",
+  managed: "",
+  unconfigured: "",
+};
+async function loadMode() {
+  const r = await control({ cmd: "mode" });
+  if (!r || !r.mode) return;
+  $("#c-mode-desc").textContent = MODE_DESC[r.mode] || "—";
+  $("#c-mode-note").textContent = MODE_NOTE[r.mode] || "";
+  $("#c-key-hint").textContent = r.key_hint || "";
+  const byok = r.mode === "byok";
+  $("#btn-use-byok").hidden = byok;
+  $("#btn-drop-key").hidden = !byok;
+  $("#btn-use-managed").hidden = !byok;
+}
+$("#btn-use-byok").addEventListener("click", askForKey);
+$("#btn-drop-key").addEventListener("click", () => {
+  try { window.webkit.messageHandlers.emma.postMessage("clear_key"); } catch (_) {}
+  setTimeout(loadMode, 900);
+});
+$("#btn-use-managed").addEventListener("click", () => {
+  try { window.webkit.messageHandlers.emma.postMessage("clear_key"); } catch (_) {}
+  setTimeout(() => { showOnboarding(); startManaged(); }, 900);
+});
+
 $("#btn-unpair").addEventListener("click", async () => {
   if (!confirm("¿Desvincular esta Mac? Emma dejará de responder hasta que la vuelvas a vincular.")) return;
   await control({ cmd: "unpair" });
@@ -706,6 +846,7 @@ loadPersonality();
 loadFacts();
 loadBalance();
 loadVersion();
+loadMode();
 control({ cmd: "status" }).then((r) => { if (r && r.muted) setState("muted"); });
 window.__emma_painted = true;   // the render watchdog's sentinel
 </script>
