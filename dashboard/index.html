@@ -191,6 +191,17 @@
     border-radius:10px; display:inline-block; margin-top:6px;
   }
   .fail { color:var(--bad); font-size:13px; margin-top:14px; }
+  /* The manual pairing fallback: must be readable and selectable, so it is
+     text with user-select on, never a link that depends on window.open. */
+  .url {
+    font-family:var(--mono); color:var(--text); background:var(--raised);
+    border:1px solid var(--line); border-radius:6px; padding:3px 8px;
+    display:inline-block; margin-top:6px;
+    user-select:text; -webkit-user-select:text;
+    /* anywhere, not break-all: only split if it genuinely cannot fit, so a
+       normal-length URL stays readable instead of breaking mid-word. */
+    overflow-wrap:anywhere;
+  }
   @media (max-width: 720px) { .shell { grid-template-columns:1fr; } nav { display:none; } }
 </style>
 </head>
@@ -223,6 +234,14 @@
         <button class="btn" id="ob-open">Abrir el navegador</button>
         <span class="small muted" id="ob-poll">Esperando a que confirmes…</span>
       </div>
+      <!-- Belt and braces (LAUNCH-10 Part 3): the manual path. If the browser
+           does not open for any reason, the code alone is useless without
+           somewhere to type it — this pane used to show one and not the other,
+           which left onboarding with no recovery at all. Selectable text. -->
+      <p class="small muted" id="ob-manual" hidden>
+        ¿No se abrió? Entra a esta dirección y escribe el código:<br>
+        <span class="url" id="ob-url"></span>
+      </p>
       <div class="fail" id="ob-fail" hidden></div>
     </div>
 
@@ -614,6 +633,7 @@ $("#ob-start").addEventListener("click", async () => {
   if (!r.ok) { fail("No pudimos pedir el código. Revisa tu conexión."); return; }
   PAIR = r;
   $("#ob-code").textContent = r.user_code || "————";
+  showManualUrl(r.verify_url);
   openBrowser(r.verify_url);
   startPolling();
 });
@@ -643,8 +663,18 @@ function fail(msg) {
   $("#ob-retry").addEventListener("click", () => $("#ob-start").click());
 }
 /* The system browser, never the WebView: this is the full web auth stack,
-   OAuth included, and a password must never be typed into a window Emma owns. */
+   OAuth included, and a password must never be typed into a window Emma owns.
+   In the app window this reaches the system browser via the WKUIDelegate
+   (emma/ui/__main__.py); in a real browser tab it is an ordinary popup. */
 function openBrowser(url) { if (url) window.open(url, "_blank"); }
+
+/* The manual path, always shown — never conditional on window.open having
+   worked, because there is no reliable way to detect that it did not. */
+function showManualUrl(url) {
+  if (!url) return;
+  $("#ob-url").textContent = String(url).replace(/^https?:\/\//, "");
+  $("#ob-manual").hidden = false;
+}
 
 /* ---- actions --------------------------------------------------------- */
 $("#btn-mute").addEventListener("click", async () => {
