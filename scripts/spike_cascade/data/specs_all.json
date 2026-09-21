@@ -1,0 +1,3634 @@
+[
+ {
+  "type": "function",
+  "function": {
+   "name": "click_button",
+   "description": "Hace click en un botón de la ventana de adelante. SIEMPRE confirma antes.\n\nÚsalo para \"cierra ese diálogo\", \"haz click en Aceptar / Cancelar\". Un click\n    de UI puede autorizar pagos — por eso la confirmación es obligatoria. Con\n    scope=\"focus\" se limita al panel enfocado; por defecto (\"window\") toda la ventana.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "scope": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "describe_screen",
+   "description": "Describe lo que hay en la ventana de adelante: botones, campos y texto.\n\nÚsalo cuando the user diga \"¿qué dice esa ventana?\", \"describe la pantalla\",\n    \"¿qué ves?\". Solo lectura — nunca lee el valor de una contraseña.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "find_button",
+   "description": "Dice si existe un botón con ese nombre en la ventana de adelante.\n\nÚsalo cuando the user pregunte \"¿hay un botón de X?\" / \"encuentra el botón Y\".\n    Con scope=\"focus\" busca SOLO en el panel donde está la atención (\"el botón\n    Enviar de este panel\"); por defecto (\"window\") busca en toda la ventana.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "scope": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "read_pane_text",
+   "description": "Lee solo el texto del panel donde está la atención (no toda la ventana).\n\nPara \"léeme este panel\", \"¿qué dice este panel?\", \"léeme la terminal\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "read_window_text",
+   "description": "Lee el texto visible de la ventana enfocada (\"léeme lo que dice esa ventana\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "summarize_pane",
+   "description": "Resume SOLO el panel enfocado (no toda la ventana). Respuesta más corta y precisa.\n\nPara \"resúmeme la terminal\", \"¿qué dice este panel?\", \"¿qué pasó en este chat?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "summarize_screen",
+   "description": "Resume la pantalla, enfocándose en lo que responde la pregunta de the user.\n\nPara \"¿qué dice ese popup?\", \"resúmeme lo que veo\", \"¿qué significa esto?\".\n    Lee la pantalla y la sintetiza en una respuesta corta.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "type_in_field",
+   "description": "Escribe texto en un campo de la ventana de adelante. SIEMPRE confirma antes.\n\nPara datos secretos, el valor lo trae Emma del Keychain; el texto NUNCA se\n    dice en voz alta ni se muestra en la confirmación.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "field_name": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "field_name",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "where_am_i",
+   "description": "Dice en qué panel o región de la ventana está puesta la atención de the user.\n\nPara \"¿dónde estoy?\", \"¿en qué panel estoy?\", \"¿qué región es esta?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "window_layout",
+   "description": "Lista los paneles/regiones de la ventana de adelante y dónde están.\n\nPara \"¿qué tengo en esta ventana?\", \"¿qué paneles hay?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "look_at_screen",
+   "description": "Lee la pantalla con visión (captura + OCR local) — texto en imágenes, PDFs,\n    apps sin árbol de accesibilidad, etc.\n\nÚsalo cuando describe_screen no alcance (\"no veo el contenido\"), o cuando\n    the user diga \"mira la pantalla\", \"toma una captura y léela\", \"¿qué dice esa\n    imagen?\". Todo es local: la captura se procesa en el Mac y se borra; nunca\n    se sube a la nube. Si pasas `question`, responde a esa pregunta sobre lo leído.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "question": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "forget_fact",
+   "description": "Delete a fact (or facts) matching the given content from long-term memory.\n\nUse when the user says any of:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "content": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "content"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "forget_last_turn",
+   "description": "Borra lo que Emma acaba de aprender de ti en este ratito.\n\nPara \"borra lo que acabo de decir\", \"olvida lo que te acabo de decir\",\n    \"borra lo último que aprendiste de mí\", \"eso no lo guardes\". Quita los datos\n    recién anotados de la conversación reciente (no toca lo de días anteriores).",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "recall_facts",
+   "description": "Look up what Emma already knows about the user.\n\nUse when the user says any of:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_fact",
+   "description": "Save a durable fact about the user to long-term memory.\n\nUse when the user says any of:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "content": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "content"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "forget_secret",
+   "description": "Borra permanentemente un secreto guardado. Pide confirmación.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "label"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_secrets",
+   "description": "Lista las etiquetas de los secretos guardados. Nunca devuelve los valores.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "recall_secret",
+   "description": "Lee un secreto guardado y lo dice en voz alta. Úsalo solo cuando estés a solas.\n\nEl valor se devuelve solo en el mensaje hablado, nunca en datos ni en logs.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "label"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_secret",
+   "description": "Guarda un secreto (contraseña, número de cuenta, ID) bajo `label`.\n\nEl valor se guarda cifrado en el Llavero de macOS, nunca en texto plano.\n    Pide confirmación antes de guardar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "label",
+     "value"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "mute_mic",
+   "description": "Apaga el micrófono del todo: deja de CAPTURAR audio (privacidad).\n\nPara \"mute\", \"apaga el micrófono\", \"no me escuches\", \"silencia el micro\".\n    Es distinto de dormir: no es por unos minutos, es indefinido, y suelta el\n    micrófono de verdad (el indicador naranja de la Mac se apaga). Como el micro\n    queda apagado, \"Emma\" ya no me despierta — para reactivarme, dime desde el\n    dashboard o reiníciame. Instantáneo, sin confirmación: cuando pides silencio\n    lo quieres YA.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "restart_emma",
+   "description": "Reinicia a Emma (vuelve fresca en unos segundos).\n\nPara \"reiníciate\", \"restart\", \"vuelve a arrancar\". Útil tras un cambio o si\n    la notas rara. Lanza el reinicio en un proceso aparte que sobrevive su muerte.\n    Confirma antes: nunca debe dispararse por contenido que Emma lee.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "shutdown_emma",
+   "description": "Apaga a Emma por completo (deja de escuchar hasta que la reinicies a mano).\n\nPara \"apágate\", \"shut down\", \"ya duérmete del todo\", \"deja de escuchar\".\n    Sale limpio (exit 0) para que launchd NO la reinicie sola. Confirma antes:\n    apagarse es disruptivo y NUNCA debe dispararse por contenido que Emma lee.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snooze_listening",
+   "description": "Duérmete: deja de escuchar el wake word por unos minutos y luego reactívate sola.\n\nPara \"duérmete\", \"tómate un descanso\", \"no escuches por 20 minutos\". Durante\n    ese rato NO responde a \"Hey Emma\"; al terminar vuelve a escuchar sola. Confirma\n    antes: hacerla sorda es disruptivo y no debe dispararse por lo que lee.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "minutes": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "unmute_mic",
+   "description": "Vuelve a escuchar tras un mute (reactiva el micrófono).\n\nPara \"unmute\", \"vuelve a escucharme\", \"prende el micrófono\". Nota: si el\n    micrófono ya está apagado no puedo oír esta orden por voz — llega desde el\n    dashboard o al reiniciarme.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "recall_last_action",
+   "description": "Devuelve la última acción que Emma completó en esta sesión.\n\nÚsalo PRIMERO cuando the user diga 'otra vez', 'como antes', 'lo de hace\n    rato', 'eso', 'lo mismo', 'deshazlo' — confirma con él el referente y\n    luego re-llama la herramienta original con los mismos argumentos.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "repeat_last",
+   "description": "Repite, TAL CUAL, lo último que Emma dijo (sin volver a generarlo).\n\nPara \"repite eso\", \"¿qué dijiste?\", \"otra vez pero repítelo\", \"no te\n    escuché, repite\", \"say that again\". Habla de nuevo la MISMA respuesta,\n    palabra por palabra — no la reformules ni la regeneres.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "current_time",
+   "description": "Return the current time. Pass `timezone` as an IANA name\n    (\"Asia/Tokyo\", \"America/Mexico_City\") to ask about a specific city.\n\nOmit `timezone` for the user's local time.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "timezone": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "lock_screen",
+   "description": "Lock the screen (control+command+Q).",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "mute",
+   "description": "Mute the system output.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_application",
+   "description": "Open a macOS application by display name (e.g. \"Spotify\", \"Safari\", \"Notes\").",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_brightness",
+   "description": "Set the display brightness. `percent` is 0-100.\n\nRequires the Homebrew `brightness` CLI (`brew install brightness`).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "percent": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "percent"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_volume",
+   "description": "Set the system output volume. `percent` is 0-100.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "percent": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "percent"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "sleep_display",
+   "description": "Put the display to sleep immediately.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "unmute",
+   "description": "Unmute the system output.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "app_focus",
+   "description": "Trae `app` al frente. Úsalo cuando the user diga 'Emma, enfoca Cursor'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "app": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "app"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "app_keystroke",
+   "description": "Manda un atajo de teclado a `app`. Formato: 'Cmd+T', 'Cmd+Shift+P', 'Escape'.\n\nÚsalo cuando the user diga 'Emma, presiona Cmd+T en Cursor'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "app": {
+      "type": "string"
+     },
+     "keys": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "app",
+     "keys"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "app_menu_click",
+   "description": "Hace click en un ítem de menú por ruta. Ejemplo: 'File > New Window'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "app": {
+      "type": "string"
+     },
+     "menu_path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "app",
+     "menu_path"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_in_app",
+   "description": "Abre algo en una app: una URL directa, un recurso guardado, o destino + app.\n\nÚsalo cuando the user diga:\n    - \"Emma, abre la conexión learning-rots-local\" → kind=\"connection\"\n    - \"Emma, abre el canal general en Slack\" → app=\"slack\", kind=\"channel\"\n    - \"Emma, crea una tarea en Things: comprar leche\"\n    - \"Emma, abre <url>\"\n    `kind` es el tipo de recurso (connection/channel/dm/note); `fields` aporta\n    datos extra. Si sugerí opciones (\"¿quisiste decir…?\") y the user eligió,\n    re-llámame con `picked=<su elección>` y confirmed=true (21-B25).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "target": {
+      "type": "string"
+     },
+     "app": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "fields": {
+      "type": "object"
+     },
+     "picked": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "target"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_app",
+   "description": "Enseña a Emma a controlar una app nueva (info pública, no destructiva).\n\nÚsalo cuando the user diga \"Emma, recuerda que <app> usa el esquema <scheme>\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "url_scheme": {
+      "type": "string"
+     },
+     "category": {
+      "type": "string"
+     },
+     "applescript_dict": {
+      "type": "string"
+     },
+     "cli": {
+      "type": "string"
+     },
+     "notes": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "get_preferred_app",
+   "description": "Tell the user which app Emma is currently using for a category.\n\nUse when the user says things like:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "category": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "category"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_apps",
+   "description": "List which apps are installed for a category and which one Emma uses by default.\n\nUse this BEFORE choosing or opening an app, and when the user asks things like:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "category": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_default_browser",
+   "description": "Set the system default browser (URL handler for http/https).\n\nUse when the user says things like:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_preferred_app",
+   "description": "Save the user's preferred app for a category.\n\nUse when the user says things like:",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "category": {
+      "type": "string"
+     },
+     "app_name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "category",
+     "app_name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "find_recent",
+   "description": "Busca archivos modificados en los últimos `days` días, opcionalmente con `query` en el nombre.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "days": {
+      "type": "integer"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_folder",
+   "description": "Lista el contenido de una carpeta (nombre y fecha de modificación).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "move_item",
+   "description": "Mueve un archivo o carpeta de `src` a `dst`. Pide confirmación primero.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "src": {
+      "type": "string"
+     },
+     "dst": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "src",
+     "dst"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_item",
+   "description": "Abre un archivo o carpeta con su aplicación predeterminada.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "analyze_disk_usage",
+   "description": "Dice qué carpetas ocupan más espacio (\"¿qué está ocupando lugar?\").\n\nEscanea las carpetas de primer nivel de `dir` y sugiere candidatos a limpiar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "dir": {
+      "type": "string"
+     },
+     "top": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "find_file",
+   "description": "Busca archivos con Spotlight (\"¿dónde está el PDF del contrato de diciembre?\").\n\n`kind`: pdf/image/video/audio/doc/code. `since`: \"diciembre\"/\"ayer\"/\"esta\n    semana\"/\"este mes\". `under_dir`: carpeta donde buscar (~/Downloads, etc).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "since": {
+      "type": "string"
+     },
+     "under_dir": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "free_space_assist",
+   "description": "Sugiere y libera espacio de forma segura. SIEMPRE confirma antes de borrar.\n\n`categories` (coma-separadas): dmgs (instaladores viejos en Descargas) /\n    caches (cachés de Library). Sin confirmar solo muestra; al confirmar mueve a\n    la Papelera (reversible) la categoría elegida. Por defecto sólo 'dmgs'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "categories": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "rename_batch",
+   "description": "Renombra en lote con vista previa. SIEMPRE confirma antes de aplicar.\n\nReemplaza `pattern` por `replace` en los nombres de archivo bajo `under_dir`\n    (ej. \".heic\" → \".jpg\"). `kind` filtra por extensión opcional. No sobrescribe\n    archivos existentes ni cruza carpetas.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "pattern": {
+      "type": "string"
+     },
+     "replace": {
+      "type": "string"
+     },
+     "under_dir": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "pattern",
+     "replace",
+     "under_dir"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "edit_file_append",
+   "description": "Agrega `text` al FINAL de un archivo (con confirmación y diff hablado).\n\nÚsalo cuando the user diga \"Emma, en mi archivo X agrega Y al final\".\n    Edita el disco directamente y luego abre/refresca el archivo en su IDE.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "edit_file_prepend",
+   "description": "Agrega `text` al INICIO de un archivo (con confirmación y diff hablado).\n\nÚsalo cuando the user diga \"Emma, en mi archivo X agrega Y al principio\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "edit_file_replace",
+   "description": "SOBRESCRIBE un archivo completo con `content`. Siempre pide confirmación.\n\nÚsalo solo cuando the user diga explícitamente \"sobrescribe X con esto\".\n    Es la edición más riesgosa: el contenido anterior se pierde.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "content": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "content"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "edit_file_search_replace",
+   "description": "Reemplaza texto LITERAL en un archivo: `search` → `replace`.\n\n`count=1` reemplaza solo la primera aparición (seguro por defecto);\n    si the user pide \"todas las ocurrencias\", pasa `count=-1`. Nunca es regex.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "search": {
+      "type": "string"
+     },
+     "replace": {
+      "type": "string"
+     },
+     "count": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "path",
+     "search",
+     "replace"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_event",
+   "description": "Crea un evento en el calendario. Pide confirmación antes de crearlo.\n\n`start_iso` es la fecha/hora de inicio en formato ISO; `duration_min`\n    la duración en minutos; `location` es opcional.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "start_iso": {
+      "type": "string"
+     },
+     "duration_min": {
+      "type": "integer"
+     },
+     "location": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "start_iso"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_event",
+   "description": "Borra UN evento del calendario cuyo título es `title`. Pide confirmación.\n\nSi hay varios con el mismo nombre, los enumera (con fecha) y pide cuál (por\n    número) — nunca borra todos (Bug 19.2-B2). `date` es informativo.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "events_in_range",
+   "description": "Lista los eventos del calendario entre dos fechas ISO (start_iso, end_iso).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "start_iso": {
+      "type": "string"
+     },
+     "end_iso": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "start_iso",
+     "end_iso"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "next_event",
+   "description": "Dice cuál es tu próximo evento del calendario.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "today_events",
+   "description": "Lista los eventos del calendario de hoy (hora, título, lugar).",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "add_reminder",
+   "description": "Agrega un recordatorio. `due_iso` (ISO) es opcional; `list_name` es la lista destino.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "due_iso": {
+      "type": "string"
+     },
+     "list_name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "complete_reminder",
+   "description": "Marca como completado UN recordatorio pendiente `title`. Pide confirmación.\n\nSi hay varios con el mismo nombre, los enumera (con fecha) y pide cuál (por\n    número) — nunca completa todos a ciegas (Bug 19.2-B2).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_reminder",
+   "description": "Borra UN recordatorio pendiente `title`. Pide confirmación.\n\nSi hay varios con el mismo nombre, enumera y pide cuál — nunca borra todos\n    (Bug 19.2-B2).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_today",
+   "description": "Lista los recordatorios pendientes que vencen hoy.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "uncomplete_reminder",
+   "description": "Reabre (marca como NO completado) un recordatorio que estaba completado.\n\nPara deshacer un 'completar' o si lo marcaste por error. Pide confirmación;\n    si hay varios con el mismo nombre, enumera y pide cuál.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "append_to_note",
+   "description": "Agrega `text` a la nota `title`, con búsqueda flexible (Bug 19.5-B3).\n\n`recent=true` (19.6-B21): ignora `title` y agrega a la nota MÁS RECIENTE\n    ('la última nota'). 1 coincidencia (exacta / empieza-con / contiene) →\n    agrega directo. Varias → pregunta por el sufijo distintivo. Ninguna →\n    ofrece crearla. Nunca agrega a la nota equivocada en silencio.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     },
+     "suffix": {
+      "type": "string"
+     },
+     "create_if_missing": {
+      "type": "boolean"
+     },
+     "recent": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "title",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_note",
+   "description": "Crea una nota nueva en Apple Notes con `title` y `body`.\n\nSi ya existe una nota cuyo título solo difiere en puntuación/acentos\n    ('Limitación: terminal Cursor' vs 'Limitación terminal Cursor'), pregunta\n    primero: con el sí de the user para crear de todos modos, re-llama con\n    confirmed=true; si prefiere agregar a la existente, usa append_to_note.\n    `folder` es opcional; si se omite, usa la carpeta por defecto.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     },
+     "folder": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "body"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delete_note",
+   "description": "Borra la nota de Apple Notes cuyo título es `title`. Pide confirmación.\n\n`recent=true` ignora `title` y apunta a la nota MÁS RECIENTE (19.6-B21).\n    Si hay varias con el mismo nombre, las enumera y pide cuál (por número) —\n    nunca borra todas (Bug 19.2-B2).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     },
+     "recent": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_notes",
+   "description": "Lista tus notas de Apple Notes (título, fecha de modificación y un fragmento).\n\n`query` filtra por título (contiene).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "merge_notes",
+   "description": "Fusiona dos notas: agrega el contenido de `source_title` al final de\n    `target_title` y borra la nota origen. Pide confirmación.\n\n`recent=true` (19.6-B21): la nota ORIGEN es la más reciente ('fusiona la\n    última nota con X'). Si algún título coincide con varias, pide cuál.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "source_title": {
+      "type": "string"
+     },
+     "target_title": {
+      "type": "string"
+     },
+     "separator": {
+      "type": "string"
+     },
+     "source_index": {
+      "type": "integer"
+     },
+     "target_index": {
+      "type": "integer"
+     },
+     "recent": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "source_title",
+     "target_title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "read_note",
+   "description": "Lee el contenido de la nota cuyo título es `title`.\n\n`recent=true` ignora `title` y lee la nota MÁS RECIENTE ('la última\n    nota', 19.6-B21). Si hay varias con el mismo nombre, pide cuál.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "index": {
+      "type": "integer"
+     },
+     "recent": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "resolve_recent_note",
+   "description": "Devuelve el título y un vistazo de la nota MÁS RECIENTE (última modificada).\n\nÚsalo para confirmar antes de actuar cuando the user diga 'la última nota' /\n    'esa nota que acabo de crear' y no estés seguro de cuál es.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_notes",
+   "description": "Busca notas cuyo título contiene `query`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_web",
+   "description": "Search the web for `query` and return a short spoken synthesis plus the top results.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "summarize_page",
+   "description": "Fetch a web page and return a three-sentence spoken summary.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "summarize_url",
+   "description": "Resume de qué trata una página web (\"¿de qué va esta URL?\", \"resúmeme este link\").\n\nDescarga la página, extrae el texto principal y lo sintetiza en 1-2 frases.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "close_current_tab",
+   "description": "Cierra la pestaña activa del navegador. Directo y rápido (Bug 19.2-B5).\n\nÚsalo cuando the user diga 'cierra esta pestaña' / 'cierra la pestaña'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "browser": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "close_duplicate_tabs",
+   "description": "Detecta y cierra pestañas duplicadas (misma URL canónica). Pide\n    confirmación y respeta dominios protegidos (google.com por defecto).\n\nÚsalo cuando the user diga \"cierra las pestañas duplicadas\". Si pide\n    explícitamente incluir Google (\"cierra todas, incluyendo Google\"), pasa\n    protect_domains=[] SOLO en esa llamada.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "browser": {
+      "type": "string"
+     },
+     "protect_domains": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "close_tabs_matching",
+   "description": "Cierra las pestañas cuyo título O URL contienen `pattern` (literal).\n\nÚsalo cuando the user diga \"cierra todas las de YouTube\". Pide confirmación\n    y respeta dominios protegidos (google.com por defecto).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "pattern": {
+      "type": "string"
+     },
+     "browser": {
+      "type": "string"
+     },
+     "protect_domains": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "pattern"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "current_tab_url",
+   "description": "Devuelve la URL de la pestaña activa del navegador preferido.\n\nFunciona con Safari y la familia Chromium (Chrome/Brave/Edge) vía\n    AppleScript; otros navegadores devuelven 'no soportado'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "browser": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_browser_tabs",
+   "description": "Lista todas las pestañas abiertas del navegador (todas las ventanas).\n\nÚsalo cuando the user diga \"¿cuántas pestañas tengo?\" / \"lista mis pestañas\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "browser": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_url",
+   "description": "Abre una URL en el navegador preferido de the user.\n\nÚsalo cuando diga:\n    - \"Emma, abre <url>\"\n    - \"Emma, ábreme la página de <thing>\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     },
+     "new_window": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "web_search_in_browser",
+   "description": "Abre una búsqueda de Google para `query` en el navegador preferido.\n\nÚsalo cuando the user diga \"Emma, busca <query> en Google\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "recent_threads",
+   "description": "Lista los identificadores de las conversaciones recientes de Mensajes.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "send_imessage",
+   "description": "Envía un iMessage a `recipient`. Pide confirmación antes de enviar.\n\n`recipient` puede ser número/correo O el nombre de un contacto guardado\n    ('mi mamá'). Si sugerí contactos parecidos y the user eligió, re-llámame\n    con `picked=<su elección>` (21-B25).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "recipient": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     },
+     "picked": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "recipient",
+     "body"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "draft_to",
+   "description": "Abre un borrador de correo (no lo envía) para `recipient` con asunto y cuerpo.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "recipient": {
+      "type": "string"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "recipient",
+     "subject",
+     "body"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_unread",
+   "description": "Lista los correos sin leer más recientes (remitente y asunto).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "recent_from",
+   "description": "Busca correos recientes de un remitente (incluye un fragmento del cuerpo).\n\nFiltra por remitente, no por asunto — sirve para «¿me escribió X?» y para los\n    triggers condicionales email_from (que necesitan ver el cuerpo, no solo el asunto).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "sender": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "sender"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_mail",
+   "description": "Busca correos en la bandeja de entrada cuyo asunto contiene `query`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "send_to",
+   "description": "Envía un correo a `recipient`. Pide confirmación antes de enviarlo.\n\n`recipient` puede ser un correo O un contacto guardado ('mi mamá'). Si\n    sugerí contactos parecidos y the user eligió, re-llámame con\n    `picked=<su elección>` (21-B25).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "recipient": {
+      "type": "string"
+     },
+     "subject": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     },
+     "picked": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "recipient",
+     "subject",
+     "body"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "cancel_my_task",
+   "description": "Cancel a running background task.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name_or_id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name_or_id"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_my_tasks",
+   "description": "List Emma's background tasks. Filter by status (running/completed/failed/cancelled/aborted).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "status": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "task_status",
+   "description": "Report status of a specific background task by name or id.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name_or_id": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name_or_id"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "wait_for_my_task",
+   "description": "Block until a background task finishes (or timeout). Useful inside a tool chain.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name_or_id": {
+      "type": "string"
+     },
+     "timeout_s": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name_or_id"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "current_datetime_speak",
+   "description": "Dice la fecha y la hora en español natural.\n\nPara \"¿qué hora es?\", \"¿qué día es hoy?\", \"¿qué fecha es?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_timers",
+   "description": "Dice qué temporizadores siguen activos (\"¿qué timers tengo?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "start_timer",
+   "description": "Inicia un temporizador en segundo plano (\"timer de 25 minutos\", \"ponme 10 minutos\").\n\nAl terminar, Emma avisa con una notificación y en voz alta. `label` es opcional.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "duration_min": {
+      "type": "integer"
+     },
+     "label": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "duration_min"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "undo_action_by_id",
+   "description": "Deshace una acción específica del historial (por su id). SIEMPRE confirma.\n\nÚsalo después de what_did_you_do, cuando the user diga \"deshaz la de las 3pm\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "action_id": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "action_id"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "undo_last_action",
+   "description": "Deshace la última acción reversible de Emma. SIEMPRE confirma antes.\n\nPara \"deshaz lo último\", \"echa para atrás\", \"deshazlo\". Si la acción no se\n    puede deshacer (un mensaje enviado, un tweet), lo dice honestamente.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "what_did_you_do",
+   "description": "Cuenta qué acciones hizo Emma en un día (\"¿qué hiciste ayer / el martes / hoy?\").\n\n`when` es una frase en español: \"ayer\", \"el martes\", \"el 8 de junio\", \"hoy\"\n    (o vacío = hoy). Solo lectura.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "when": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "describe_capabilities",
+   "description": "Tell the user what Emma can do, in one or two short spoken sentences.\n\nUse when the user says any of:",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "next_track",
+   "description": "Skip to the next track.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "now_playing",
+   "description": "Tell the user what is currently playing.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "pause",
+   "description": "Pause whatever is playing.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "play_playlist",
+   "description": "Play a playlist by name. Routes to the OPEN music app; with none open\n    it asks which to launch (re-call with app=<pick>).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "app": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "play_track",
+   "description": "Search for a track or artist and start playing the top result.\n\nRoutes to whatever music app is actually open (22-B30); with none open\n    it ASKS which to launch — the user's pick comes back as `app=\"Spotify\"` /\n    `app=\"Music\"`, which always proceeds.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "app": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "previous_track",
+   "description": "Go to the previous track.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "resume",
+   "description": "Resume playback.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_command",
+   "description": "Run a simple shell command on the user's Mac and return the output.\n\nIMPORTANT: Use ONE simple command. Do NOT write multi-line scripts,\n    do NOT chain with && or ;, do NOT embed osascript/AppleScript\n    inline. If you need multiple steps, call this tool multiple times.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_shell_task",
+   "description": "Start an arbitrary shell command as a background task.\n\nUse when the user wants something to keep running while he keeps doing other\n    things: \"Emma, corre estos tests y avísame\", \"Emma, descarga este repo\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "timeout_s": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "command",
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_in_terminal",
+   "description": "Abre una terminal real y corre `command` (the user lo ve ejecutarse).\n\nÚsalo cuando diga:\n    - \"Emma, corre <comando> en mi terminal\"\n    - \"Emma, abre una terminal en <path> y corre <comando>\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "command": {
+      "type": "string"
+     },
+     "cwd": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "ide_terminal_send",
+   "description": "Escribe `text` en la terminal integrada del IDE y opcionalmente da Enter.\n\nÚsalo cuando the user diga \"Emma, en la terminal de Cursor corre 'npm test'\"\n    o \"escribe X en la terminal\". Abre/enfoca la terminal primero (Bug 19.6-B18).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string"
+     },
+     "enter": {
+      "type": "boolean"
+     },
+     "ide": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "new_file_in_ide",
+   "description": "Crea un archivo nuevo (con contenido opcional) y lo abre en el IDE.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "content": {
+      "type": "string"
+     },
+     "ide": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_in_ide",
+   "description": "Abre un archivo o carpeta en el IDE preferido de the user.\n\nÚsalo cuando diga:\n    - \"Emma, abre <path> en mi IDE\"\n    - \"Emma, abre <path> en la línea N\"\n    - \"Emma, ábreme esto en Cursor\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "type": "string"
+     },
+     "line": {
+      "type": "integer"
+     },
+     "ide": {
+      "type": "string"
+     },
+     "project_mode": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "path"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_in_ide",
+   "description": "Lanza 'Buscar en archivos' (Cmd+Shift+F) en el IDE con `query`.\n\nPre-rellena la búsqueda vía portapapeles + pegar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "ide": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "toggle_ide_terminal",
+   "description": "Abre/cierra la terminal integrada del IDE (Bug 19.2-B6).\n\nÚsalo cuando the user diga 'abre la terminal', 'muéstrame la terminal',\n    'abre una terminal en Cursor'.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "ide": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "clone_and_open",
+   "description": "Clone a GitHub repo and open it in the user's preferred IDE.\n\nUse when the user says any of:\n    - \"Emma, clona <repo> en mi IDE\"\n    - \"Emma, baja ese repo y ábrelo\"\n    - \"Emma, clona el primero de los que encontraste\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "repo_url": {
+      "type": "string"
+     },
+     "dest_subdir": {
+      "type": "string"
+     },
+     "ide": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "repo_url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "describe_my_health",
+   "description": "Run the health check and speak the result.\n\nUse when the user says:",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_workspace_for_debugging",
+   "description": "Open Emma's source for live editing, then stop the running service.\n\nUse this when the user says any of these (and similar phrasings):",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "codex_status",
+   "description": "Dice cómo va la última tarea del agente de codificación (o una por id).\n\nÚsalo cuando the user pregunte \"¿cómo va el agente?\" / \"¿ya terminó Codex?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "task_id": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delegate_to_codex",
+   "description": "Encarga una tarea de programación a un agente de codificación interno.\n\nÚsalo cuando the user pida trabajo NO trivial sobre un repo: \"agrega login\n    con Google\", \"refactoriza este módulo\", \"arregla el bug de X\", \"escribe\n    tests\". Para cambios chiquitos de una o dos líneas usa edit_file_* en su\n    lugar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "task": {
+      "type": "string"
+     },
+     "cwd": {
+      "type": "string"
+     },
+     "branch": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "task"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "delegate_to_claude_code",
+   "description": "Hand a coding task off to Claude Code (the CLI) and let it work.\n\nUse when the user says any of:\n    - \"Emma, reprograma X\"\n    - \"Emma, arregla el bug de Y\"\n    - \"Emma, refactoriza Z\"\n    - \"Emma, agrega tests para W\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "task": {
+      "type": "string"
+     },
+     "cwd": {
+      "type": "string"
+     },
+     "branch": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "task"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "bookmark_current",
+   "description": "Guarda la pestaña activa de Safari en marcadores (vía Cmd+D).\n\nSafari no expone la creación de marcadores en su diccionario\n    AppleScript, así que esto usa scripting de interfaz (System Events) y\n    requiere permiso de Accesibilidad. `folder` no se puede elegir aquí.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "folder": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "current_page_text",
+   "description": "Devuelve el texto legible de la pestaña activa de Safari.\n\nRequiere activar \"Permitir JavaScript desde eventos de Apple\" en el\n    menú Desarrollo de Safari.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "current_url",
+   "description": "Devuelve la URL de la pestaña activa de Safari.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_url_safari",
+   "description": "Abre `url` en una pestaña nueva de Safari, específicamente.\n\nPara \"abre <url>\" a secas usa `open_url`, que respeta el navegador\n    preferido. Este es para cuando the user pide Safari por nombre.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "browser_click",
+   "description": "Click an element. `selector` accepts CSS, ``text=...``, or ``role=...``.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "selector": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "selector"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "browser_do",
+   "description": "Run a multi-step browser task described in natural language.\n\nCurrently only the Amazon \"find product and add to cart\" flow is\n    scripted - non-Amazon intents return a clean error so the LLM falls\n    back to ``browser_navigate`` and friends.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "intent": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "intent"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "browser_navigate",
+   "description": "Open `url` in Emma's persistent Chromium window.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "url": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "browser_screenshot",
+   "description": "Capture the current page. Returns the PNG path.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "browser_type",
+   "description": "Type `text` into a focused field matching `selector`.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "selector": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "selector",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "disable_proactivity",
+   "description": "Desactiva una proactividad por nombre.\n\nÚsalo cuando the user diga \"Emma, apaga el recap del viernes\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "do_not_disturb",
+   "description": "Modo No Molestar: sigo respondiendo si me llamas, pero no hablo sola.\n\nPara \"no molestar\", \"modo no molestar\", \"ponte en silencio\", \"no me\n    interrumpas\", \"DND\". Silencia TODA la salida proactiva (avisos, briefings,\n    recordatorios que te iba a soltar sin que preguntes) por N minutos, pero\n    \"Emma\" me sigue despertando y te contesto normal. Las alarmas y timers que ya\n    programaste SÍ suenan — No Molestar no los calla. Instantáneo, sin\n    confirmación (es un modo reversible).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "minutes": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "enable_proactivity",
+   "description": "Activa una proactividad por nombre (p. ej. 'morning_briefing').\n\nÚsalo cuando the user diga \"Emma, activa el briefing matinal\" o\n    \"enciende los avisos de reuniones\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "end_do_not_disturb",
+   "description": "Sal del modo No Molestar (vuelvo a avisarte de cosas sin que preguntes).\n\nPara \"quita el no molestar\", \"ya puedes interrumpirme\", \"desactiva no\n    molestar\", \"vuelve a avisarme\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_proactivities",
+   "description": "Lista las proactividades, si cada una está encendida, y su próximo disparo.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_quiet_hours",
+   "description": "Define las horas de silencio con un rango 'HH:MM-HH:MM' (coma para varios).\n\nÚsalo cuando the user diga \"Emma, silencio de 11 de la noche a 7 de la mañana\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "window": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "window"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "snooze_proactivities",
+   "description": "Pausa TODA la salida proactiva por N minutos. Pide confirmación.\n\nÚsalo cuando the user diga \"Emma, no me molestes por 30 minutos\" o\n    \"snooze 60\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "minutes": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "health_check",
+   "description": "Check Emma's external dependencies (OpenAI, ElevenLabs, Postgres, Playwright)\n    and report status per service.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "diagnose_self",
+   "description": "Diagnóstico honesto de Emma: mic, latencia, errores, uptime, memoria, disco, batería.\n\nPara \"¿cómo estás?\", \"¿funcionas bien?\", \"diagnóstico\", \"¿todo en orden?\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "reload_tools",
+   "description": "Recarga las herramientas desde disco sin reiniciar (para probar un cambio).\n\nPara \"recarga las herramientas\", \"recárgate\", \"vuelve a cargar tus tools\".",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "telemetry_summary",
+   "description": "Resumen honesto de uso: acciones, fallos, causas y latencia (\"resumen de la semana\").\n\n`period` es \"day\" / \"week\" / \"month\". Lee el registro de fallos y el log de\n    acciones — no hay un contador total de llamadas, así que reporto lo que SÍ se\n    registra: acciones hechas y fallos con su causa y latencia.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "period": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "birthday_remember",
+   "description": "Guarda el cumpleaños de alguien (\"guarda que el cumpleaños de Ana es el 8 de junio\").\n\n`date` puede ser ISO (1990-06-15), '8 de junio' o '08/06' (día/mes).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "date": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "date"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "birthdays_this_week",
+   "description": "Dice quién cumple esta semana (\"¿quién cumple esta semana?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "birthdays_today",
+   "description": "Dice quién cumple años hoy (\"¿quién cumple hoy?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "list_conditionals",
+   "description": "Dice qué acciones condicionales siguen pendientes (\"¿qué tienes pendiente?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "schedule_conditional",
+   "description": "Programa una acción condicional (\"si Ana confirma, agenda café\").\n\n`trigger` usa el DSL: email_from(\"a@x.com\", contains=\"ok\") / calendar_event(\"X\")\n    created / time_at(\"2026-06-17T09:00:00\"). `action_tool`+`action_args` es la\n    herramienta a ejecutar al cumplirse. Confirma antes de guardar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "trigger": {
+      "type": "string"
+     },
+     "action_tool": {
+      "type": "string"
+     },
+     "action_args": {
+      "type": "object"
+     },
+     "expires_at": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "trigger",
+     "action_tool",
+     "action_args"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "convert",
+   "description": "Convierte un valor entre unidades o monedas.\n\nLongitud (m/km/mi/ft…), masa (kg/lb/oz…), temperatura (c/f/k) y moneda\n    (USD/MXN/EUR…). Para \"cuánto es 100 USD en MXN\", \"5 km en millas\", \"20°C en F\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "value": {
+      "type": "number"
+     },
+     "from_unit": {
+      "type": "string"
+     },
+     "to_unit": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "value",
+     "from_unit",
+     "to_unit"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "deep_research",
+   "description": "Investiga a fondo: busca, lee las mejores fuentes y sintetiza con citas.\n\nPara \"¿qué pasó con X?\", \"investígame Y\", \"resume lo último de Z\". Lee el\n    contenido real de las páginas (no solo títulos) y responde en 2-3 oraciones\n    citando las fuentes por [n]. `depth` = cuántas fuentes leer (1-5).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "depth": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "open_my_page",
+   "description": "Abre una de las páginas guardadas de the user por nombre.\n\nÚsalo cuando diga \"Emma, abre mi <name>\" (GitHub, calendar, portfolio, ...).\n    Si sugerí opciones y the user eligió, re-llámame con `picked=<su elección>`\n    y confirmed=true (21-B25).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "picked": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_app_preference",
+   "description": "Guarda la app preferida de the user para una categoría y la usa de ahí en adelante.\n\nÚsalo (1) la PRIMERA vez que necesites abrir algo y un tool te diga que no\n    hay editor configurado (`data.editor_unset`), después de que the user elija, o\n    (2) cuando diga \"cambia mi editor a X\" / \"usa Y para código\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "category": {
+      "type": "string"
+     },
+     "app": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "category",
+     "app"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_connection",
+   "description": "Recuerda un recurso DENTRO de una app: conexión de TablePlus, canal, etc.\n\nÚsalo cuando the user diga \"Emma, recuerda la conexión <name> de TablePlus\"\n    o cuando intente abrir una conexión que aún no conozco y me dicte el\n    nombre exacto. `kind` ∈ connection, channel, dm, note (19.6-B17).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "app": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "app"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_contact",
+   "description": "Recuerda un contacto (solo info pública — sin números de teléfono).\n\nÚsalo cuando the user diga \"Emma, recuerda que mi mamá es Ana, su correo es ...\".",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     },
+     "relation": {
+      "type": "string"
+     },
+     "aliases": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_page",
+   "description": "Recuerda una página que the user abre seguido.\n\nÚsalo cuando diga:\n    - \"Emma, recuerda que mi <name> es <url>\"\n    - \"Emma, mi <name> está en <url>\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     },
+     "title": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_stt_correction",
+   "description": "Aprende de una corrección de pronunciación/transcripción.\n\nÚsalo cuando the user te corrige ('no, es X, no Y'). `wrong` es lo que\n    entendiste, `right` lo correcto. Lo guardo para no volver a equivocarme.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "wrong": {
+      "type": "string"
+     },
+     "right": {
+      "type": "string"
+     },
+     "section": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "wrong",
+     "right"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_term",
+   "description": "Recuerda un término del glosario (sigla, codename, jerga).",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "key": {
+      "type": "string"
+     },
+     "expansion": {
+      "type": "string"
+     },
+     "context": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "expansion"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "remember_user_profile",
+   "description": "Guarda un dato de identidad de the user (quién es 'yo/mi/mis').\n\nÚsalo cuando diga \"mi usuario de GitHub es X\", \"me llamo Y\",\n    \"mi LinkedIn es Z\". `field` ∈ display_name, full_name, github_username,\n    linkedin, website, preferred_lang.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "field": {
+      "type": "string"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "field",
+     "value"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "get_repo_url",
+   "description": "Resolve a repo query to its top clone URL. Used when the user chains\n    'busca X y clónalo' in one breath.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "my_repos",
+   "description": "Lista los repos de the user (los suyos, no search). Para 'mis repos',\n    'los repos que tengo', 'el repo que hice de X'.\n\nUsa /user/repos (autenticado: públicos + privados) o /users/<usuario>/repos\n    (público) según haya GITHUB_TOKEN. `sort` ∈ updated, created, pushed,\n    full_name; `visibility` ∈ all, public, private.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "sort": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     },
+     "visibility": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_github",
+   "description": "Search GitHub public repositories by name or keyword.\n\nUse when the user says any of:\n    - \"Emma, busca el repo X en GitHub\"\n    - \"Emma, búscame un repo de Y\"\n    - \"Emma, ¿hay un proyecto open source de Z?\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     },
+     "limit": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_jira_issue",
+   "description": "Crea un issue en Jira. `project` es la clave del proyecto (ej. ENG); `issue_type`\n    ∈ Task/Bug/Story. Confirma antes de crear.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "project": {
+      "type": "string"
+     },
+     "summary": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "issue_type": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "project",
+     "summary"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "create_linear_issue",
+   "description": "Crea un issue en Linear (\"crea issue en Linear: 'X'\").\n\nResuelve el `team` por nombre; si hay varios y no especificas, te pregunta cuál.\n    Confirma antes de crear.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "team": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "notion_append",
+   "description": "Agrega texto al final de una página de Notion (\"agrega a mi página de ideas: 'X'\").\n\nBusca la página por título; si hay varias, te pregunta cuál. Confirma antes de escribir.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "page_title": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "page_title",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "postman_run",
+   "description": "Corre un collection de Postman con newman (\"corre el collection de health en Postman\").\n\nBusca el collection por nombre en ~/.postman. `environment` es opcional.\n    Devuelve cuántas aserciones pasaron y la lista de fallos.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "collection": {
+      "type": "string"
+     },
+     "environment": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "collection"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "coin_flip",
+   "description": "Lanza una moneda: cara o cruz (\"tira una moneda\", \"cara o cruz\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "generate_password",
+   "description": "Genera una contraseña segura y la copia al portapapeles.\n\n`kind`: \"strong\" (con símbolos) o \"simple\" (solo letras y números). NUNCA\n    se dice en voz alta — va directo al portapapeles.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "length": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "generate_uuid",
+   "description": "Genera un identificador único (UUID v4).",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "pick_random",
+   "description": "Elige uno al azar de una lista (\"elige por mí entre…\", \"¿cuál escojo?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    "required": [
+     "items"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "roll_dice",
+   "description": "Tira `n` dados de `sides` caras (\"saca un dado\", \"tira dos dados\").",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "n": {
+      "type": "integer"
+     },
+     "sides": {
+      "type": "integer"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "rss_latest",
+   "description": "Lee los últimos titulares de un feed RSS (\"últimas de Hacker News\").\n\n`feed_url` puede ser una URL o el nombre de un feed guardado en tu diccionario.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "feed_url": {
+      "type": "string"
+     },
+     "n": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "feed_url"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "post_to_linkedin",
+   "description": "Abre el composer de LinkedIn con tu texto y lo copia al portapapeles.\n\nÚsalo cuando the user diga \"Emma, publica en LinkedIn: <texto>\". LinkedIn no\n    deja prellenar texto por URL de forma confiable, así que abrimos el composer\n    y copiamos el texto para que the user lo pegue (Cmd+V) y publique.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "post_to_x",
+   "description": "Publica un tweet/post en X (Twitter). SIEMPRE confirma antes de enviar.\n\nÚsalo cuando the user diga \"Emma, tuitea: <texto>\" / \"publica en X: <texto>\".\n    Si hay un token de X guardado, lo publica por API; si no, abre el composer\n    de X prellenado y the user le da Post.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "send_to_discord",
+   "description": "Manda un mensaje a un canal de Discord vía webhook. SIEMPRE confirma.\n\nÚsalo cuando the user diga \"Emma, manda en Discord al canal X: <texto>\".\n    La primera vez por canal, the user copia la URL del webhook (Ajustes del canal\n    → Integraciones → Webhooks) y la guarda: \"Emma, recuerda mi webhook de\n    Discord del canal X\". Sin webhook, te abro el canal para escribir a mano.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "channel": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "channel",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "send_whatsapp",
+   "description": "Abre WhatsApp con un mensaje prellenado para un contacto. SIEMPRE confirma.\n\nÚsalo cuando the user diga \"Emma, mándale en WhatsApp a Juan: <texto>\".\n    `to` puede ser un nombre de contacto (lo resuelvo en tu directorio) o un\n    número con código de país. the user le da Enviar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "to": {
+      "type": "string"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "to",
+     "text"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "enroll_my_voice",
+   "description": "Aprende tu voz para reconocerte (\"Emma, esta es mi voz\").\n\nGraba 5 segundos y guarda tu huella de voz como `name` (por defecto «primary_user»).\n    Re-enrolar mejora el perfil. Pide confirmación antes de grabar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "forget_my_voice",
+   "description": "Olvida un perfil de voz guardado (\"olvida la voz de X\"). Confirma antes de borrar.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "who_is_speaking",
+   "description": "Dice a quién reconoce Emma en la voz actual (\"¿quién está hablando?\", \"¿soy yo?\").",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "tableplus_query",
+   "description": "Ejecuta SQL dentro de una conexión de TablePlus y lee los resultados.\n\n\"Ejecuta select count(*) from users en mi base learning-rots\". Resuelve la\n    conexión por nombre. Las consultas de escritura (INSERT/UPDATE/DELETE/DDL) piden\n    confirmación; los SELECT corren directo. Devuelve hasta 50 filas.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "connection": {
+      "type": "string"
+     },
+     "sql": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "connection",
+     "sql"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "set_conversation_tone",
+   "description": "Ajusta el tono con el que Emma te habla.\n\nEjemplos: \"háblame más serio\", \"relájate\", \"ponte animada\", \"sé breve\",\n    \"tono normal\" (quita el ajuste). El cambio aplica a partir de la siguiente\n    respuesta.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "style": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "style"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "show_visualizer",
+   "description": "Open Emma's visual interface — the JARVIS-style native window — and bring it forward.\n\nCall this for ANY request to show Emma's visual self / interface / brain / HUD,\n    in Spanish or English. Triggers include: \"abre tu cerebro\", \"abre tu interfaz\",\n    \"muéstrate\", \"muestra tu interfaz\", \"enséñame tu cara\", \"abre tu pantalla\",\n    \"show your brain\", \"show your interface\", \"open your interface\", \"show yourself\",\n    \"open your visualizer\", \"show me your face/HUD\". If the user asks to see Emma,\n    her interface, her brain, her face, or her visualizer in any wording, this is\n    the tool — do not refuse.",
+   "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "add_vocabulary_word",
+   "description": "Teach Emma how to pronounce or transcribe a new technical name.\n\nUse when the user says any of:\n    - \"Emma, agrega 'X' al vocabulario, se pronuncia 'Y' en español.\"\n    - \"Emma, cuando diga 'X' entiende que es 'Y'.\"\n    - \"Emma, recuerda que 'X' se dice 'Y'.\"",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "canonical": {
+      "type": "string"
+     },
+     "say_es": {
+      "type": "string"
+     },
+     "say_en": {
+      "type": "string"
+     },
+     "aliases": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "description": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "canonical"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "run_workflow",
+   "description": "Encadena varios pasos en un solo flujo (\"haz X, luego Y, y agrega Z\").\n\n`steps` es una lista; cada paso es {tool, args, depends_on?(índices), on_failure?\n    (\"abort\"|\"continue\"), desc?(frase en español)}. Muestra el plan y pide UNA\n    confirmación; al confirmar, corre los pasos en orden de dependencia.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "steps": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    },
+    "required": [
+     "steps"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "latest_video_from_creator",
+   "description": "Open the most recent video from a YouTube creator/channel.\n\nSearches by channel name; if multiple channels match closely, asks the\n    user to pick one.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "creator_name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "creator_name"
+    ],
+    "additionalProperties": false
+   }
+  }
+ },
+ {
+  "type": "function",
+  "function": {
+   "name": "search_and_open",
+   "description": "Search YouTube and open the top video result in the browser.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "additionalProperties": false
+   }
+  }
+ }
+]
