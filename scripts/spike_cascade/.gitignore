@@ -1,0 +1,8 @@
+# Personal tier: the live memory-priming block, the raw log mine (timestamps),
+# and model replies, which echo priming facts back ("sé que te gusta...").
+data/system_prompt.txt
+data/mined.json
+results/m1_*.jsonl
+results/*.log
+# Downloaded model weights (~425 MB).
+data/models/

@@ -1,0 +1,5 @@
+# Disposable spike code: inherit the repo config, relax the style-only rules.
+extend = "../../pyproject.toml"
+
+[lint]
+extend-ignore = ["SIM115", "B905", "RUF046"]
