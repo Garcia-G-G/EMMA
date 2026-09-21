@@ -131,3 +131,68 @@ Moved guidance makes some descriptions longer. So "core 20–30 + retrieved
 top-40" (the spec's framing) **cannot fit under 8k.** The workable shape is
 core ≈ 20–25 + retrieved ≈ 15–20, and the retriever's recall@15–20 is what
 matters. Part 2 measures it.
+
+## Part 1 — System prompt: 6,994 → 2,662 tokens
+
+**Mechanism.** Per-tool routing guidance moved to `tools/guidance.py`
+(`GUIDANCE: dict[tool_name, str]`), appended by `registry._spec()` to the
+description the model receives. It's a separate map, not a third docstring
+paragraph, because `tools/base.py:_docstring_summary` keeps only the first two
+paragraphs, and many docstrings already use both. A third paragraph would have
+been silently truncated, which is exactly the loss the spec warned about.
+
+**What stayed always-on** (true of every turn): Session language, Role,
+Personality, Language, Language mirror, Session continuity, App routing, Tool
+failure recovery, Response length, Variety, Preambles, Tool results,
+Confirmation flow, the untrusted-content fence, Forbidden, Unprompted speech,
+Vague search guard (the closest existing "ask when unsure" rule; LAUNCH-9's
+invariant was never implemented), **Clarification picks** (the cross-tool
+"¿Quisiste decir A, B o C? → wait → `picked=`" rule and identity resolution,
+kept from Knowledge dictionary), Learn from corrections, Anaphora, Long-term
+memory, Pronunciation guide, Memory, Emotional attunement.
+
+**What moved** (21 sections, ~4.3k tokens): every section marked **T** in the
+Part 0 table. Split sentence by sentence onto the tool each sentence is about
+(93 tools carry guidance). Cross-tool sentences are repeated on each tool they
+govern, e.g. the edit-flow contract on all four `edit_file_*` tools, and
+"READ THE TEXT BACK" on all four social tools.
+
+| | Before | After |
+|---|---:|---:|
+| Instructions (o200k) | 6,994 | **2,662** |
+| of which memory priming | 186 | 186 |
+| Tool schemas, all 172 (o200k) | 17,929 | 22,189 |
+| Total, all tools sent | 24,923 | 24,851 |
+
+The total doesn't drop yet: the guidance is paid only when its tool is sent,
+and until Part 2 every tool is sent. The 12 unavailable tools' guidance
+(Integraciones, Speaker ID, 3/4 of Repo cloning ≈ 0.6k) is now actually gone,
+because it travels with tools that aren't offered.
+
+**Nothing lost: verified.**
+- 165 quoted trigger phrases were extracted from the removed sections of the
+  pre-LAUNCH-12 prompt. All 165 are present verbatim in some tool description.
+  The first pass found 7 I had re-cased while splitting ("Dame" vs "dame",
+  "¿Cómo va?" vs "¿cómo va?"), and those were restored verbatim. I had also
+  dropped "¿Cómo estás?" from `diagnose_self`'s triggers. That phrase is
+  labelled `__none__` in the frozen set, so dropping it would have quietly
+  tuned the guidance to the test set; it was restored.
+- `tests/test_tool_guidance.py`: every guidance key is a registered tool (no
+  orphans on rename); guidance reaches `_spec` untruncated and the Realtime
+  payload; all moved phrases reach a description; no moved section header
+  remains in the prompt; prompt ≤ 12,500 chars (≈ 3k tokens at the measured
+  4.17 chars/token).
+- `test_screen_vision_routing.py::test_system_prompt_carries_the_web_content_routing_rule`
+  pinned the rule to the prompt. It's now
+  `test_web_content_routing_rule_reaches_the_model`, with the same three
+  assertions against the `describe_screen` / `look_at_screen` specs.
+
+**Suites.** `pytest tests/`: 1196 passed, 4 failed. The 4 are
+`test_memory_semantic.py`, live `text-embedding-3-small` calls rejected with
+401 (invalid key). They fail identically at HEAD with this change stashed, so
+they predate this work. Personality byte-identity, prompt-injection,
+confirmation, language and continuity tests: green. Acceptance
+`--mock-external`: **99/99**. Caveat: mock mode doesn't run a model, so it
+can't show routing regressions; Part 4 does. `ruff check .` clean; `mypy`
+clean on touched files. (`ruff format --check .` fails on ~150 files at HEAD
+already; not touched.)
