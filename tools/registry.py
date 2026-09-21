@@ -15,11 +15,12 @@ import structlog
 import tools
 from config.settings import settings
 from tools.base import RegisteredTool, ToolNameCollisionError, ToolResult, get_registry
+from tools.guidance import GUIDANCE
 
 log = structlog.get_logger("emma.tools.registry")
 
 # "base"/"registry" hold no tools. "availability" is the probe helpers.
-_SKIP = {"base", "registry", "availability"}
+_SKIP = {"base", "registry", "availability", "guidance"}
 _discovered = False
 
 
@@ -206,11 +207,15 @@ def available_tools() -> list[RegisteredTool]:
 
 
 def _spec(entry: RegisteredTool) -> dict[str, Any]:
+    # Routing guidance travels with its tool, not in the always-on prompt
+    # (LAUNCH-12): the model reads it only when the tool is offered.
+    guide = GUIDANCE.get(entry.name)
+    description = f"{entry.description}\n\n{guide}" if guide else entry.description
     return {
         "type": "function",
         "function": {
             "name": entry.name,
-            "description": entry.description,
+            "description": description,
             "parameters": entry.parameters,
         },
     }
