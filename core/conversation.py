@@ -715,8 +715,6 @@ async def _build_instructions() -> str:
     except Exception as exc:
         log.warning("memory_priming_failed", error=str(exc))
         memory = ""
-    if memory:
-        base += f"\n# Memory\n{memory}\n"
     # 35: emotion-aware tone. The Realtime model hears the user's voice, so the
     # always-on directive is the live driver; a style hint (auto-detected affect
     # or an explicit set_conversation_tone) is appended when present.
@@ -730,9 +728,16 @@ async def _build_instructions() -> str:
         "- 'Háblame más serio' / 'relájate' / 'ponte animada' / 'tono normal' "
         "→ set_conversation_tone.\n"
     )
+    # LAUNCH-12 cache ordering: everything above is byte-stable across sessions
+    # for a given user, so it can be cached as a prefix. The two things that
+    # change per session — the memory block (ranked against the live
+    # conversation) and the style hint — go LAST, after every static section,
+    # so a changed fact never invalidates the cached prefix above it.
+    if memory:
+        base += f"\n# Memory\n{memory}\n"
     hint = runtime.get_style_hint()
     if hint:
-        base += f"- Tono para esta conversación: {hint}\n"
+        base += f"\n# Tone for this conversation\n- {hint}\n"
     # Rewrite the stand-in name to the paired user's real name (or the generic
     # default). Every "the user" in this prompt refers to the user, so a single
     # replace is exhaustive and keeps possessives intact ("the user's" -> "<name>'s").
