@@ -48,6 +48,7 @@ from pipecat.frames.frames import (
     InterruptionFrame,
     LLMContextFrame,
     LLMTextFrame,
+    LLMUpdateSettingsFrame,
     OutputAudioRawFrame,
     TranscriptionFrame,
     UserStartedSpeakingFrame,
@@ -88,6 +89,7 @@ from core import (
     runtime_state,
     session_memory,
     speaker,
+    tool_selection,
     vocabulary,
 )
 from core.confidence import is_low_confidence
@@ -101,7 +103,7 @@ from memory import episodic
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
-from tools.registry import dispatch, get_tool, list_tools, openai_tool_specs
+from tools.registry import available_specs, dispatch, get_tool, list_tools, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
 
@@ -190,6 +192,10 @@ class TranscriptCollector(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+# Strong refs for fire-and-forget sticky pre-loads (asyncio keeps only weak ones).
+_PRELOADS: set[asyncio.Task[list[str]]] = set()
+
+
 class _UserSpeechTap(FrameProcessor):
     """ALWAYS-ON tap between transport.input and the LLM (21-B24).
 
@@ -221,6 +227,12 @@ class _UserSpeechTap(FrameProcessor):
             if cleaned != frame.text:
                 log.debug("transcript_corrected", before=frame.text, after=cleaned)
             session_memory.push_event("user", "speech", cleaned)
+            if settings.TOOL_RETRIEVAL:
+                # LAUNCH-12 sticky set: pre-load what this utterance is about so
+                # the follow-up turns have it without a find_tools round-trip.
+                t = asyncio.create_task(tool_selection.load(cleaned))
+                _PRELOADS.add(t)
+                t.add_done_callback(_PRELOADS.discard)
             if is_low_confidence(cleaned, _last_assistant_speech()):
                 session_memory.push_event("user", "low_confidence", cleaned)
                 log.info("low_confidence_transcript", text=cleaned[:80])
@@ -1145,6 +1157,19 @@ def _make_function_handler(
     return _handler
 
 
+def _session_tool_specs() -> list[dict[str, Any]]:
+    """The tools this session opens with (LAUNCH-12).
+
+    With TOOL_RETRIEVAL: the fixed core + the loader + whatever the sticky set
+    kept from earlier turns — never the whole registry. Otherwise the legacy
+    full set, capped at 128 by ``openai_tool_specs()``.
+    """
+    if not settings.TOOL_RETRIEVAL:
+        return openai_tool_specs()
+    tool_selection.init(available_specs())
+    return tool_selection.current_specs()
+
+
 async def _build_session_properties() -> SessionProperties:
     instructions = await _build_instructions()
     return SessionProperties(
@@ -1176,7 +1201,7 @@ async def _build_session_properties() -> SessionProperties:
                 speed=1.0,
             ),
         ),
-        tools=_adapt_tool_specs_for_realtime(openai_tool_specs()),
+        tools=_adapt_tool_specs_for_realtime(_session_tool_specs()),
         tool_choice="auto",
     )
 
@@ -1308,6 +1333,17 @@ async def build_pipeline(
     auth_watcher.set_task(task)
     dead_watcher.set_task(task)
     session_control.set_task(task)
+
+    async def _apply_tools(specs: list[dict[str, Any]]) -> None:
+        # Swap ONLY the tool list; instructions stay byte-identical so the
+        # prefix remains cacheable. A session_properties delta replaces the
+        # stored properties wholesale, so copy the ones this session opened with.
+        props = session_props.model_copy(update={"tools": _adapt_tool_specs_for_realtime(specs)})
+        await task.queue_frame(
+            LLMUpdateSettingsFrame(delta=OpenAIRealtimeLLMService.Settings(session_properties=props))
+        )
+
+    tool_selection.set_applier(_apply_tools if settings.TOOL_RETRIEVAL else None)
     return pipeline, task, transport, context, auth_watcher, llm
 
 
@@ -1389,7 +1425,7 @@ async def run_session(immediate_command: bool = False) -> None:
     log.info(
         "conversation_start",
         voice=settings.REALTIME_VOICE,
-        tools=len(openai_tool_specs()),
+        tools=len(tool_selection.current_specs()) if settings.TOOL_RETRIEVAL else len(openai_tool_specs()),
         registered=len(list_tools()),
     )
     try:
@@ -1406,6 +1442,7 @@ async def run_session(immediate_command: bool = False) -> None:
             # (reset_conversation) reconnects, which we don't want on teardown.
             await asyncio.wait_for(llm._disconnect(), timeout=3.0)  # type: ignore[no-untyped-call]
         _active_task = None  # session over; nothing to interrupt
+        tool_selection.set_applier(None)  # the task it pushed into is gone
         log.info("conversation_end")
 
     if auth_watcher.terminal_error is not None:

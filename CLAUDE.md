@@ -155,29 +155,46 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 
 ## Tool budget convention (mandatory)
 
-Every tool advertised in `session.update` costs **~60 input tokens on every
-turn** (measured against gpt-realtime-2). There is **no 128-tool ceiling** in
-the Realtime API — the server echoes back all 183 tools and still selects the
-one at index 127 — so this is a cost guard, not a correctness one. Never
-"fix" a count by deleting a working tool.
+**A turn does not carry the registry** (LAUNCH-12). With `TOOL_RETRIEVAL`
+(default on) a session opens with the fixed core in `core/tool_selection.py`
+(`CORE_TOOLS`, ~24 incl. the `find_tools` loader), then grows by retrieval:
+the model calls `find_tools(need)` when the core lacks a capability, and each
+finished user transcript pre-loads matches (sticky, LRU, size-bounded by
+`STICKY_CHAR_BUDGET`). Changes go out as a tools-only `session.update` via
+`LLMUpdateSettingsFrame`; instructions stay byte-identical (cacheable). A
+complete turn is **< 8k tokens** (measured: `_planning/notes/LAUNCH-12-VERIFY.md`).
+
+**128 tools per request is a hard ceiling.** Realtime itself accepts 183, but
+Groq rejects >128 and other providers may. `openai_tool_specs()` applies
+`min(REALTIME_TOOL_BUDGET, 128)`, `tool_selection.cap()` the same, and
+`tests/test_tool_selection.py` pins both. No setting lifts it.
+
+**Routing guidance lives with its tool**, in `tools/guidance.py`, appended to
+the description by `registry._spec()` — not in the system prompt, which only
+holds rules true of every turn. (`_docstring_summary` keeps two paragraphs, so
+a third docstring paragraph would be silently dropped.)
 
 When adding a tool:
 1. If it needs a credential, a CLI, or a binary the installer does not
    provide, give its module a `def available() -> bool` (or the tool a
    `@tool(available=...)`). Probes live in `tools/availability.py` and must do
    no slow I/O — they run on every session build.
-2. Keep the **registered-and-available** count (`registry.available_tools()`)
-   under `REALTIME_TOOL_BUDGET` (`config/settings.py`).
-   `tests/test_tool_budget.py::test_registered_tool_count_within_budget` fails
-   if it drifts. It asserts the **pre-trim** count on purpose: `openai_tool_specs()`
-   applies the cap itself (`kept = core + rest[:room]`), so asserting on the
-   *advertised* count was true by construction for any registry — a developer
-   could add 20 tools, see green, and ship a payload 20 tools short.
-3. If the new tool should outlive the long tail when the budget does bite, rank
-   its module in `registry._PRIORITY_MODULES`. Trim order is an explicit
-   three-tier ranking — core, priority, then everything unlisted — never
-   alphabetical. Unlisted is the trim zone.
-4. Names are unique per module: `tools/base.py` raises
+2. Make it **retrievable**: put the Spanish/English trigger phrases the user
+   would actually say in its docstring or its `tools/guidance.py` entry. BM25
+   over that text is how the tool gets found.
+   `test_tool_selection.py::test_every_available_tool_is_reachable` fails if
+   it can't be.
+3. Add it to `CORE_TOOLS` only if any turn might need it regardless of topic,
+   and justify it in the verify doc. The core is paid on every turn, and its
+   order is part of the cache key: append to it, don't reorder it.
+4. `REALTIME_TOOL_BUDGET` (175) remains the registry-growth alarm:
+   `tests/test_tool_budget.py::test_registered_tool_count_within_budget`
+   asserts the available count pre-trim, so a batch of new tools can't land
+   unnoticed. It also caps the `TOOL_RETRIEVAL=false` fallback, together with
+   the 128 ceiling. In that fallback the trim order is core, then priority,
+   then unlisted (`registry._CORE_MODULES` / `_PRIORITY_MODULES`), never
+   alphabetical.
+5. Names are unique per module: `tools/base.py` raises
    `ToolNameCollisionError` when two modules claim one name.
 
 ## Permissions convention (mandatory)
