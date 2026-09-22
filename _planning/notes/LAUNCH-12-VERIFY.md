@@ -329,3 +329,41 @@ deselect the wizard one. **Latent product bug it exposes:**
 `core/diagnostics.py:_mic_rms` calls `sd.wait()` with no timeout, so a stuck
 mic hangs `diagnose_self` — and therefore a voice turn — forever. Out of scope
 here; worth its own fix.
+
+## Part 3 — Memory priming, the tail of the prompt, and cache order
+
+**Memory priming is already relevance-ranked and already small.**
+`priming_block(context=…)` ranks semantically against the live conversation
+(the last 6 user turns) and falls back to confidence order — the spec's
+suggestion is implemented (25-A). Measured on the live DB at
+`MEMORY_PRIMING_TOP_N=15`: **186 tokens**, 2.3 % of the 8k budget. Ranking it
+harder buys nothing worth the risk, so `TOP_N` is unchanged.
+
+**Everything else appended after the static prompt, audited:**
+
+| Appended | Tokens | Varies |
+|---|---:|---|
+| Pronunciation guide (`vocabulary.pronunciation_block`) | 192 | only when the user teaches a word |
+| Memory block | 186 | per session |
+| Style hint (`runtime.get_style_hint`) | 0 at rest, ~15 when set | per session |
+| Name substitution (`"the user"` → display name) | ±1 per occurrence | per user, never per turn |
+
+**Cache order fixed.** The memory block used to sit *before* the static
+"Emotional attunement" section, and the style hint was appended inside it, so a
+changed fact or a detected mood invalidated the cached prefix from that point
+on. Both now come last, after every static section: the prompt is
+stable-prefix-first, per-session material at the tail. Tool order already
+follows the same rule — fixed core first, retrieved tools appended (pinned by
+`test_core_is_a_stable_prefix`).
+
+The style hint also got its own `# Tone for this conversation` header; it used
+to be a loose bullet dangling under "Emotional attunement", which made the
+static section's bytes depend on it.
+
+**Still unverifiable:** whether the provider actually reports
+`cached_tokens > 0`. Production has never recorded a Realtime session and there
+is no credit, so cacheability here is a property of the bytes we send, argued
+from ordering — not an observation.
+
+**Suites:** 1218 passed, 4 failed (the pre-existing live-embeddings 401s).
+Acceptance `--mock-external` 99/99. `ruff check .` clean.
