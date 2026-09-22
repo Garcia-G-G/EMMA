@@ -28,7 +28,9 @@ async def main(out: str) -> None:
         memory = await priming_block(context=None)
     except Exception:
         memory = ""
-    specs = registry.openai_tool_specs()
+    # What a session actually opens with (core + loader + sticky under
+    # TOOL_RETRIEVAL; the capped full set otherwise). "--all" = every available tool.
+    specs = registry.available_specs() if "--all" in sys.argv else conversation._session_tool_specs()
     rt = conversation._adapt_tool_specs_for_realtime(specs)
     mod = {e.name: registry._module_of(e) for e in registry.available_tools()}
     Path(out).write_text(

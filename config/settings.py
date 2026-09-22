@@ -516,7 +516,18 @@ class Settings(BaseSettings):
     # however large (LAUNCH-10 Part 5). Crossing the budget also logs every
     # dropped name at ERROR. Raise it deliberately, with the token cost in hand,
     # rather than reflexively.
+    #
+    # LAUNCH-12: this no longer governs what a request carries. With
+    # TOOL_RETRIEVAL on (the default) a turn sends core (~24) + retrieved
+    # (<= 12) tools — see core/tool_selection.py. It stays as the registry-growth
+    # alarm above, and caps the full-set fallback. **128 is a hard per-request
+    # ceiling no setting can lift** (Groq rejects more; other providers may):
+    # openai_tool_specs() applies min(budget, 128), tool_selection.cap() the same,
+    # and tests/test_tool_selection.py pins both.
     REALTIME_TOOL_BUDGET: int = 175
+    # LAUNCH-12: per-request tool selection (core + find_tools loader + sticky
+    # retrieval). False = the old full-set session (capped at 128).
+    TOOL_RETRIEVAL: bool = True
 
     # ---- Proactive engine (Prompt 17) -------------------------------
     # Master switch + global behavior. Conservative defaults: only the

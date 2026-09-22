@@ -17,6 +17,8 @@ from config.settings import settings
 from tools.base import RegisteredTool, ToolNameCollisionError, ToolResult, get_registry
 from tools.guidance import GUIDANCE
 
+MAX_TOOLS_PER_REQUEST = 128  # mirrored in core.tool_selection; test pins equality
+
 log = structlog.get_logger("emma.tools.registry")
 
 # "base"/"registry" hold no tools. "availability" is the probe helpers.
@@ -234,8 +236,11 @@ def openai_tool_specs() -> list[dict[str, Any]]:
        at ERROR. It is never silent.
     """
     entries = available_tools()
+    # 128 is a hard product ceiling (LAUNCH-12): Groq rejects more per request
+    # and other providers may. No setting can lift it; budget<=0 means "cap only".
     budget = int(settings.REALTIME_TOOL_BUDGET)
-    if budget <= 0 or len(entries) <= budget:
+    budget = MAX_TOOLS_PER_REQUEST if budget <= 0 else min(budget, MAX_TOOLS_PER_REQUEST)
+    if len(entries) <= budget:
         return [_spec(e) for e in entries]
 
     core = [e for e in entries if _module_of(e) in _CORE_RANK]
@@ -261,6 +266,15 @@ def openai_tool_specs() -> list[dict[str, Any]]:
         dropped=[e.name for e in dropped],
     )
     return [_spec(e) for e in kept]
+
+
+def available_specs() -> list[dict[str, Any]]:
+    """Every available tool's spec, untrimmed, in rank order.
+
+    The input to per-request selection (``core.tool_selection``): the selector
+    picks the handful a turn needs, so nothing here is sent as a whole.
+    """
+    return [_spec(e) for e in available_tools()]
 
 
 def unavailable_tools() -> list[str]:

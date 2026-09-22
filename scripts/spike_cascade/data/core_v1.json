@@ -1,0 +1,6 @@
+["remember_stt_correction","recall_last_action","recall_facts","set_conversation_tone",
+ "shutdown_emma","snooze_listening","remember_fact",
+ "describe_screen","look_at_screen","summarize_screen","summarize_pane","read_pane_text",
+ "task_status","list_my_tasks",
+ "open_url","open_application","current_datetime_speak","play_track","pause","set_volume",
+ "search_web","describe_capabilities","run_command"]

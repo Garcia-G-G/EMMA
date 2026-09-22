@@ -137,9 +137,11 @@ def test_every_priority_module_is_a_real_module() -> None:
     assert not overlap, f"module listed in BOTH core and priority: {sorted(overlap)}"
 
 
-def test_budget_zero_disables_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_budget_zero_leaves_only_the_hard_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    # LAUNCH-12: 0 used to mean "no cap at all"; the 128-per-request ceiling is
+    # now absolute, so 0 means "only that".
     monkeypatch.setattr(settings, "REALTIME_TOOL_BUDGET", 0)
-    assert len(openai_tool_specs()) == len(available_tools())
+    assert len(openai_tool_specs()) == min(len(available_tools()), registry.MAX_TOOLS_PER_REQUEST)
 
 
 def test_screen_vision_is_in_the_guaranteed_core() -> None:
@@ -167,11 +169,11 @@ def test_module_available_predicate_filters(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "ghp_realtoken")
     availability.reset_cache()
     assert gh.available() is True
-    assert "my_repos" in {s["function"]["name"] for s in openai_tool_specs()}
+    assert "my_repos" in {s["function"]["name"] for s in registry.available_specs()}
 
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "")
     assert gh.available() is False
-    assert "my_repos" not in {s["function"]["name"] for s in openai_tool_specs()}
+    assert "my_repos" not in {s["function"]["name"] for s in registry.available_specs()}
 
 
 def test_per_tool_available_predicate_filters(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,9 +193,10 @@ def test_per_tool_available_predicate_filters(monkeypatch: pytest.MonkeyPatch) -
 def test_availability_is_reevaluated_every_call(monkeypatch: pytest.MonkeyPatch) -> None:
     """Not a static list captured at import — flipping a setting flips the payload."""
     monkeypatch.setattr(settings, "NOTION_API_KEY", "")
-    assert "notion_append" not in {s["function"]["name"] for s in openai_tool_specs()}
+    # available_specs(): the pool per-request selection draws from (LAUNCH-12).
+    assert "notion_append" not in {s["function"]["name"] for s in registry.available_specs()}
     monkeypatch.setattr(settings, "NOTION_API_KEY", "secret_abc")
-    assert "notion_append" in {s["function"]["name"] for s in openai_tool_specs()}
+    assert "notion_append" in {s["function"]["name"] for s in registry.available_specs()}
 
 
 def test_broken_probe_keeps_the_tool() -> None:

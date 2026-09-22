@@ -196,3 +196,136 @@ confirmation, language and continuity tests: green. Acceptance
 can't show routing regressions; Part 4 does. `ruff check .` clean; `mypy`
 clean on touched files. (`ruff format --check .` fails on ~150 files at HEAD
 already; not touched.)
+
+## Part 2 — Tools: 172 always-on → core + retrieval
+
+### The gate: retrieved-40 finished on the frozen set (140/140)
+
+Run before building anything, as the spec requires. Frozen payload (pre-Part-1
+prompt + pre-guidance descriptions), Qwen3 8B local, BM25 top-40, no core:
+
+| Condition | REAL (120 items) | Correct tool offered | Selection when offered |
+|---|---:|---:|---:|
+| full-184 | **71.7 %** (86/120) | 100 % | 71.7 % |
+| static-40 | 41.7 % (50/120) | 46.7 % | 78.6 % |
+| **retrieved-40** | **60.0 %** (72/120) | 83.3 % | 69.0 % |
+| Realtime, historical (log items) | 58.0 % (29/50) | — | — |
+
+**Verdict: retrieval passes the gate** — it beats the fixed 40 by 18.3 points,
+which is what the spec said to check. It still trails full-184 by 11.7, and the
+cause is recall: the right tool was absent from 17 % of requests. Latency for
+this condition is not reported (swap was 6.3/7.2 GB; contaminated).
+
+### Retriever choice (offline, no LLM: recall of an acceptable tool)
+
+Core of 23 + top-k from the rest, over the **new** guided descriptions:
+
+| Retriever | recall@10 | recall@20 | Ships? |
+|---|---:|---:|---|
+| BM25 (name + description + moved trigger phrases) | 90.4 % | 93.9 % | **yes** — no dependency |
+| nomic-embed-text (local, 274 MB) | 76.5 % | 82.6 % | no — worse than BM25 |
+| qwen3-embedding 0.6b (local, 639 MB) | 93.0 % | 94.8 % | no — needs Ollama + 639 MB |
+| BM25 + qwen3-embedding (RRF hybrid) | **95.7 %** | 95.7 % | not yet — same dependency |
+
+BM25 alone over the *old* descriptions was 72.2 %@10 / 79.1 %@20, so moving the
+trigger phrases into the tools (Part 1) is worth ~18 points at k=10. The spec
+was right not to assume embeddings win: the small one loses outright, and the
+good one costs a 639 MB model and an Ollama runtime the installer doesn't ship,
+for +5.3 points. `memory/embeddings.py` is not an option at all — it's the paid
+OpenAI API (zero-spend rule, and the key has no credit). **Shipping BM25**;
+`find_tools` covers its misses, and the hybrid is the measured upgrade path.
+
+Production selector, counting only tools available on this Mac: **90.7 %**
+(98/108) with core + top-10.
+
+**Query stopwords.** The wake phrase opens nearly every utterance, and "emma"
+matched `restart_emma`, `shutdown_emma`, `add_vocabulary_word`… so those were
+pre-loaded on almost every turn. Wake words are dropped from *queries* only
+(`_QUERY_STOP`; descriptions untouched). Recall is unchanged at 90.7 % — this
+buys no score, it stops wasting sticky slots.
+
+### Design as built
+
+* **Core: 24 tools** (`core/tool_selection.py:CORE_TOOLS`), fixed order (part of
+  the cache key). Justification per group: **4** named by the always-on prompt,
+  so the rule breaks without them (`remember_stt_correction`,
+  `recall_last_action`, `recall_facts`, `set_conversation_tone`); **2** session
+  lifecycle; **1** memory write; **5** screen vision (audit 2026-08-03 §2 calls
+  it non-negotiable, and the AX→screenshot fallback needs both layers); **2**
+  background-task status (CLAUDE.md convention); **9** everyday actions, chosen
+  by frequency in the maker's production logs; **1** the loader.
+  *Caveat:* 50 of the 140 frozen items were mined from those same logs, so the
+  frequency evidence and the test set overlap. The core was picked by category
+  rule, not by fitting the frozen set.
+* **Loader**: `find_tools(need)` (`tools/tool_loader_tool.py`). The model
+  describes the need in its own words; BM25 retrieves; the enlarged list is
+  pushed to the live session; the model calls the real tool next. One extra
+  round-trip, only on turns the core can't serve.
+* **Sticky**: each finished user transcript pre-loads its matches for following
+  turns (`_UserSpeechTap` → `tool_selection.load`), LRU, `STICKY_MAX=12` **and**
+  `STICKY_CHAR_BUDGET=5000` chars. A count alone can't bound tokens (the 12
+  largest tools are 3.5k); the size bound can. Best-ranked tools are inserted
+  last so eviction drops the weakest first.
+* **Realtime wiring**: `LLMUpdateSettingsFrame` with a `session_properties`
+  delta (pipecat's public path) → `_update_settings` → `session.update`. Only
+  `tools` changes; instructions stay byte-identical, so the cached prefix
+  survives. Chosen over transcript-gating because `server_vad` +
+  `create_response=true` means the server answers before the transcript exists,
+  and gating would add transcription latency to every turn.
+* **`TOOL_RETRIEVAL=false`** restores the old full-set session, now capped at 128.
+
+### Measured payload (o200k, live)
+
+| | Tokens |
+|---|---:|
+| Session opens (prompt 2,662 + 24 core tools 3,429) | **6,091** |
+| 140 frozen utterances as consecutive turns | median **7,338**, max **7,422** |
+| Worst case (prompt + core + largest sticky set the size cap allows) | **6,945** |
+
+Every turn is under 8,000. Tools per turn: median 32, max 36 — far under 128.
+
+### The 128 ceiling
+
+`registry.openai_tool_specs()` applies `min(REALTIME_TOOL_BUDGET, 128)`;
+`tool_selection.cap()` applies the same and logs every dropped name at ERROR.
+`tests/test_tool_selection.py` pins the constant in both modules, the fallback
+at budgets 175/0/10000, the session-open set, and the worst case.
+`REALTIME_TOOL_BUDGET` (175) survives as the registry-growth alarm; CLAUDE.md's
+tool-budget convention is rewritten to match, including the "no 128-tool
+ceiling" claim, which was true of Realtime and is false of Groq.
+
+### Tests
+
+`tests/test_tool_selection.py` (23): ceiling, core membership and stability,
+retrieval quality, LRU + size bounds, best-match survival, loader behaviour,
+a failed `session.update` not breaking the turn, the session opening with the
+core rather than the registry, the fallback, wake-phrase stopwords, and
+**every available tool reachable** (nothing silently dropped).
+
+`tests/test_tool_budget.py`: three tests probed availability through
+`openai_tool_specs()`, which is now only the capped fallback — GitHub and
+Notion sit in unlisted modules and are trimmed past 128, so they failed. They
+now probe `registry.available_specs()`, the pool selection draws from, which is
+what those tests mean by "advertisable". `test_budget_zero_disables_the_cap`
+became `test_budget_zero_leaves_only_the_hard_ceiling`: 0 used to mean "no cap",
+and the ceiling is now absolute.
+
+**Suites:** 1218 passed, 4 failed (the pre-existing live-embeddings 401s).
+Acceptance `--mock-external`: 99/99. `ruff check .` clean. `mypy .` clean
+(182 files).
+
+**Not verified live.** The `session.update` tool swap is exercised against a
+fake applier, never the real Realtime API: zero spend, no credit. What Pipecat
+and the API do with a mid-session tool change is argued from source
+(`pipecat/services/openai/realtime/llm.py:682-748`), not observed.
+
+### Environment note (not caused by this work)
+
+This Mac's CoreAudio capture hangs: a bare `sounddevice` record + `sd.wait()`
+never returns, outside Emma entirely. Two tests block on it forever
+(`test_diagnose_self_explains_a_missing_accessibility_grant`,
+`test_wizard.py::test_mic_test_never_crashes`); runs above stub `_mic_rms` and
+deselect the wizard one. **Latent product bug it exposes:**
+`core/diagnostics.py:_mic_rms` calls `sd.wait()` with no timeout, so a stuck
+mic hangs `diagnose_self` — and therefore a voice turn — forever. Out of scope
+here; worth its own fix.
