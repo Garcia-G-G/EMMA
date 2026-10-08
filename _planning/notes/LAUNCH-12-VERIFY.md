@@ -367,3 +367,106 @@ from ordering — not an observation.
 
 **Suites:** 1218 passed, 4 failed (the pre-existing live-embeddings 401s).
 Acceptance `--mock-external` 99/99. `ruff check .` clean.
+
+## Part 4 — The spike re-run on the new payload (2026-10-08)
+
+Same frozen 140-item set (`labelled.json`), same scorer (`score.py`: first tool
+call vs the acceptable set), same thresholds as SPIKE-CASCADE §1, unchanged:
+**migrate ≥ 90 %, don't < 85 %**. Payload = the shipped one at `9bfac43`:
+`system_prompt_v2.txt` (Part 1+3 prompt) and `specs_avail_guided.json` (the 173
+tools *available on this Mac*, with their guidance). Tools are picked by
+`core.tool_selection` itself, not a copy. Qwen3 8B, Ollama, `think:false`,
+temperature 0. Raw rows: `results/m1_ollama_qwen3_8b_{core10,loader}.jsonl`.
+
+### A comparability correction, found during this run
+
+The SPIKE full-184 baseline offered **all 184 registered tools**, availability
+ignored. Production offers only what passes the availability probes, and on
+this Mac `my_repos`, `search_github` (no `gh`) and `set_brightness` don't. Seven
+of the 120 real items are labelled *only* with those tools, so core10 could
+never get them right, and neither could Emma on this machine. Both scopes are
+reported; the like-for-like one is the 113.
+
+### 4a. Qwen3 8B, production selection (core + BM25 top-10): 140/140, 0 errors
+
+| Condition | Prompt tokens (median) | REAL, all 120 | REAL, 113 with an available label | Scenario | Log |
+|---|---:|---:|---:|---:|---:|
+| full-184, old payload (SPIKE baseline) | 22,808 | **71.7 %** (86/120) | 69.9 % (79/113) | 71.4 % | 72.0 % |
+| **core10, new payload** | **6,723** | 67.5 % (81/120) | **71.7 % (81/113)** | 70.0 % | 64.0 % |
+
+**Against the threshold: < 85 % either way → *don't migrate*, unchanged.**
+
+**Accuracy held at 30 % of the tokens, and on the like-for-like set it rose
+1.8 points.** That is within noise at n=113, so the defensible claim is "no
+loss", not "a gain". The paired breakdown shows where the two effects are:
+
+| Same 113 items | n | full-184 | core10 |
+|---|---:|---:|---:|
+| right tool was offered by retrieval | 103 | 74 (71.8 %) | **80 (77.7 %)** |
+| right tool missed by retrieval | 10 | 5 | 1 |
+
+- **Where retrieval found the tool, the smaller payload selects 5.9 points
+  better** than the full registry on the same items. That is the audit's
+  prediction, confirmed where it can be tested.
+- **Real retrieval misses: 10 of 113 (8.8 %)**, not the 14–17 % the raw offer
+  recall suggests: `current_time`, `add_reminder`, `mute`, `open_my_page` ×2,
+  `list_notes`, `post_to_x`, `start_timer`, `recall_secret`, `delegate_to_codex`.
+- **`find_tools` was on offer in all 120 turns and called 0 times**, including
+  on the 10 misses. When the right tool is missing, Qwen calls a neighbour or
+  nothing (23 of 39 misses are "no tool call", the same failure mode as
+  full-184's 26 of 34).
+
+### 4b. The loader round-trip: core only, then `find_tools`: 140/140, 0 errors
+
+The `find_tools` path had never been exercised. Shape, matching production:
+turn 1 offers the 24 core tools (incl. `find_tools`) only; if the model's first
+call is `find_tools`, its call and the tool's result, serialized like
+`tools/tool_loader_tool.py` returns it, go back into the conversation, the
+tools retrieved on the model's own `need` are added, and the second choice is
+scored. This is what a Realtime first turn sees when the transcript pre-load
+hasn't landed yet.
+
+| Condition | REAL, all 120 | REAL, 113 available | Prompt tokens (median) | Warm p50 |
+|---|---:|---:|---:|---:|
+| core10 (pre-load before the call) | 67.5 % | 71.7 % | 6,723 | (contaminated) |
+| **loader (core only + `find_tools`)** | **45.8 %** (55/120) | **48.7 %** (55/113) | 5,808 | 5.4 s |
+
+**The loader does not close the recall gap for Qwen; it opens a much bigger
+one.** About 59 real items need a tool outside the core; Qwen called
+`find_tools` on **7** of them (5.8 % of real turns). On the other ~52 it called
+a core neighbour (`open_application` for `open_in_app`, `play_track` for
+`play_playlist`, `run_command` for IDE/file edits, `read_pane_text` for
+`read_note`) or nothing (34 of 65 misses are "no tool call"). Of the 7
+round-trips, 2 ended correct (`close_duplicate_tabs`, `close_current_tab`); 4
+were the unavailable GitHub tools; 1 was a `__none__` item where loading was
+itself the mistake. The second hop works mechanically: the model reads the
+result and calls a loaded tool every time.
+
+What this means for each architecture:
+
+- **Cascade (any text model):** the transcript exists *before* the LLM call, so
+  pre-loading is always on time and **core10 is the honest shape**. The loader
+  result doesn't apply.
+- **Realtime:** turn 1 can race the pre-load, so it may see the loader shape.
+  Whether *Realtime's* model calls `find_tools` more readily than Qwen is
+  unmeasured (no credit). Qwen's 7/59 is a warning, not a measurement of
+  Realtime. Measuring it is the first thing to do with credit, and the cheap
+  fix if it's bad is to await the pre-load before the response is created,
+  rather than to rely on the model asking.
+
+Latency: 4a's 38 s warm p50 is contaminated (5.9 GB disk free, heavy swap; it
+is physically backwards against SPIKE's 6.2 s at 3.4× the tokens). 4b's 5.4 s
+p50 at 5.8k tokens is plausible but ran on the same machine state; neither is
+reported against the 1.5 / 2.5 s threshold.
+
+### 4c. Groq free (gpt-oss-120b), core10: 46/140 scored, 94 pending
+
+Stopped by Groq's free-tier **daily** limit (200k tokens/day, HTTP 429 TPD),
+not the per-minute one. At ~6.6k tokens a call that is ~30 items/day, so the
+remaining 94 take ~3 days of resumed runs. Scored when complete; not reported
+on 46 items (45 scenario + 1 log, the head of the file: not a sample).
+
+### Suites at this commit
+
+`mypy .` clean (182 files). The test/acceptance/ruff numbers are Part 3's: this
+part changes only `scripts/spike_cascade/` and this doc.

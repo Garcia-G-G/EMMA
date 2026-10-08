@@ -7,7 +7,10 @@ Spike code: disposable. One JSONL row per (item, condition), resumable.
       --key-env GROQ_API_KEY --model llama-3.3-70b-versatile --cond full
 
 Conditions: full (all 184 registered), static40 (first 40 in registry trim order),
-retr40 (per-utterance BM25 top-40 over name + description).
+static128 (first 128), retr40 (per-utterance BM25 top-40 over name + description),
+and core10 (LAUNCH-12 production selection: core + BM25 top-10, via
+core.tool_selection itself — the shipped code, not a copy). core10 implies the
+post-LAUNCH-12 system prompt (--system).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import json
 import math
 import os
 import re
+import sys
 import time
 import urllib.request
 from collections import Counter
@@ -94,7 +98,12 @@ def _post(url: str, body: dict, headers: dict, timeout: float = 3600) -> dict:
 
 
 def call_ollama(
-    model: str, system: str, text: str, tools: list[dict], num_ctx: int
+    model: str,
+    system: str,
+    text: str,
+    tools: list[dict],
+    num_ctx: int,
+    history: list[dict] | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     r = _post(
@@ -106,6 +115,7 @@ def call_ollama(
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": text},
+                *(history or []),
             ],
             "tools": tools,
             "options": {"temperature": 0, "num_ctx": num_ctx},
@@ -118,6 +128,8 @@ def call_ollama(
     calls = [c["function"]["name"] for c in msg.get("tool_calls") or []]
     return {
         "calls": calls,
+        "need": _need_arg(msg.get("tool_calls") or []),
+        "_raw_calls": msg.get("tool_calls") or [],
         "content": (msg.get("content") or "")[:300],
         "wall_s": wall,
         "prompt_tokens": r.get("prompt_eval_count"),
@@ -128,6 +140,53 @@ def call_ollama(
     }
 
 
+LOADER_NAME = "find_tools"
+
+
+def _need_arg(tool_calls: list[dict]) -> str:
+    """The `need` the model passed to find_tools (its own phrasing of the request)."""
+    for c in tool_calls:
+        fn = c.get("function") or {}
+        if fn.get("name") != LOADER_NAME:
+            continue
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+        return str((args or {}).get("need") or "")
+    return ""
+
+
+def _loader_history(r: dict, loaded: list[str], backend: str) -> list[dict]:
+    """Assistant find_tools call + its result, in the backend's wire format."""
+    raw = r.get("_raw_calls") or []
+    payload = json.dumps(
+        {
+            "success": bool(loaded),
+            "user_message": (
+                "Tools now available: "
+                + ", ".join(loaded)
+                + ". Call the one that fits the user's request now; don't mention this step."
+            )
+            if loaded
+            else (
+                "No encontré una herramienta para eso. Dile al usuario brevemente que "
+                "no puedes hacerlo, o pídele que lo diga de otra forma."
+            ),
+            "data": {"loaded": loaded},
+            "requires_confirmation": False,
+        },
+        ensure_ascii=False,
+    )
+    assistant = {"role": "assistant", "content": "", "tool_calls": raw}
+    if backend == "ollama":
+        return [assistant, {"role": "tool", "tool_name": LOADER_NAME, "content": payload}]
+    tc_id = (raw[0] if raw else {}).get("id", "call_0")
+    return [assistant, {"role": "tool", "tool_call_id": tc_id, "content": payload}]
+
+
 def call_openai_compat(
     base: str,
     key: str,
@@ -136,6 +195,7 @@ def call_openai_compat(
     text: str,
     tools: list[dict],
     tool_choice: str = "auto",
+    history: list[dict] | None = None,
 ) -> dict:
     t0 = time.perf_counter()
     r = _post(
@@ -146,6 +206,7 @@ def call_openai_compat(
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": text},
+                *(history or []),
             ],
             "tools": tools,
             "tool_choice": tool_choice,
@@ -159,6 +220,8 @@ def call_openai_compat(
     u = r.get("usage") or {}
     return {
         "calls": calls,
+        "need": _need_arg(msg.get("tool_calls") or []),
+        "_raw_calls": msg.get("tool_calls") or [],
         "content": (msg.get("content") or "")[:300],
         "wall_s": wall,
         "prompt_tokens": u.get("prompt_tokens"),
@@ -173,7 +236,9 @@ def main() -> None:
     ap.add_argument("--backend", required=True, choices=["ollama", "openai_compat"])
     ap.add_argument("--model", required=True)
     ap.add_argument(
-        "--cond", required=True, choices=["full", "static40", "static128", "retr40"]
+        "--cond",
+        required=True,
+        choices=["full", "static40", "static128", "retr40", "core10", "loader"],
     )
     ap.add_argument("--base-url")
     ap.add_argument("--key-env")
@@ -183,10 +248,17 @@ def main() -> None:
     )
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--tool-choice", default="auto", choices=["auto", "required"])
+    ap.add_argument(
+        "--system", default="system_prompt.txt", help="prompt file under data/"
+    )
+    ap.add_argument(
+        "--specs", default="specs_all.json", help="tool specs file under data/"
+    )
+    ap.add_argument("--tag", default="", help="suffix for the results filename")
     a = ap.parse_args()
 
-    specs = load_specs()
-    system = (DATA / "system_prompt.txt").read_text()
+    specs = json.load(open(DATA / a.specs))
+    system = (DATA / a.system).read_text()
     items = json.load(open(DATA / "labelled.json"))
     if a.limit:
         items = items[: a.limit]
@@ -205,6 +277,12 @@ def main() -> None:
         if a.cond == "static128"
         else None
     )  # Groq caps tools at 128
+    selector = None
+    if a.cond in ("core10", "loader"):
+        sys.path.insert(0, str(HERE.parents[1]))
+        from core.tool_selection import ToolSelector  # the SHIPPED selector, not a copy
+
+        selector = ToolSelector(specs)
 
     RESULTS.mkdir(exist_ok=True)
     tc = "" if a.tool_choice == "auto" else f"_tc-{a.tool_choice}"
@@ -226,7 +304,13 @@ def main() -> None:
         for it in items:
             if it["id"] in done:
                 continue
-            tools = fixed if fixed is not None else retr40(specs, it["text"], bm)
+            if a.cond == "loader":
+                # Core only (find_tools included) — the shipped Realtime shape.
+                tools = [selector.by_name[n] for n in selector.core]
+            elif selector is not None:
+                tools = selector.select_for_text(it["text"])
+            else:
+                tools = fixed if fixed is not None else retr40(specs, it["text"], bm)
             offered = [t["function"]["name"] for t in tools]
             if gap:
                 time.sleep(max(0.0, last + gap - time.time()))
@@ -253,8 +337,64 @@ def main() -> None:
                     else ""
                 )
                 r, err = {"calls": None}, f"{type(e).__name__}: {str(e)[:200]} {body}"
+            # The loader round-trip, shaped like production: the model's own
+            # find_tools call and the tool's result (tools/tool_loader_tool.py,
+            # as the function handler serializes it) go back into the
+            # conversation, the retrieved tools are added, and the second choice
+            # is the one scored. Retrieval runs on the model's phrasing of `need`.
+            loader_used = False
+            hist: list[dict] = []
+            if (
+                a.cond == "loader"
+                and err is None
+                and (r.get("calls") or [None])[0] == LOADER_NAME
+            ):
+                loader_used = True
+                loaded = selector.retrieve(r.get("need") or it["text"])
+                tools2 = tools + [
+                    selector.by_name[n] for n in loaded if n not in selector.core
+                ]
+                offered = [t["function"]["name"] for t in tools2]
+                hist = _loader_history(r, loaded, a.backend)
+                r["loader_need"] = r.get("need")
+                r["loader_hop1_calls"] = r.get("calls")
+                if gap:
+                    time.sleep(max(0.0, last + gap - time.time()))
+                    last = time.time()
+                try:
+                    if a.backend == "ollama":
+                        r2 = call_ollama(
+                            a.model, system, it["text"], tools2, a.num_ctx, hist
+                        )
+                    else:
+                        r2 = call_openai_compat(
+                            a.base_url,
+                            key,
+                            a.model,
+                            system,
+                            it["text"],
+                            tools2,
+                            a.tool_choice,
+                            hist,
+                        )
+                    r2["loader_need"] = r["loader_need"]
+                    r2["loader_hop1_calls"] = r["loader_hop1_calls"]
+                    r2["wall_s"] = r.get("wall_s", 0) + r2.get("wall_s", 0)
+                    r2["prompt_tokens"] = (r.get("prompt_tokens") or 0) + (
+                        r2.get("prompt_tokens") or 0
+                    )
+                    r, err = r2, None
+                except Exception as e:
+                    body = (
+                        e.read().decode(errors="replace")[:400]
+                        if hasattr(e, "read")
+                        else ""
+                    )
+                    err = f"loader_hop2 {type(e).__name__}: {str(e)[:200]} {body}"
+            r.pop("_raw_calls", None)
             row = {
                 "id": it["id"],
+                "loader_used": loader_used,
                 "cond": a.cond,
                 "model": a.model,
                 "n_tools": len(tools),
