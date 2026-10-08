@@ -34,12 +34,16 @@ def _embed(model: str, texts: list[str]) -> list[list[float]]:
 
 
 def _cos(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b)) / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)))
+    return sum(x * y for x, y in zip(a, b)) / (
+        math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    )
 
 
 def main() -> None:
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    flags = dict(a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
+    flags = dict(
+        a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a
+    )
     specs_path = Path(args[0]) if args else HERE / "data" / "specs_all.json"
     core = set(json.load(open(args[1]))) if len(args) > 1 else set()
     mode = flags.get("mode", "bm25")  # bm25 | embed | hybrid
@@ -48,7 +52,9 @@ def main() -> None:
     items = json.load(open(HERE / "data" / "labelled.json"))
     pool = [s for s in specs if s["function"]["name"] not in core]
     names = [s["function"]["name"] for s in pool]
-    docs = [s["function"]["name"] + " " + s["function"].get("description", "") for s in pool]
+    docs = [
+        s["function"]["name"] + " " + s["function"].get("description", "") for s in pool
+    ]
     bm = BM25([_toks(d) for d in docs])
     tvec = _embed(emodel, docs) if mode != "bm25" else []
     ks = [5, 10, 15, 20, 30, 40]
@@ -85,7 +91,9 @@ def main() -> None:
         for k in ks:
             if set(order[:k]) & set(acc):
                 hits[k] += 1
-    print(f"{specs_path.name} [{mode}{'/' + emodel if mode != 'bm25' else ''}]: {len(specs)} tools, core={len(core)}, items with a tool={n}")
+    print(
+        f"{specs_path.name} [{mode}{'/' + emodel if mode != 'bm25' else ''}]: {len(specs)} tools, core={len(core)}, items with a tool={n}"
+    )
     if core:
         print(f"  covered by core alone: {core_hits}/{n} = {core_hits / n:.1%}")
     for k in ks:

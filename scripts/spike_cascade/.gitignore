@@ -7,3 +7,4 @@ results/*.log
 # Downloaded model weights (~425 MB).
 data/models/
 data/payload_*.json
+data/system_prompt_v2.txt
