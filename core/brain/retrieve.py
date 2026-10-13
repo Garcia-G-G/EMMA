@@ -73,6 +73,15 @@ class DualRetriever:
         self.embedder = embedder
 
     @property
+    def knn_status(self) -> str:
+        """``ok`` | ``embedder_missing`` | ``index_empty`` — why kNN can't vote, if it can't."""
+        if self.embedder is None or not self.embedder.available():
+            return "embedder_missing"
+        if self.index is None or len(self.index) == 0:
+            return "index_empty"
+        return "ok"
+
+    @property
     def has_knn(self) -> bool:
         return (
             self.index is not None

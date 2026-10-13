@@ -210,3 +210,32 @@ def test_a_brain1_index_is_rebuilt_not_crashed_on(tmp_path: Path) -> None:
     con.close()
     idx = ExampleIndex(p)
     assert len(idx) == 0 and idx.count("labelled") == 0
+
+
+def test_the_index_is_rebuilt_only_when_its_inputs_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A daemon boot must not re-embed 4,000+ rows (20-150 s) when nothing changed."""
+    import numpy as np
+
+    import core.brain_host as host
+    from core.brain.embed import DIM
+    from core.brain.index import Example, ExampleIndex
+
+    builds: list[str] = []
+
+    def fake_build(embedder: object, path: Path) -> ExampleIndex:
+        builds.append(str(path))
+        idx = ExampleIndex(path)
+        idx.replace_all([Example("x", "x", "x", "L1", ("mute",), "es", "labelled")],
+                        np.ones((1, DIM), dtype=np.float32))
+        return idx
+
+    monkeypatch.setattr(host, "build_index", fake_build)
+    db = tmp_path / "brain.db"
+    host.open_index(None, db).close()  # type: ignore[arg-type]
+    host.open_index(None, db).close()  # type: ignore[arg-type]
+    assert len(builds) == 1, "rebuilt with unchanged inputs"
+    monkeypatch.setattr(host, "index_fingerprint", lambda: "phrasebook edited")
+    host.open_index(None, db).close()  # type: ignore[arg-type]
+    assert len(builds) == 2, "kept a stale index after its inputs changed"

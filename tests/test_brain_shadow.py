@@ -184,3 +184,47 @@ def test_decision_latency_p95_under_100ms(brain: Brain) -> None:
         if best < 100:
             break
     assert best < 100, f"decision p95 {best:.1f} ms"
+
+
+# ---- a fresh install whose embedder download failed (BRAIN-1.5 Part 4) ------------------
+
+
+def _no_model_brain(tmp_path: Path) -> Brain:
+    missing = Embedder(tmp_path / "no-model")
+    return Brain(tool_docs(), vocab(apps=APPS), thresholds_from_settings(), None, missing)
+
+
+def test_without_the_embedder_tool_requests_defer_and_say_why(tmp_path: Path) -> None:
+    brain = _no_model_brain(tmp_path)
+    d = brain.decide("Emma, abre Safari")
+    assert (d.verdict, d.reason) == ("defer", "embedder_missing")
+    assert any(f.name == "knn_status" and f.value == "embedder_missing" for f in d.features)
+
+
+def test_without_the_embedder_the_closed_lists_still_answer(tmp_path: Path) -> None:
+    brain = _no_model_brain(tmp_path)
+    assert brain.decide("Hey Emma, borra mi carpeta home completa.").verdict == "refuse"
+    assert brain.decide("Hey Emma, ¿cómo estás?").verdict == "none"
+    assert brain.decide("Hey Emma, búscame algo.").verdict == "clarify"
+
+
+def test_a_missing_embedder_is_logged_once_at_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from structlog.testing import capture_logs
+
+    import core.brain.embed as embed_mod
+
+    monkeypatch.setattr(embed_mod, "MODEL_DIR", tmp_path / "no-model")
+    monkeypatch.setattr(embed_mod.Embedder.__init__, "__defaults__",
+                        (tmp_path / "no-model", 2))
+    monkeypatch.setattr(brain_shadow, "_brain", None)
+    with capture_logs() as logs:
+        brain_shadow._load_brain()
+        loaded = brain_shadow._brain
+        assert loaded is not None
+        for _ in range(5):
+            assert loaded.decide("Emma, abre Safari").reason == "embedder_missing"
+    missing = [e for e in logs if e.get("event") == "brain_embedder_missing"]
+    assert len(missing) == 1, logs
+    monkeypatch.setattr(brain_shadow, "_brain", None)

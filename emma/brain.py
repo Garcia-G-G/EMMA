@@ -81,12 +81,12 @@ def _decide(text: str) -> dict[str, Any]:
     from core.brain.brain import Brain
     from core.brain.embed import Embedder
     from core.brain.index import DEFAULT_PATH
-    from core.brain_host import build_index, thresholds_from_settings, tool_docs, vocab
+    from core.brain_host import open_index, thresholds_from_settings, tool_docs, vocab
     from core.brain_shadow import installed_apps
 
     docs = tool_docs(available_only=True)
     emb = Embedder()
-    index = build_index(emb, DEFAULT_PATH) if emb.available() else None
+    index = open_index(emb, DEFAULT_PATH) if emb.available() else None
     brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, emb)
     return brain.decide(text).to_record()
 

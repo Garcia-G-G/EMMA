@@ -74,6 +74,7 @@ class ExampleIndex:
                 source TEXT NOT NULL DEFAULT 'labelled'
             );
             CREATE INDEX IF NOT EXISTS examples_source ON examples(source);
+            CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE VIRTUAL TABLE IF NOT EXISTS example_vec
                 USING vec0(embedding float[{DIM}] distance_metric=cosine);
             """
@@ -158,6 +159,14 @@ class ExampleIndex:
             return ids, np.zeros((0, DIM), dtype=np.float32)
         mat = np.vstack([np.frombuffer(r[1], dtype=np.float32) for r in rows])
         return ids, mat
+
+    def get_meta(self, key: str) -> str | None:
+        row = self.conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return str(row[0]) if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
 
     def close(self) -> None:
         self.conn.close()

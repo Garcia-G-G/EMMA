@@ -175,7 +175,7 @@ def decide(
     tools: Mapping[str, ToolDoc],
     vocab: Vocab,
     th: Thresholds,
-    has_knn: bool = True,
+    knn_status: str = "ok",
 ) -> Decision:
     f: list[Feature] = []
     content = _content(norm.tokens)
@@ -191,9 +191,11 @@ def decide(
         f.append(Feature("single_unexplained_token", content[0]))
         return _decision(norm, "none", "noise:single_token", f, retrieval)
 
-    if not has_knn:
-        f.append(Feature("knn_available", False))
-        return _decision(norm, "defer", "no_knn", f, retrieval)
+    if knn_status != "ok":
+        # Fail closed and say why: without the embedder (a fresh install whose
+        # model download failed) one retriever can't vote, so nothing goes local.
+        f.append(Feature("knn_status", knn_status, passed=False))
+        return _decision(norm, "defer", knn_status, f, retrieval)
 
     cands = retrieval.candidates
     bm_sorted = sorted((c for c in cands if c.bm25_rank), key=lambda c: c.bm25_rank)

@@ -105,6 +105,35 @@ def build_index(
     return index
 
 
+def index_fingerprint() -> str:
+    """What the shipped rows depend on: phrasebook, labelled set, model, embed rule."""
+    import hashlib
+    import inspect
+
+    from core.brain import embed, retrieve
+
+    h = hashlib.sha256()
+    h.update(phrasebook.PATH.read_bytes())
+    h.update(LABELLED.read_bytes())
+    h.update(embed.REVISION.encode())
+    h.update(inspect.getsource(retrieve.embed_text).encode())
+    h.update(inspect.getsource(phrasebook.expand).encode())
+    return h.hexdigest()
+
+
+def open_index(embedder: Embedder, path: Path | str) -> ExampleIndex:
+    """The persisted index, rebuilt only when its inputs changed (a boot costs ~0 s,
+    a rebuild 20-150 s on an M3 under load)."""
+    fp = index_fingerprint()
+    index = ExampleIndex(path)
+    if len(index) and index.get_meta("fingerprint") == fp:
+        return index
+    index.close()
+    index = build_index(embedder, path)
+    index.set_meta("fingerprint", fp)
+    return index
+
+
 def holdouts(
     index: ExampleIndex, embedder: Embedder, examples: list[Example]
 ) -> dict[str, frozenset[str]]:

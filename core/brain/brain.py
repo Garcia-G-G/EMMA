@@ -46,7 +46,7 @@ class Brain:
         t1 = time.perf_counter()
         r = self.retriever.rank(norm, exclude_id=exclude_id, exclude_ids=exclude_ids)
         t2 = time.perf_counter()
-        d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.has_knn)
+        d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.knn_status)
         t3 = time.perf_counter()
         d.timings = {
             "normalize_ms": round((t1 - t0) * 1000, 3),

@@ -188,11 +188,18 @@ def _load_brain() -> None:
     try:
         from core.brain.embed import Embedder
         from core.brain.index import DEFAULT_PATH
-        from core.brain_host import build_index, thresholds_from_settings, tool_docs, vocab
+        from core.brain_host import open_index, thresholds_from_settings, tool_docs, vocab
 
         docs = tool_docs(available_only=True)
         embedder = Embedder()
-        index = build_index(embedder, DEFAULT_PATH) if embedder.available() else None
+        if embedder.available():
+            index = open_index(embedder, DEFAULT_PATH)
+        else:
+            # Logged ONCE, here, at load — every decision then carries
+            # reason="embedder_missing" in its own record; no per-turn noise.
+            index = None
+            log.warning("brain_embedder_missing", model_dir=str(embedder.model_dir),
+                        fix="re-run the installer, or: python -m emma.brain fetch-model")
         brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, embedder)
         with _brain_lock:
             _brain = brain

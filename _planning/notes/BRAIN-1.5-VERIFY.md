@@ -176,3 +176,48 @@ How the 51 local decisions were chosen: agree 38, relaxed (kNN in BM25 top-3)
 
 Pinned (`tests/test_brain_eval.py`): coverage 77, local 51, wrong 0. Gates:
 1436 passed, 2 xfailed; ruff, mypy clean.
+
+## Part 4 — ship the embedder
+
+**Installer** (`_landing/install.sh`, step 5.2, commit in the `_landing` repo):
+pinned revision `614241f6…` of `intfloat/multilingual-e5-small`, the int8 ONNX
+model + tokenizer, each file's SHA-256 verified (a mismatch is deleted, never
+loaded), into `~/.emma/models/multilingual-e5-small/`. **Non-fatal**: if it
+fails, Emma installs and works; the brain defers every tool turn with
+`embedder_missing`. Tested by extracting the step verbatim against a fresh
+`EMMA_HOME`:
+
+| Case | Result |
+|---|---|
+| Fresh install | downloaded + verified, **69.1 s** on this connection (~2 MB/s) |
+| Re-run | **0.39 s**, checksums only — no re-download |
+| Corrupted file | detected, re-downloaded, verified (`0b44a9d7…`) |
+
+**Not deployed.** The live installer pins v0.3.1, which has no `core/brain`;
+deploying now would make every new install download 135 MB that nothing uses.
+It goes live with the release that ships the brain (commit + push done).
+
+| Model | |
+|---|---|
+| Name | `intfloat/multilingual-e5-small`, int8 ONNX (`onnx/model_qint8_avx512_vnni.onnx`) |
+| Size on disk | 118.3 MB model + 17.1 MB tokenizer = 135.4 MB (145 MB `du`) |
+| Download time (this connection) | 69.1 s |
+| Load time (first call, cold) | 1.1–1.6 s |
+| Decision latency, 4,172-row index, 140 items | p50 9.8–17.4 ms, p95 22.9–129 ms across 3 rounds on a heavily loaded Mac (best round p95 22.9 ms; pinned < 100 ms best-of-3) |
+
+**Degrades honestly without it.** The gate's kNN check now reports *why* it
+can't vote: `embedder_missing` or `index_empty` (was a vague `no_knn`), as the
+decision's reason and a `knn_status` feature. Closed lists (refuse / clarify /
+small talk / noise) still answer without it. The daemon logs
+`brain_embedder_missing` **once**, at brain load, with the fix (re-run the
+installer, or `python -m emma.brain fetch-model`) — never per turn (test: 5
+decisions, 1 warning).
+
+**The index is cached.** Building 4,172 rows took 20–157 s on this Mac
+depending on load — on every daemon boot. `brain.db` now stores a fingerprint
+of its inputs (phrasebook, labelled set, model revision, the embed-text rule)
+and is rebuilt only when it changes: `python -m emma.brain decide` cold 19.6 s,
+then **2.3 s** for the whole process. On this Mac "Emma, abre Safari" now
+resolves locally (`open_application`); in BRAIN-1 it deferred on disagreement.
+
+Gates: 1440 passed, 2 xfailed; ruff, mypy clean.
