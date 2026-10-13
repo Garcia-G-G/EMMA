@@ -49,3 +49,56 @@ What the tests caught while writing:
 - **Regionalisms I wrote and then removed** ("if unsure, leave it out"):
   *súbele/bájale*, *picar* (click), *brincar* (skip), *junta* (meeting),
   *regrésame*, *computadora*. Now in the test's closed list.
+
+## Part 2 — both retrievers index the phrasebook
+
+- **BM25**: the brain builds its own index over each tool's phrasebook text
+  (placeholders stripped) + the tool name split on underscores. It imports the
+  BM25 *implementation* from `core.tool_selection`; Realtime's *index* there is
+  untouched (frozen-surface test green). Tools outside the phrasebook are
+  indexed by name only. **The brain no longer indexes LLM descriptions at
+  all** — BRAIN-1's "canonical phrases from docstrings" seeding is removed.
+- **kNN**: `brain.db` holds 140 labelled rows + **4,032 phrasebook rows** (each
+  placeholder filled 2 ways), every row tagged `source = phrasebook | labelled |
+  learned`. A BRAIN-1 `brain.db` (no `source`) is rebuilt on open — it held no
+  learned data. Build: 20.4 s for 4,172 rows on this Mac (background thread in
+  the daemon).
+- **Honest evaluation**: each item is excluded from its own neighbors, AND any
+  phrasebook row within cosine 0.97 of it is held out *for that item*
+  (`brain_host.holdouts`): 14 items had a near-copy (29 rows). BRAIN-1 held
+  seeds out globally; per-item is stricter where it matters and doesn't throw
+  away coverage for other items.
+
+### Retrievers, before / after (115 items with a tool)
+
+| | Before (BRAIN-1) | After (phrasebook) |
+|---|---:|---:|
+| BM25 top-1 | 60 (52.2 %) | **80 (69.6 %)** |
+| BM25 top-5 | 78 (67.8 %) | **102 (88.7 %)** |
+| kNN top-1 (LOO) | 46 (40.0 %) | **89 (77.4 %)** |
+| kNN top-5 (LOO) | 66 (57.4 %) | **107 (93.0 %)** |
+| **Agreement** (BM25 top-1 == kNN top-1) | **20 (17.4 %)** | **70 (60.9 %)** |
+| …correct | 18 (90 %) | 65 (93 %) |
+
+Agreement moved from 17 % to 61 %, as the prompt expected — the retrievers were
+the bottleneck.
+
+### One wrong answer appeared — and the rule that removes it
+
+With the shipped gate on the new retrievers: 46.4 % served, 1 wrong.
+`log_11` "¿Puedes decirme qué repositorios tiene el usuario examplehandle en
+GitHub?" — both retrievers agreed on `remember_user_profile` (it *talks* like
+a profile phrasing) and the residue put the whole question into `value`. **A
+question never stores**: the gate now defers a `PERSIST` tool when the
+utterance is interrogative (`?`/`¿`, or opens with a question word or "puedes
+/ podrías"), reason `question_not_statement`. Fails closed: a stored fact said
+as a question defers too.
+
+### Gate A (as shipped, margin 0.0) after Part 2
+
+**Served 64/140 = 45.7 %, local 38/140 = 27.1 %, wrong 0.** Defer reasons:
+disagree 46, slots 27, complex 2, question_not_statement 1. (Part 3 studies
+the gate; these are the "A" numbers.)
+
+Pinned: retriever floors re-pinned upward in `tests/test_brain_retrieve.py`;
+gate floors unchanged until Part 3. Gates: 1436 passed, 2 xfailed; ruff, mypy clean.

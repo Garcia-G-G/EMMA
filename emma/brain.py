@@ -86,7 +86,7 @@ def _decide(text: str) -> dict[str, Any]:
 
     docs = tool_docs(available_only=True)
     emb = Embedder()
-    index = build_index(emb, DEFAULT_PATH, seed_docs=docs) if emb.available() else None
+    index = build_index(emb, DEFAULT_PATH) if emb.available() else None
     brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, emb)
     return brain.decide(text).to_record()
 

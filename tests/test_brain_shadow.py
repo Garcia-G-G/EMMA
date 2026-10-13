@@ -32,7 +32,7 @@ needs_model = pytest.mark.skipif(not EMBEDDER.available(), reason="local embedde
 @pytest.fixture(scope="module")
 def brain(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Brain]:
     docs = tool_docs()
-    index = build_index(EMBEDDER, tmp_path_factory.mktemp("b") / "brain.db", seed_docs=docs)
+    index = build_index(EMBEDDER, tmp_path_factory.mktemp("b") / "brain.db")
     base = vocab(apps=APPS, notes=NOTES, playlists=PLAYLISTS, connections=CONNECTIONS)
     v = Vocab(apps=base.apps, aliases=base.aliases, pages=PAGES, notes=base.notes,
               playlists=base.playlists, connections=base.connections, contacts=base.contacts)

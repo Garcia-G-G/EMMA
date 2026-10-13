@@ -192,7 +192,7 @@ def _load_brain() -> None:
 
         docs = tool_docs(available_only=True)
         embedder = Embedder()
-        index = build_index(embedder, DEFAULT_PATH, seed_docs=docs) if embedder.available() else None
+        index = build_index(embedder, DEFAULT_PATH) if embedder.available() else None
         brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, embedder)
         with _brain_lock:
             _brain = brain

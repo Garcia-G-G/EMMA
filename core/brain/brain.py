@@ -33,12 +33,18 @@ class Brain:
         self.thresholds = thresholds
         self.retriever = DualRetriever(tools, index, embedder)
 
-    def decide(self, utterance: str, exclude_id: str | None = None) -> Decision:
-        """``exclude_id``: leave-one-out, for evaluating on the labelled set itself."""
+    def decide(
+        self,
+        utterance: str,
+        exclude_id: str | None = None,
+        exclude_ids: frozenset[str] = frozenset(),
+    ) -> Decision:
+        """``exclude_id(s)``: evaluation only — the item itself and any phrasing
+        that near-copies it may not answer (leave-one-out)."""
         t0 = time.perf_counter()
         norm = normalize(utterance)
         t1 = time.perf_counter()
-        r = self.retriever.rank(norm, exclude_id=exclude_id)
+        r = self.retriever.rank(norm, exclude_id=exclude_id, exclude_ids=exclude_ids)
         t2 = time.perf_counter()
         d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.has_knn)
         t3 = time.perf_counter()

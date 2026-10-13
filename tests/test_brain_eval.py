@@ -31,6 +31,7 @@ from core.brain.sinks import is_sink
 from core.brain.slots import Vocab
 from core.brain_host import (
     build_index,
+    holdouts,
     is_wrong,
     labelled_examples,
     thresholds_from_settings,
@@ -52,15 +53,13 @@ DOCS = {d.name: d for d in tool_docs()}
 @pytest.fixture(scope="module")
 def results(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[tuple[Example, Decision]]]:
     examples = labelled_examples()
-    index = build_index(
-        EMBEDDER, tmp_path_factory.mktemp("brain") / "brain.db",
-        seed_docs=list(DOCS.values()), holdout=examples,
-    )
+    index = build_index(EMBEDDER, tmp_path_factory.mktemp("brain") / "brain.db")
+    held = holdouts(index, EMBEDDER, examples)
     base = vocab(apps=APPS, notes=NOTES, playlists=PLAYLISTS, connections=CONNECTIONS)
     v = Vocab(apps=base.apps, aliases=base.aliases, pages=PAGES, notes=base.notes,
               playlists=base.playlists, connections=base.connections, contacts=base.contacts)
     brain = Brain(list(DOCS.values()), v, thresholds_from_settings(), index, EMBEDDER)
-    yield [(ex, brain.decide(ex.text, exclude_id=ex.id)) for ex in examples]
+    yield [(ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held[ex.id])) for ex in examples]
     index.close()
 
 
@@ -159,3 +158,13 @@ def test_closed_lists(text: str, verdict: str) -> None:
 )
 def test_closed_lists_dont_swallow_real_requests(text: str) -> None:
     assert pre_retrieval(normalize(text)) is None
+
+
+def test_a_question_never_stores() -> None:
+    """log_11 agreed on remember_user_profile and put the whole question in `value`."""
+    from core.brain.gate import _is_question
+
+    assert _is_question(normalize("¿Puedes decirme qué repositorios tiene el usuario X en GitHub?"))
+    assert _is_question(normalize("what is my github username"))
+    assert not _is_question(normalize("Emma, mi usuario de GitHub es examplehandle."))  # syn_02
+    assert not _is_question(normalize("Hey Emma, recuérdame que soy alérgico a los mariscos."))

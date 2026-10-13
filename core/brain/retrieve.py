@@ -13,9 +13,10 @@ surface the pseudo-tool ``__none__`` (the nearest examples wanted no tool).
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from core.brain import phrasebook
 from core.brain.decision import Candidate
 from core.brain.embed import Embedder
 from core.brain.index import ExampleIndex, Neighbor
@@ -56,10 +57,18 @@ class DualRetriever:
         tools: Sequence[ToolDoc],
         index: ExampleIndex | None = None,
         embedder: Embedder | None = None,
+        texts: Mapping[str, str] | None = None,
     ) -> None:
+        """``texts``: the BM25 document per tool. Default: the phrasebook (+ the
+        tool name split on underscores). Never the LLM descriptions (BRAIN-1.5):
+        those are written for a model to read, and Realtime's own index of them
+        (core.tool_selection) must stay untouched."""
         self.tools = {t.name: t for t in tools}
         self._names = list(self.tools)
-        self._bm = BM25([doc_tokens(t.name + " " + t.description) for t in tools])
+        if texts is None:
+            book = phrasebook.load()
+            texts = {t.name: phrasebook.bm25_text(t.name, book) for t in tools}
+        self._bm = BM25([doc_tokens(texts.get(t.name, t.name.replace("_", " "))) for t in tools])
         self.index = index
         self.embedder = embedder
 
@@ -73,7 +82,11 @@ class DualRetriever:
         )
 
     def rank(
-        self, norm: Normalized, k: int = 10, exclude_id: str | None = None
+        self,
+        norm: Normalized,
+        k: int = 10,
+        exclude_id: str | None = None,
+        exclude_ids: frozenset[str] = frozenset(),
     ) -> Retrieval:
         t0 = time.perf_counter()
         bm = self._bm.scores(query_tokens(norm.text)) if norm.tokens else [0.0] * len(self._names)
@@ -88,7 +101,7 @@ class DualRetriever:
         if self.has_knn and norm.tokens:
             assert self.index is not None and self.embedder is not None
             vec = self.embedder.embed_one(embed_text(norm))
-            neighbors = self.index.search(vec, k=k, exclude_id=exclude_id)
+            neighbors = self.index.search(vec, k=k, exclude_id=exclude_id, exclude_ids=exclude_ids)
             for nb in neighbors:  # nearest first, so the first sighting is the max
                 for tool in nb.example.accept_tools:
                     if tool not in knn_score:

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from core.brain.decision import Candidate, Decision, Feature, Verdict
 from core.brain.normalize import Normalized, fold
 from core.brain.retrieve import NONE_TOOL, Retrieval, ToolDoc
-from core.brain.sinks import is_sink
+from core.brain.sinks import PERSIST, is_sink
 from core.brain.slots import FILLER, STOP, TOOLS, Vocab, resolve
 
 
@@ -86,6 +86,22 @@ _SECOND_VERB = frozenset(fold(v) for v in (
     "ensename", "postealo", "publica", "check", "tell", "open", "play", "search", "close",
     "create", "delete", "send", "run", "show", "add", "read",
 ))
+
+
+# A question asks; it never tells Emma something to keep. "¿Puedes decirme qué
+# repositorios tiene el usuario X?" agreed on remember_user_profile and filled
+# `value` with the whole question (log_11, BRAIN-1.5) — a store from a question.
+_QUESTION_OPENERS = frozenset(fold(w) for w in (
+    "que", "cual", "cuales", "cuanto", "cuantos", "cuantas", "donde", "como", "quien", "quienes",
+    "cuando", "puedes", "podrias", "sabes", "what", "which", "how", "where", "who", "when",
+    "can", "could", "do", "does", "is", "are",
+))
+
+
+def _is_question(norm: Normalized) -> bool:
+    if "?" in norm.original or "¿" in norm.original:
+        return True
+    return bool(norm.tokens) and norm.tokens[0] in _QUESTION_OPENERS
 
 
 def _conj_then_verb(tokens: tuple[str, ...]) -> str | None:
@@ -225,6 +241,12 @@ def decide(
     f.append(Feature("leftover", ",".join(res.leftover), passed=not res.leftover))
     if anaphora:
         return _decision(norm, "defer", "anaphora", f, retrieval, chosen=chosen, slots=res.slots)
+    stores = chosen in PERSIST
+    asks = _is_question(norm)
+    f.append(Feature("question_into_store", stores and asks, passed=not (stores and asks)))
+    if stores and asks:
+        return _decision(norm, "defer", "question_not_statement", f, retrieval, chosen=chosen,
+                         slots=res.slots)
     if res.missing or res.leftover or chosen not in TOOLS:
         return _decision(norm, "defer", "slots", f, retrieval, chosen=chosen, slots=res.slots)
 

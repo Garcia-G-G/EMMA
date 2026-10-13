@@ -22,7 +22,7 @@ from core.brain.embed import Embedder
 from core.brain.index import Example
 from core.brain.normalize import normalize
 from core.brain.retrieve import DualRetriever, Retrieval
-from core.brain_host import build_index, labelled_examples, tool_docs
+from core.brain_host import build_index, holdouts, labelled_examples, tool_docs
 
 EMBEDDER = Embedder()
 needs_model = pytest.mark.skipif(
@@ -30,19 +30,17 @@ needs_model = pytest.mark.skipif(
     reason="local embedder missing: python -c 'from core.brain.embed import fetch; fetch()'",
 )
 
-# Pinned 2026-10-13 on the 115 items whose label includes a real tool.
+# Pinned on the 115 items whose label includes a real tool. kNN leave-one-out,
+# and any phrasebook row within cosine 0.97 of the item held out (BRAIN-1.5).
+# BRAIN-1 values (description BM25, labelled-only kNN) in comments.
 PIN = {
     "items": 115,
-    "bm25_r1": 60,  # 52.2 %
-    "bm25_r5": 78,  # 67.8 %
-    # Re-pinned in BRAIN-1 Part 4 (was 45 / 68): Part 3 embedded text that a
-    # normalize bug had mangled ("analytics- prod"); kNN now embeds the words
-    # only. Net -2 at r@5 on near-ties (lost sc_V40, sc_V69, log_12; gained
-    # log_15, log_22) — see BRAIN-1-VERIFY Part 4.
-    "knn_r1": 46,  # 40.0 %
-    "knn_r5": 66,  # 57.4 %
-    "agree": 20,  # 17.4 % — BM25 top-1 == kNN top-1
-    "agree_correct": 18,  # 90 % of the agreements are the right tool
+    "bm25_r1": 80,  # 69.6 %  (was 60, 52.2 %)
+    "bm25_r5": 102,  # 88.7 %  (was 78)
+    "knn_r1": 89,  # 77.4 %  (was 46, 40.0 %)
+    "knn_r5": 107,  # 93.0 %  (was 66)
+    "agree": 70,  # 60.9 % — BM25 top-1 == kNN top-1  (was 20, 17.4 %)
+    "agree_correct": 65,  # 93 % of the agreements are the right tool  (was 18)
 }
 
 
@@ -59,19 +57,25 @@ def _ok(tool: str, ex: Example) -> bool:
 
 
 @pytest.fixture(scope="module")
-def retriever(tmp_path_factory: pytest.TempPathFactory) -> Iterator[DualRetriever]:
+def built(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[DualRetriever, dict[str, frozenset[str]]]]:
     index = build_index(EMBEDDER, tmp_path_factory.mktemp("brain") / "brain.db")
-    yield DualRetriever(tool_docs(), index, EMBEDDER)
+    yield DualRetriever(tool_docs(), index, EMBEDDER), holdouts(index, EMBEDDER, labelled_examples())
     index.close()
 
 
 @pytest.fixture(scope="module")
-def scored(retriever: DualRetriever) -> list[Scored]:
+def retriever(built: tuple[DualRetriever, dict[str, frozenset[str]]]) -> DualRetriever:
+    return built[0]
+
+
+@pytest.fixture(scope="module")
+def scored(built: tuple[DualRetriever, dict[str, frozenset[str]]]) -> list[Scored]:
+    retriever, held = built
     out: list[Scored] = []
     for ex in labelled_examples():
         if not any(a != "__none__" for a in ex.accept_tools):
             continue
-        r = retriever.rank(normalize(ex.text), k=10, exclude_id=ex.id)
+        r = retriever.rank(normalize(ex.text), k=10, exclude_id=ex.id, exclude_ids=held[ex.id])
         bm = [c.tool for c in sorted((c for c in r.candidates if c.bm25_rank), key=lambda c: c.bm25_rank)]
         kn = [c.tool for c in sorted((c for c in r.candidates if c.knn_rank), key=lambda c: c.knn_rank)]
         out.append(Scored(ex, r, bm, kn))
@@ -172,3 +176,37 @@ def test_embedder_is_fast_warm() -> None:
         return ms
 
     assert best_p95(round_ms) < 100
+
+
+def test_index_rows_carry_their_source(tmp_path: Path) -> None:
+    from core.brain.index import Example, ExampleIndex
+
+    idx = ExampleIndex(tmp_path / "b.db")
+    vec = EMBEDDER.embed(["abre safari", "abre finder"]) if EMBEDDER.available() else None
+    if vec is None:
+        pytest.skip("local embedder missing")
+    idx.replace_all(
+        [Example("a", "abre safari", "abre safari", "PHRASEBOOK", ("open_application",), "es", "phrasebook"),
+         Example("b", "abre finder", "abre finder", "L2", ("open_application",), "es", "labelled")],
+        vec,
+    )
+    assert (idx.count("phrasebook"), idx.count("labelled"), idx.count("learned")) == (1, 1, 0)
+    with pytest.raises(ValueError):
+        idx.replace_all([Example("c", "x", "x", "", (), "es", "bogus")], vec[:1])
+
+
+def test_a_brain1_index_is_rebuilt_not_crashed_on(tmp_path: Path) -> None:
+    """BRAIN-1's brain.db had no `source` column; it is a cache, so it starts over."""
+    import sqlite3
+
+    from core.brain.index import ExampleIndex
+
+    p = tmp_path / "brain.db"
+    con = sqlite3.connect(p)
+    con.execute("CREATE TABLE examples (rowid INTEGER PRIMARY KEY, id TEXT, text TEXT, normalized TEXT,"
+                " brain_path TEXT, accept_tools TEXT, lang_hint TEXT)")
+    con.execute("INSERT INTO examples VALUES (1,'x','x','x','L1','[]','es')")
+    con.commit()
+    con.close()
+    idx = ExampleIndex(p)
+    assert len(idx) == 0 and idx.count("labelled") == 0

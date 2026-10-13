@@ -9,11 +9,11 @@ the labelled set.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import numpy as np
 
+from core.brain import phrasebook
 from core.brain.brain import Brain
 from core.brain.decision import Decision
 from core.brain.embed import Embedder
@@ -74,56 +74,54 @@ def labelled_examples(path: Path = LABELLED) -> list[Example]:
     return out
 
 
-_QUOTED = re.compile("[\"\u201c'\u2018\u00ab]([^\"\u201d'\u2019\u00bb]{6,90})[\"\u201d'\u2019\u00bb]")
-_NOT_A_PHRASE = re.compile(r"cmd|ctrl|\+|::|\{")
 LEAK_COSINE = 0.97
 
 
-def canonical_phrases(docs: list[ToolDoc]) -> list[Example]:
-    """The trigger phrases Emma already ships, quoted in her tools' descriptions.
-
-    CORE-LOCAL §1 defines L1 as "aliases + canonical phrases". Whole phrases
-    only (>= 3 tokens); keyboard shortcuts and template fragments dropped.
-    """
-    seen: dict[tuple[str, str], str] = {}
-    for d in docs:
-        for m in _QUOTED.findall(d.description):
-            n = normalize(m)
-            if len(n.tokens) >= 3 and not _NOT_A_PHRASE.search(n.text):
-                seen.setdefault((d.name, " ".join(n.words)), m)
-    return [
-        Example(f"seed:{name}:{i}", orig, text, "SEED", (name,), lang_hint(normalize(orig).tokens))
-        for i, ((name, text), orig) in enumerate(seen.items())
-    ]
+def phrasebook_examples(tools: list[str] | None = None) -> list[Example]:
+    """Every phrasebook phrasing, filled, as an index row (``source='phrasebook'``)."""
+    book = phrasebook.load()
+    out: list[Example] = []
+    for tool in tools if tools is not None else list(book):
+        for i, (lang, text) in enumerate(phrasebook.expansions(tool, book)):
+            n = normalize(text)
+            out.append(Example(f"pb:{tool}:{i}", text, n.text, "PHRASEBOOK", (tool,),
+                               "en" if lang == "en" else lang_hint(n.tokens), "phrasebook"))
+    return out
 
 
 def build_index(
     embedder: Embedder,
     path: Path | str,
     examples: list[Example] | None = None,
-    seed_docs: list[ToolDoc] | None = None,
-    holdout: list[Example] | None = None,
+    with_phrasebook: bool = True,
 ) -> ExampleIndex:
-    """Labelled examples (+ canonical phrases from ``seed_docs``).
-
-    ``holdout``: for EVALUATION on the labelled set — any seed phrase within
-    ``LEAK_COSINE`` of a held-out item is left out, so a docstring that quotes a
-    test utterance can't score it.
-    """
+    """Labelled examples (+ the phrasebook). Never the LLM tool descriptions."""
     rows = list(examples if examples is not None else labelled_examples())
+    if with_phrasebook:
+        rows += phrasebook_examples()
     vecs = embedder.embed([embed_text(normalize(e.text)) for e in rows])
-    if seed_docs:
-        seeds = canonical_phrases(seed_docs)
-        svecs = embedder.embed([embed_text(normalize(e.text)) for e in seeds])
-        if holdout:
-            hvecs = embedder.embed([embed_text(normalize(e.text)) for e in holdout])
-            keep = [i for i in range(len(seeds)) if float((hvecs @ svecs[i]).max()) < LEAK_COSINE]
-            seeds, svecs = [seeds[i] for i in keep], svecs[keep]
-        rows += seeds
-        vecs = np.vstack([vecs, svecs])
     index = ExampleIndex(path)
     index.replace_all(rows, vecs)
     return index
+
+
+def holdouts(
+    index: ExampleIndex, embedder: Embedder, examples: list[Example]
+) -> dict[str, frozenset[str]]:
+    """Per labelled item: the phrasebook rows too close to it to count (cos >= 0.97).
+
+    The phrasebook is written not to copy the 140 (a test checks exact matches);
+    this also keeps a near-copy from answering for the item in evaluation.
+    """
+    ids, mat = index.vectors("phrasebook")
+    if not ids:
+        return {e.id: frozenset() for e in examples}
+    vecs = embedder.embed([embed_text(normalize(e.text)) for e in examples])
+    sims = vecs @ mat.T
+    return {
+        e.id: frozenset(ids[j] for j in np.nonzero(sims[i] >= LEAK_COSINE)[0])
+        for i, e in enumerate(examples)
+    }
 
 
 def thresholds_from_settings() -> Thresholds:
@@ -165,11 +163,18 @@ def vocab(
 
 
 def evaluate(
-    brain: Brain, examples: list[Example] | None = None
+    brain: Brain,
+    examples: list[Example] | None = None,
+    held: dict[str, frozenset[str]] | None = None,
 ) -> list[tuple[Example, Decision]]:
-    """Every labelled example through the brain, kNN leave-one-out."""
+    """Every labelled example through the brain: itself excluded (leave-one-out)
+    and any phrasebook near-copy of it (``held``, from ``holdouts``)."""
     rows = examples if examples is not None else labelled_examples()
-    return [(ex, brain.decide(ex.text, exclude_id=ex.id)) for ex in rows]
+    held = held or {}
+    return [
+        (ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held.get(ex.id, frozenset())))
+        for ex in rows
+    ]
 
 
 def is_wrong(
