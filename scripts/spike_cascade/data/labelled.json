@@ -7,7 +7,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A02",
@@ -17,7 +18,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A03",
@@ -27,7 +29,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A04",
@@ -38,7 +41,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "sc_A05",
@@ -48,7 +52,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L3"
  },
  {
   "id": "sc_A06",
@@ -58,7 +63,8 @@
   ],
   "src": "scenario",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A07",
@@ -68,7 +74,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A08",
@@ -79,7 +86,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "sc_A09",
@@ -91,7 +99,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_A11",
@@ -103,7 +112,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A12",
@@ -113,7 +123,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_A13",
@@ -123,7 +134,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_A14",
@@ -133,7 +145,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A15",
@@ -143,7 +156,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A16",
@@ -153,7 +167,8 @@
   ],
   "src": "scenario",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L3"
  },
  {
   "id": "sc_A17",
@@ -163,7 +178,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A18",
@@ -173,7 +189,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A19",
@@ -183,7 +200,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A20",
@@ -193,7 +211,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A21",
@@ -203,7 +222,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_A22",
@@ -213,7 +233,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_A23",
@@ -223,7 +244,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A24",
@@ -234,7 +256,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A25",
@@ -244,7 +267,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A26",
@@ -254,7 +278,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A27",
@@ -264,7 +289,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_A28",
@@ -274,7 +300,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_A29",
@@ -284,7 +311,8 @@
   ],
   "src": "scenario",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_A30",
@@ -294,7 +322,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "sc_V01",
@@ -304,7 +333,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V02",
@@ -315,7 +345,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_V03",
@@ -328,7 +359,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V05",
@@ -338,7 +370,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V07",
@@ -348,7 +381,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V08",
@@ -358,7 +392,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V11",
@@ -368,7 +403,8 @@
   ],
   "src": "scenario",
   "cat": "none",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V12",
@@ -378,7 +414,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V13",
@@ -388,7 +425,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V15",
@@ -398,7 +436,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_V17",
@@ -408,7 +447,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V19",
@@ -418,7 +458,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_V21",
@@ -429,7 +470,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V24",
@@ -439,7 +481,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V25",
@@ -452,7 +495,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V26",
@@ -463,7 +507,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V27",
@@ -473,7 +518,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V28",
@@ -483,7 +529,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V29",
@@ -493,7 +540,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V31",
@@ -503,7 +551,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V32",
@@ -514,7 +563,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V33",
@@ -524,7 +574,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V34",
@@ -534,7 +585,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V36",
@@ -544,7 +596,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V37",
@@ -554,7 +607,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V39",
@@ -564,7 +618,8 @@
   ],
   "src": "scenario",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V40",
@@ -574,7 +629,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V41",
@@ -584,7 +640,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V42",
@@ -594,7 +651,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V43",
@@ -604,7 +662,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V44",
@@ -614,7 +673,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V45",
@@ -624,7 +684,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V46",
@@ -635,7 +696,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V47",
@@ -645,7 +707,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V49",
@@ -656,7 +719,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V50",
@@ -666,7 +730,8 @@
   ],
   "src": "scenario",
   "cat": "safety",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "TPL"
  },
  {
   "id": "sc_V56",
@@ -676,7 +741,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "sc_V62",
@@ -686,7 +752,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "sc_V67",
@@ -696,7 +763,8 @@
   ],
   "src": "scenario",
   "cat": "clean",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "sc_V68",
@@ -707,7 +775,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "sc_V69",
@@ -719,7 +788,8 @@
   ],
   "src": "scenario",
   "cat": "ambiguous",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "log_00",
@@ -731,7 +801,8 @@
   "cat": "clean",
   "rt_hist": [
    "create_note"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_01",
@@ -743,7 +814,8 @@
   "cat": "clean",
   "rt_hist": [
    "read_note"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_02",
@@ -755,7 +827,8 @@
   "cat": "clean",
   "rt_hist": [
    "delete_note"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_03",
@@ -767,7 +840,8 @@
   "cat": "clean",
   "rt_hist": [
    "pause"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_04",
@@ -779,7 +853,8 @@
   "cat": "clean",
   "rt_hist": [
    "open_my_page"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_05",
@@ -789,7 +864,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "L2"
  },
  {
   "id": "log_06",
@@ -801,7 +877,8 @@
   "cat": "clean",
   "rt_hist": [
    "close_current_tab"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_07",
@@ -812,7 +889,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "L1"
  },
  {
   "id": "log_08",
@@ -825,7 +903,8 @@
   "cat": "clean",
   "rt_hist": [
    "current_time"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_09",
@@ -835,7 +914,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "L2"
  },
  {
   "id": "log_10",
@@ -847,7 +927,8 @@
   "cat": "clean",
   "rt_hist": [
    "append_to_note"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_11",
@@ -860,7 +941,8 @@
   "cat": "clean",
   "rt_hist": [
    "my_repos"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_12",
@@ -873,7 +955,8 @@
   "rt_hist": [
    "remember_stt_correction",
    "latest_video_from_creator"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_13",
@@ -886,7 +969,8 @@
   "cat": "near_dup_remember",
   "rt_hist": [
    "remember_stt_correction"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_14",
@@ -898,7 +982,8 @@
   "cat": "near_dup_remember",
   "rt_hist": [
    "remember_stt_correction"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_15",
@@ -912,7 +997,8 @@
   "cat": "codeswitch",
   "rt_hist": [
    "ide_terminal_send"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_16",
@@ -924,7 +1010,8 @@
   "cat": "codeswitch",
   "rt_hist": [
    "ide_terminal_send"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_17",
@@ -939,7 +1026,8 @@
   "rt_hist": [
    "app_focus",
    "app_keystroke"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_18",
@@ -953,7 +1041,8 @@
   "cat": "clean",
   "rt_hist": [
    "search_in_ide"
-  ]
+  ],
+  "brain_path": "L2"
  },
  {
   "id": "log_19",
@@ -967,7 +1056,8 @@
   "cat": "codeswitch",
   "rt_hist": [
    "find_file"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_20",
@@ -978,7 +1068,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "LLM"
  },
  {
   "id": "log_21",
@@ -990,7 +1081,8 @@
   "cat": "clean",
   "rt_hist": [
    "post_to_x"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_22",
@@ -1002,7 +1094,8 @@
   "cat": "clean",
   "rt_hist": [
    "post_to_x"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_23",
@@ -1015,7 +1108,8 @@
   "cat": "clean",
   "rt_hist": [
    "read_note"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_24",
@@ -1029,7 +1123,8 @@
   "cat": "near_dup_screen",
   "rt_hist": [
    "look_at_screen"
-  ]
+  ],
+  "brain_path": "READ"
  },
  {
   "id": "log_25",
@@ -1041,7 +1136,8 @@
   ],
   "src": "log",
   "cat": "near_dup_screen",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "READ"
  },
  {
   "id": "log_26",
@@ -1052,7 +1148,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "L2"
  },
  {
   "id": "log_27",
@@ -1065,7 +1162,8 @@
   "rt_hist": [
    "start_timer",
    "start_timer"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_28",
@@ -1077,7 +1175,8 @@
   ],
   "src": "log",
   "cat": "clean",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "LLM"
  },
  {
   "id": "log_29",
@@ -1090,7 +1189,8 @@
   "cat": "clean",
   "rt_hist": [
    "shutdown_emma"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_30",
@@ -1103,7 +1203,8 @@
   "cat": "clean",
   "rt_hist": [
    "shutdown_emma"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_31",
@@ -1117,7 +1218,8 @@
   "cat": "clean",
   "rt_hist": [
    "run_command"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_32",
@@ -1129,7 +1231,8 @@
   "cat": "clean",
   "rt_hist": [
    "close_current_tab"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_33",
@@ -1141,7 +1244,8 @@
   "cat": "clean",
   "rt_hist": [
    "open_url"
-  ]
+  ],
+  "brain_path": "LLM"
  },
  {
   "id": "log_34",
@@ -1153,7 +1257,8 @@
   "cat": "ambiguous",
   "rt_hist": [
    "recall_last_action"
-  ]
+  ],
+  "brain_path": "L1"
  },
  {
   "id": "log_35",
@@ -1165,7 +1270,8 @@
   "cat": "none",
   "rt_hist": [
    "diagnose_self"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_36",
@@ -1175,7 +1281,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_37",
@@ -1185,7 +1292,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_38",
@@ -1197,7 +1305,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_39",
@@ -1207,7 +1316,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_40",
@@ -1217,7 +1327,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_41",
@@ -1227,7 +1338,8 @@
   ],
   "src": "log",
   "cat": "none",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_42",
@@ -1239,7 +1351,8 @@
   "cat": "noise",
   "rt_hist": [
    "open_in_app"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_43",
@@ -1251,7 +1364,8 @@
   "cat": "noise",
   "rt_hist": [
    "diagnose_self"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_44",
@@ -1264,7 +1378,8 @@
   "rt_hist": [
    "summarize_screen",
    "summarize_screen"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_45",
@@ -1276,7 +1391,8 @@
   "cat": "noise",
   "rt_hist": [
    "my_repos"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_46",
@@ -1286,7 +1402,8 @@
   ],
   "src": "log",
   "cat": "noise",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_47",
@@ -1296,7 +1413,8 @@
   ],
   "src": "log",
   "cat": "noise",
-  "rt_hist": []
+  "rt_hist": [],
+  "brain_path": "TPL"
  },
  {
   "id": "log_48",
@@ -1309,7 +1427,8 @@
   "rt_hist": [
    "describe_screen",
    "look_at_screen"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "log_49",
@@ -1321,7 +1440,8 @@
   "cat": "noise",
   "rt_hist": [
    "open_application"
-  ]
+  ],
+  "brain_path": "TPL"
  },
  {
   "id": "syn_00",
@@ -1331,7 +1451,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "syn_01",
@@ -1341,7 +1462,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_02",
@@ -1351,7 +1473,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_03",
@@ -1361,7 +1484,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L3"
  },
  {
   "id": "syn_04",
@@ -1371,7 +1495,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "syn_05",
@@ -1382,7 +1507,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_06",
@@ -1392,7 +1518,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  },
  {
   "id": "syn_07",
@@ -1402,7 +1529,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_08",
@@ -1412,7 +1540,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_09",
@@ -1422,7 +1551,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L1"
  },
  {
   "id": "syn_10",
@@ -1432,7 +1562,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_remember",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L3"
  },
  {
   "id": "syn_11",
@@ -1443,7 +1574,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_12",
@@ -1455,7 +1587,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_13",
@@ -1465,7 +1598,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_14",
@@ -1475,7 +1609,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_15",
@@ -1485,7 +1620,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_16",
@@ -1495,7 +1631,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "L2"
  },
  {
   "id": "syn_17",
@@ -1506,7 +1643,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_18",
@@ -1516,7 +1654,8 @@
   ],
   "src": "synthetic",
   "cat": "near_dup_screen",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "READ"
  },
  {
   "id": "syn_19",
@@ -1530,6 +1669,7 @@
   ],
   "src": "synthetic",
   "cat": "codeswitch",
-  "rt_hist": null
+  "rt_hist": null,
+  "brain_path": "LLM"
  }
 ]

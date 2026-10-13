@@ -20,7 +20,7 @@ from core import dictionary, vocabulary
 def temp_dict(tmp_path, monkeypatch):
     """Point core.dictionary at a temp copy of the real dictionary.toml."""
     p = tmp_path / "dictionary.toml"
-    shutil.copy(dictionary._DICT_PATH, p)
+    shutil.copy(dictionary._TEMPLATE_PATH, p)  # the shipped dictionary
     monkeypatch.setattr(dictionary, "_DICT_PATH", p)
     dictionary.reload()
     yield p
@@ -76,6 +76,11 @@ class TestB11UserProfile:
 class TestB12BiasWordsGlobal:
     def test_bias_includes_identity_contacts_glossary(self, temp_dict, temp_vocab):
         dictionary.set_user_field("github_username", "examplehandle")
+        # Seed the contact this asserts on. It used to arrive by leaking out of an
+        # earlier test through the shared dictionary cache, so the test failed
+        # whenever it ran alone.
+        dictionary.append_contact("mom", "Ana García", relation="madre", aliases=["mamá"])
+        dictionary.reload()
         bw = vocabulary.bias_words()
         assert "examplehandle" in bw  # identity
         assert "Ana García" in bw and "mamá" in bw  # contact name + alias (seeded)

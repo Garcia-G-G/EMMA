@@ -1,7 +1,17 @@
 """Knowledge dictionary loader.
 
-Five views derived from ``config/dictionary.toml``. Lazy + hot-reloadable via
+Five views derived from the dictionary TOML. Lazy + hot-reloadable via
 ``reload()``. Module-level cache; safe to import many times.
+
+Two files, read layered (BRAIN-1 Part 0a):
+
+* ``config/dictionary.toml`` — the shipped TEMPLATE, inside the source tree.
+  ``install.sh`` re-extracts the tarball over ``~/.emma/src`` on every upgrade,
+  so nothing the user teaches Emma may live here.
+* ``~/.emma/dictionary.toml`` — the USER file. Every write goes here, and it
+  wins over the template key by key on read, so a release can still add new
+  keys. ``migrate()`` seeds it from the in-tree file the first time (that file
+  holds whatever the user taught a pre-0a install), and runs before any write.
 
 Read-only at runtime EXCEPT through the ``append_*`` helpers, which append
 safely-escaped blocks to the TOML file (mirrors ``core.vocabulary.append_entry``,
@@ -21,7 +31,8 @@ import structlog
 
 log = structlog.get_logger("emma.dictionary")
 
-_DICT_PATH = Path(__file__).resolve().parent.parent / "config" / "dictionary.toml"
+_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "config" / "dictionary.toml"
+_DICT_PATH = Path.home() / ".emma" / "dictionary.toml"  # the user file; all writes
 _LOCK = threading.RLock()
 
 
@@ -84,16 +95,61 @@ _PERSONALITY_FIELDS = ("calidez", "formalidad", "humor", "verbosidad", "proactiv
 _PERSONALITY_DEFAULT = 3
 
 
+def migrate() -> bool:
+    """Seed the user file from the in-tree one if it doesn't exist yet. Idempotent.
+
+    The in-tree file is the template on a fresh install, and the user's own data
+    on an install that predates the split; copying it covers both. Returns True
+    when it created the user file.
+    """
+    with _LOCK:
+        if _DICT_PATH.exists() or not _TEMPLATE_PATH.exists():
+            return False
+        try:
+            _DICT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _DICT_PATH.with_name(_DICT_PATH.name + ".tmp")
+            tmp.write_bytes(_TEMPLATE_PATH.read_bytes())
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, _DICT_PATH)
+        except OSError as exc:
+            log.error("dictionary_migrate_failed", path=str(_DICT_PATH), error=str(exc))
+            return False
+        log.info("dictionary_migrated", src=str(_TEMPLATE_PATH), dst=str(_DICT_PATH))
+        return True
+
+
+def _load(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except (tomllib.TOMLDecodeError, OSError) as exc:
+        log.error("dictionary_parse_failed", path=str(path), error=str(exc))
+        return {}
+
+
+def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
+    """Tables merge key by key (recursively); any other value from ``over`` wins."""
+    out = dict(base)
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def tables() -> dict[str, Any]:
+    """The merged TOML (template, then user on top). For readers outside this module."""
+    return _merge(_load(_TEMPLATE_PATH), _load(_DICT_PATH))
+
+
 def _parse() -> None:
-    if not _DICT_PATH.exists():
+    if not _TEMPLATE_PATH.exists() and not _DICT_PATH.exists():
         log.warning("dictionary_missing", path=str(_DICT_PATH))
         return
-    try:
-        with _DICT_PATH.open("rb") as f:
-            data = tomllib.load(f)
-    except tomllib.TOMLDecodeError as exc:
-        log.error("dictionary_parse_failed", error=str(exc))
-        return
+    data = tables()
     with _LOCK:
         _pages.clear()
         _contacts.clear()
@@ -248,7 +304,8 @@ def _rewrite_named_block(header: str, block: str) -> None:
     at the first blank line, comment, or next section header, so it never eats the
     following section's comments — everything outside the table stays byte-for-byte.
     """
-    text = _DICT_PATH.read_text(encoding="utf-8")
+    migrate()
+    text = _DICT_PATH.read_text(encoding="utf-8") if _DICT_PATH.exists() else ""
     lines = text.splitlines()
     out: list[str] = []
     i = 0
@@ -325,7 +382,8 @@ def _rewrite_apps_default(category: str, app: str) -> None:
     :func:`_toml_escape`."""
     header = f"[apps.{category}]"
     esc = _toml_escape(app)
-    lines = _DICT_PATH.read_text(encoding="utf-8").splitlines()
+    migrate()
+    lines = _DICT_PATH.read_text(encoding="utf-8").splitlines() if _DICT_PATH.exists() else []
     out: list[str] = []
     i = 0
     replaced = False
@@ -435,6 +493,8 @@ def _append_block(section: str, slug: str, fields: dict[str, Any]) -> None:
         else:
             lines.append(f'{k} = "{_toml_escape(str(v))}"')
     with _LOCK:
+        migrate()
+        _DICT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _DICT_PATH.open("a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         reload()
@@ -479,6 +539,8 @@ def append_connection(name: str, app: str, kind: str = "connection", **fields: s
         if v:
             lines.append(f'{k} = "{_toml_escape(str(v))}"')
     with _LOCK:
+        migrate()
+        _DICT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _DICT_PATH.open("a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         reload()

@@ -449,6 +449,14 @@ def main() -> int:
     with contextlib.suppress(Exception):
         permissions.harden_local_files()
 
+    # BRAIN-1 0a: user data lives in ~/.emma/dictionary.toml, out of the source
+    # tree install.sh re-extracts. Seed it from the in-tree file before an
+    # upgrade can overwrite what the user taught a pre-0a install.
+    with contextlib.suppress(Exception):
+        from core import dictionary
+
+        dictionary.migrate()
+
     if not permissions.preflight():
         # The user is being asked to grant something. Retry a few times (the
         # plist throttles to >=30s), then stay down rather than restarting

@@ -44,6 +44,8 @@ def temp_dict(tmp_path, monkeypatch):
     path = tmp_path / "dictionary.toml"
     path.write_text(_SAMPLE, encoding="utf-8")
     monkeypatch.setattr(dictionary, "_DICT_PATH", path)
+    # The sample is a complete dictionary; don't layer the shipped template on it.
+    monkeypatch.setattr(dictionary, "_TEMPLATE_PATH", tmp_path / "no-template.toml")
     dictionary.reload()
     yield path
     dictionary._DICT_PATH = path  # keep pointing at temp during teardown

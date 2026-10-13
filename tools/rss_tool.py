@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import time
-import tomllib
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
 import httpx
 import structlog
@@ -16,7 +14,6 @@ log = structlog.get_logger("emma.tools.rss")
 
 _CACHE_TTL = 300.0
 _cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
-_FEEDS_TOML = Path(__file__).resolve().parent.parent / "config" / "dictionary.toml"
 
 
 def _resolve_feed(feed: str) -> str | None:
@@ -25,8 +22,9 @@ def _resolve_feed(feed: str) -> str | None:
     if feed.lower().startswith("http"):
         return feed
     try:
-        with _FEEDS_TOML.open("rb") as fh:
-            feeds = tomllib.load(fh).get("feeds", {})
+        from core import dictionary  # template + the user's own file, layered
+
+        feeds = dictionary.tables().get("feeds", {})
     except Exception:
         return None
     want = feed.lower()
