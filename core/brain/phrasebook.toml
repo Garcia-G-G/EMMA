@@ -1,0 +1,1058 @@
+# The brain's own retrieval text (BRAIN-1.5). Brain-only: no LLM ever reads it.
+#
+# How a person talks to an assistant, per tool — not how a tool is documented.
+# Neutral Spanish (tú and usted both count) and English; nothing regional.
+# {placeholders} are the tool's parameter names; one phrasing covers every value.
+# `stt` holds mangled forms speech recognition produces or is expected to.
+#
+# NEVER copy a labelled utterance (scripts/spike_cascade/data/labelled.json) here:
+# those 140 are the exam. tests/test_phrasebook.py enforces it, and that no
+# phrasing appears under two tools.
+
+# ---- apps, system, audio --------------------------------------------------------------
+
+[open_application]
+es = ["abre {name}", "ábreme {name}", "lanza {name}", "inicia {name}", "abrir {name}",
+      "quiero abrir {name}", "{name} por favor", "puedes abrir {name}", "me abres {name}",
+      "abre la aplicación {name}", "abre la app de {name}", "pon {name} en pantalla",
+      "arranca {name}", "necesito {name} abierto", "ejecuta la aplicación {name}",
+      "abra {name}", "podría abrir {name}", "inicie {name}"]
+en = ["open {name}", "launch {name}", "start {name}", "bring up {name}", "fire up {name}",
+      "open the {name} app", "can you open {name}", "please open {name}", "run {name}",
+      "get {name} open", "pull up {name}", "I need {name} open", "open up {name}",
+      "could you launch {name}", "start the {name} application"]
+stt = ["abre espotifai", "abre guasa", "abre el saforí", "abre fainder", "ábreme el crom"]
+
+[set_volume]
+es = ["sube el volumen", "baja el volumen", "volumen al {percent}", "pon el volumen en {percent}",
+      "ajusta el volumen a {percent}", "sube el sonido", "baja el sonido", "más volumen",
+      "menos volumen", "el volumen en {percent} por ciento", "sube un poco el volumen",
+      "baja un poco el volumen", "volumen a la mitad", "deja el volumen en {percent}",
+      "podrías subir el volumen", "suba el volumen", "baje el volumen un poco"]
+en = ["turn it up", "turn it down", "volume to {percent}", "set the volume at {percent}",
+      "make it louder", "make it quieter", "volume up", "volume down",
+      "set volume to {percent} percent", "lower the volume", "raise the volume",
+      "half volume", "put the volume at {percent}", "can you turn the volume up",
+      "a bit louder please"]
+stt = ["sube el bolumen", "bolumen al {percent}"]
+
+[set_brightness]
+es = ["sube el brillo", "baja el brillo", "brillo al {percent}", "pon el brillo en {percent}",
+      "ajusta el brillo a {percent}", "más brillo", "menos brillo", "la pantalla más clara",
+      "la pantalla más oscura", "brillo de la pantalla al {percent}", "deja el brillo en {percent}",
+      "sube un poco el brillo", "baja un poco el brillo", "podrías bajar el brillo", "suba el brillo de la pantalla"]
+en = ["brighter screen", "dim the screen", "brightness to {percent}", "set the brightness at {percent}",
+      "turn the brightness up", "turn the brightness down", "more brightness", "less brightness",
+      "make the screen brighter", "make the screen darker", "screen brightness {percent} percent",
+      "can you dim the display", "lower the brightness", "raise the brightness", "brightness up"]
+stt = ["sube el brío", "brillo al ochenta"]
+
+[mute]
+es = ["silencia", "silencio", "quita el sonido", "sin sonido", "apaga el sonido",
+      "pon en silencio", "silencia el sistema", "silencia los altavoces", "mutea el sonido",
+      "calla el audio", "que no suene nada", "corta el sonido", "silencie el equipo",
+      "puedes silenciar", "deja todo en silencio"]
+en = ["mute", "mute the sound", "mute the speakers", "silence", "turn the sound off",
+      "no sound", "kill the audio", "mute the computer", "shut the sound off", "go silent",
+      "mute everything", "can you mute it", "cut the sound", "audio off", "mute the volume"]
+stt = ["miut", "mutea"]
+
+[unmute]
+es = ["quita el silencio", "devuelve el sonido", "activa el sonido", "pon el sonido otra vez",
+      "que vuelva el sonido", "enciende el sonido", "sonido de vuelta", "desmutea",
+      "reactiva el audio", "ya puedes sonar", "vuelve a poner el audio", "quítale el mute",
+      "activa los altavoces", "devuélveme el sonido", "active el sonido"]
+en = ["unmute", "unmute the sound", "sound back on", "turn the sound back on", "restore the audio",
+      "audio on", "bring the sound back", "unmute the speakers", "undo mute", "turn audio on",
+      "let it play sound", "speakers on", "enable sound", "sound on please", "stop muting"]
+stt = ["anmiut"]
+
+[mute_mic]
+es = ["apaga el micrófono", "deja de escucharme", "silencia el micrófono", "cierra el micrófono",
+      "no me escuches", "micrófono apagado", "corta el micrófono", "desactiva el micrófono",
+      "no quiero que escuches", "apaga el mic", "mutea el micrófono", "mic en silencio",
+      "deja de oír", "tapa el micrófono", "apague el micrófono"]
+en = ["mute the mic", "turn off the microphone", "stop listening to me", "mic off",
+      "mute the microphone", "disable the mic", "don't listen", "kill the mic", "close the mic",
+      "turn the mic off", "microphone off", "stop hearing me", "cut the microphone",
+      "mute yourself", "switch off the mic"]
+stt = ["apaga el maicrófono"]
+
+[shutdown_emma]
+es = ["apágate ahora mismo", "apágate ya", "puedes apagarte", "ciérrate", "termina por hoy",
+      "hasta mañana, apágate", "desconéctate", "sal por completo", "deja de funcionar",
+      "cierra todo tu sistema", "ya no te necesito, apágate", "apáguese", "termina tu sesión",
+      "apágate por completo", "adiós, ya puedes apagarte"]
+en = ["shut down", "shut yourself down", "turn yourself off", "power off", "quit",
+      "exit completely", "that's all, shut down", "go offline", "you can turn off now",
+      "close yourself", "shutdown now", "turn off emma", "stop running", "exit emma",
+      "time to shut down"]
+stt = ["apagate yaa"]
+
+[snooze_listening]
+es = ["deja de escuchar un rato", "duérmete", "duérmete un rato", "no escuches por diez minutos",
+      "tómate un descanso", "pausa por un rato", "deja de escuchar {minutes} minutos",
+      "no me escuches un momento", "descansa un poco", "vuelve en un rato",
+      "quédate dormida {minutes} minutos", "pausa la escucha", "duerma un rato",
+      "deja de oír por un rato", "silencio por unos minutos"]
+en = ["go to sleep", "sleep for a bit", "stop listening for a while", "take a break",
+      "snooze for {minutes} minutes", "pause listening", "don't listen for ten minutes",
+      "nap for a while", "come back in a bit", "sleep {minutes} minutes", "pause for a while",
+      "go quiet for a few minutes", "rest for a bit", "stop listening for now", "snooze"]
+stt = ["duermete un ratito"]
+
+[current_time]
+es = ["qué hora es justo ahora", "qué horas son", "me dices la hora", "dime qué hora es", "la hora",
+      "qué hora tienes", "sabes qué hora es", "hora actual", "qué hora es ahora", "a qué hora estamos",
+      "qué hora es en {timezone}", "hora en {timezone}", "tiene la hora", "me da la hora",
+      "qué hora marca el reloj"]
+en = ["what time is it", "what's the time", "tell me the time", "time please", "current time",
+      "do you have the time", "what time is it now", "what time is it in {timezone}",
+      "time in {timezone}", "the time", "got the time", "check the time", "what hour is it",
+      "time right now", "can you tell me the time"]
+stt = ["que ora es"]
+
+[current_datetime_speak]
+es = ["qué día es hoy", "qué fecha es hoy", "dime la fecha", "fecha y hora", "a qué fecha estamos",
+      "dime el día y la hora", "en qué día estamos", "qué día de la semana es", "la fecha de hoy",
+      "fecha completa", "hoy qué día es", "me dices la fecha", "dígame la fecha",
+      "qué fecha tenemos", "día y hora actuales"]
+en = ["what day is it", "what's the date", "today's date", "date and time", "what's today",
+      "tell me the date", "what day of the week is it", "the date please", "current date",
+      "what date is it today", "date and time now", "what's the date today", "which day is today",
+      "say the date", "full date and time"]
+stt = ["que dia es oy"]
+
+# ---- music ------------------------------------------------------------------------------
+
+[play_track]
+es = ["pon música de {query}", "pon una canción de {query}", "reproduce {query}", "toca {query}",
+      "quiero escuchar {query}", "ponme a {query}", "pon algo de {query}", "pon la canción {query}",
+      "escuchemos {query}", "busca y pon {query}", "pon {query} en {app}", "música de {query} por favor",
+      "reproduce algo de {query}", "puedes poner {query}", "ponga música de {query}",
+      "me pones {query}", "suena {query}"]
+en = ["play {query}", "play some {query}", "play the song {query}", "put on {query}",
+      "I want to hear {query}", "play music by {query}", "play {query} on {app}",
+      "can you play {query}", "throw on some {query}", "let's hear {query}", "queue up {query}",
+      "play something by {query}", "start playing {query}", "play a song by {query}",
+      "put some {query} on"]
+stt = ["pon musica de bad bony", "ponme a bilie ailish"]
+
+[play_playlist]
+es = ["pon la playlist {name}", "pon mi playlist {name}", "reproduce la lista {name}",
+      "pon la lista de reproducción {name}", "quiero escuchar mi lista {name}",
+      "pon la playlist {name} en {app}", "toca la playlist {name}", "pon mi lista {name}",
+      "reproduce mi playlist {name}", "ponme la playlist de {name}", "arranca la lista {name}",
+      "pon la lista {name} por favor", "puedes poner la playlist {name}",
+      "ponga la playlist {name}", "escuchemos la lista {name}"]
+en = ["play the playlist {name}", "play my {name} playlist", "put on my playlist {name}",
+      "start the {name} playlist", "play the {name} list", "play playlist {name} on {app}",
+      "queue my {name} playlist", "can you play my {name} playlist", "shuffle my {name} playlist",
+      "play my list {name}", "put the {name} playlist on", "start playing {name} playlist",
+      "I want my {name} playlist", "play the {name} mix", "load the playlist {name}"]
+stt = ["pon la pleilist {name}"]
+
+[resume]
+es = ["sigue la música", "continúa la música", "reanuda", "reanuda la música", "dale play",
+      "vuelve a poner la música", "quita la pausa", "sigue reproduciendo", "continúa la canción",
+      "que siga sonando", "reproduce de nuevo", "otra vez la música", "play", "continúe la música",
+      "sigue con la canción"]
+en = ["resume", "resume the music", "keep playing", "continue playing", "unpause",
+      "play again", "hit play", "continue the song", "start the music again", "carry on playing",
+      "resume playback", "back to the music", "let it play", "resume the song", "go on playing"]
+stt = ["reanuda la musica"]
+
+[pause]
+es = ["pausa", "pausa la música", "detén la música", "para la música", "pon pausa",
+      "pausa la canción", "deja de reproducir", "para la canción", "detén la canción",
+      "pausa un momento", "pon la música en pausa", "frena la música", "pause la música",
+      "para un momento la música", "pausa lo que suena"]
+en = ["pause", "pause the music", "stop the music", "pause the song", "hold the music",
+      "pause playback", "stop playing", "pause it", "hit pause", "freeze the song",
+      "pause for a second", "stop the song", "put it on pause", "pause the track", "halt the music"]
+stt = ["poz la musica"]
+
+[next_track]
+es = ["siguiente canción", "la siguiente", "salta esta canción", "pasa a la siguiente",
+      "otra canción", "cambia de canción", "omite esta canción", "siguiente tema", "adelanta la canción",
+      "no me gusta esta, la siguiente", "pon la que sigue", "salta", "siguiente por favor",
+      "cambia la canción", "pase a la siguiente"]
+en = ["next song", "skip", "skip this song", "next track", "play the next one", "skip this one",
+      "next please", "change the song", "skip ahead", "go to the next song", "another song",
+      "skip track", "move to the next track", "next one", "I don't like this, skip"]
+stt = ["siguiente canson"]
+
+[now_playing]
+es = ["qué canción es esta", "qué está sonando", "cómo se llama esta canción", "quién canta esto",
+      "qué estoy escuchando", "de quién es esta canción", "qué suena ahora", "nombre de esta canción",
+      "qué tema es este", "qué música es esta", "dime qué suena", "qué canción está puesta",
+      "qué está tocando", "quién es el artista", "esta canción cuál es"]
+en = ["what song is this", "what's playing", "who sings this", "what am I listening to",
+      "name of this song", "what's this track", "who's the artist", "what's on right now",
+      "what song is playing", "tell me what's playing", "which song is this", "what music is this",
+      "song name please", "what tune is this", "who is this"]
+stt = ["que cancion es esta"]
+
+# ---- browser, web ------------------------------------------------------------------------
+
+[open_url]
+es = ["abre {url}", "ve a {url}", "entra a {url}", "abre la página {url}", "abre el sitio {url}",
+      "llévame a {url}", "navega a {url}", "abre la web {url}", "carga {url}", "abre el enlace {url}",
+      "visita {url}", "pon la página {url}", "entra en {url}", "vaya a {url}", "abre el link {url}"]
+en = ["open {url}", "go to {url}", "visit {url}", "take me to {url}", "load {url}",
+      "navigate to {url}", "open the website {url}", "open the page {url}", "browse to {url}",
+      "pull up {url}", "open the link {url}", "head to {url}", "bring up {url}", "show me {url}",
+      "open the site {url}"]
+stt = ["abre gugol punto com", "abre wikipedia punto org"]
+
+[open_my_page]
+es = ["abre mi {name}", "ábreme mi {name}", "mi {name}", "abre mi página de {name}",
+      "llévame a mi {name}", "abre mi perfil de {name}", "entra a mi {name}", "pon mi {name}",
+      "quiero ver mi {name}", "abre mi {name} en el navegador", "mi página de {name}",
+      "abra mi {name}", "puedes abrir mi {name}", "enséñame mi {name}", "carga mi {name}"]
+en = ["open my {name}", "my {name}", "open my {name} page", "take me to my {name}",
+      "show my {name}", "pull up my {name}", "open my {name} profile", "go to my {name}",
+      "load my {name}", "bring up my {name}", "my {name} please", "can you open my {name}",
+      "I want my {name}", "open my {name} in the browser", "visit my {name}"]
+stt = ["abre mi gijab", "abre mi calendaryo"]
+
+[close_current_tab]
+es = ["cierra la pestaña", "cierra esta pestaña ya", "cierra la pestaña actual", "quita esta pestaña",
+      "cierra la pestaña de adelante", "ciérrala", "cierra lo que tengo abierto en el navegador",
+      "elimina esta pestaña", "cierra la pestaña activa", "esta pestaña ciérrala",
+      "cierre esta pestaña", "puedes cerrar la pestaña", "fuera esta pestaña",
+      "cierra la ventana del navegador", "cierra esa pestaña de ahí"]
+en = ["close this tab", "close the tab", "close the current tab", "kill this tab",
+      "get rid of this tab", "close the active tab", "close it", "shut this tab", "tab close",
+      "can you close this tab", "close the front tab", "close that tab", "remove this tab",
+      "close the browser tab", "x this tab"]
+stt = ["sierra la pestaña"]
+
+[close_duplicate_tabs]
+es = ["cierra las pestañas repetidas", "quita las pestañas duplicadas", "elimina las pestañas repetidas",
+      "cierra las que están dos veces", "limpia las pestañas duplicadas", "deja una de cada pestaña",
+      "cierra pestañas duplicadas del navegador", "borra las pestañas repetidas",
+      "hay pestañas repetidas, ciérralas", "cierra las duplicadas", "quita las repetidas",
+      "cierre las pestañas duplicadas", "limpia el navegador de duplicados",
+      "pestañas duplicadas fuera", "cierra los duplicados"]
+en = ["close duplicate tabs", "close the duplicate tabs", "remove duplicate tabs", "kill duplicate tabs",
+      "close repeated tabs", "dedupe my tabs", "close the tabs that are open twice",
+      "clean up duplicate tabs", "get rid of duplicate tabs", "close duplicates",
+      "remove the repeated tabs", "close the doubles", "dedupe the browser", "close tab duplicates",
+      "close all duplicate tabs"]
+stt = ["sierra las pestañas duplicadas"]
+
+[list_browser_tabs]
+es = ["qué pestañas tengo abiertas", "cuántas pestañas tengo", "lista mis pestañas", "dime mis pestañas",
+      "qué tengo abierto en el navegador", "enumera las pestañas", "qué páginas tengo abiertas",
+      "cuántas pestañas hay abiertas", "muéstrame las pestañas", "lee mis pestañas",
+      "pestañas abiertas", "qué sitios tengo abiertos", "cuántas pestañas abiertas tengo ahora",
+      "dígame qué pestañas tengo", "qué hay en mis pestañas"]
+en = ["what tabs do I have open", "list my tabs", "how many tabs are open", "show my tabs",
+      "what's open in the browser", "which tabs are open", "read my tabs", "count my tabs",
+      "open tabs", "what pages do I have open", "tell me my tabs", "list the open tabs",
+      "how many tabs do I have", "what sites are open", "tabs list"]
+stt = ["cuantas pestanias tengo"]
+
+[search_web]
+es = ["busca en internet {query}", "busca en la web {query}", "investiga {query}", "busca {query} en internet",
+      "qué dice internet de {query}", "averigua {query}", "busca información de {query}",
+      "busca en línea {query}", "consulta en internet {query}", "busca rápido {query}",
+      "qué hay en la web sobre {query}", "búscame información sobre {query}", "busque {query} en internet",
+      "encuentra en internet {query}", "dime qué encuentras de {query}"]
+en = ["search the web for {query}", "look up {query}", "google {query}", "search online for {query}",
+      "find information about {query}", "what does the internet say about {query}",
+      "search for {query} online", "web search {query}", "look {query} up online",
+      "find out about {query}", "check online for {query}", "search {query}",
+      "can you look up {query}", "do a web search for {query}", "get me info on {query}"]
+stt = ["busca en internet el clima"]
+
+[web_search_in_browser]
+es = ["busca {query} en google", "busca en google {query}", "abre una búsqueda de {query}",
+      "busca {query} en el navegador", "googlea {query}", "abre google con {query}",
+      "busca en el buscador {query}", "haz una búsqueda en google de {query}",
+      "pon en google {query}", "busca en el navegador {query}", "abre resultados de {query}",
+      "búscalo en google", "busque en google {query}", "abre google y busca {query}",
+      "búsqueda de google {query}"]
+en = ["search google for {query}", "google search {query}", "open a google search for {query}",
+      "search {query} in the browser", "open google results for {query}", "search the browser for {query}",
+      "look {query} up on google", "open a search for {query}", "search {query} on google",
+      "bring up google results for {query}", "type {query} into google", "browser search {query}",
+      "do a google search on {query}", "show google results for {query}", "google it {query}"]
+stt = ["busca en gugol {query}"]
+
+[deep_research]
+es = ["investiga a fondo {query}", "haz una investigación de {query}", "investiga en detalle {query}",
+      "quiero un reporte de {query}", "estudia a fondo {query}", "investigación profunda de {query}",
+      "busca fuentes sobre {query}", "dame un análisis de {query}", "investiga {query} con fuentes",
+      "haz un informe de {query}", "analiza a fondo {query}", "investigue a fondo {query}",
+      "busca todo sobre {query}", "reúne información completa de {query}", "profundiza en {query}"]
+en = ["research {query} in depth", "deep research on {query}", "do a deep dive on {query}",
+      "write a report on {query}", "research {query} thoroughly", "investigate {query} with sources",
+      "give me an analysis of {query}", "dig into {query}", "find sources on {query}",
+      "thorough research on {query}", "compile research on {query}", "research everything about {query}",
+      "in-depth look at {query}", "do some research on {query}", "study {query} in depth"]
+stt = ["investiga a fondo el mercado"]
+
+[browser_do]
+es = ["hazlo en el navegador", "en el navegador {intent}", "usa el navegador para {intent}",
+      "entra a la web y {intent}", "en la página haz {intent}", "navega y {intent}",
+      "completa esto en la web {intent}", "haz esto en el navegador {intent}",
+      "en el sitio {intent}", "automatiza en el navegador {intent}", "ve a la web y haz {intent}",
+      "abre el navegador y {intent}", "hágalo en el navegador", "llena el formulario {intent}",
+      "en internet haz {intent}"]
+en = ["do it in the browser", "in the browser {intent}", "use the browser to {intent}",
+      "go to the site and {intent}", "on the page {intent}", "browse and {intent}",
+      "fill out the form {intent}", "automate in the browser {intent}", "on the website {intent}",
+      "open the browser and {intent}", "handle this on the web {intent}", "web task {intent}",
+      "do this online {intent}", "in a browser window {intent}", "complete this on the site {intent}"]
+stt = ["hazlo en el navegadór"]
+
+[latest_video_from_creator]
+es = ["pon el último video de {creator_name}", "abre el video más nuevo de {creator_name}",
+      "lo último de {creator_name}", "el último video de {creator_name} en youtube",
+      "qué subió {creator_name}", "abre lo más reciente de {creator_name}",
+      "quiero ver lo último de {creator_name}", "video nuevo de {creator_name}",
+      "pon lo nuevo de {creator_name}", "el más reciente de {creator_name}",
+      "ábreme el último de {creator_name}", "ponga el último video de {creator_name}",
+      "qué publicó {creator_name}", "lo más nuevo del canal de {creator_name}",
+      "nuevo video de {creator_name} por favor"]
+en = ["open the latest video from {creator_name}", "play {creator_name}'s newest video",
+      "what did {creator_name} upload", "latest from {creator_name}", "newest {creator_name} video",
+      "open {creator_name}'s most recent video", "show me {creator_name}'s latest",
+      "play the new {creator_name} video", "{creator_name}'s last upload", "latest {creator_name} on youtube",
+      "most recent from {creator_name}", "what's new from {creator_name}", "put on {creator_name}'s latest",
+      "open {creator_name}'s new video", "pull up the newest from {creator_name}"]
+stt = ["el ultimo video de mister bist"]
+
+# ---- notes -----------------------------------------------------------------------------
+
+[create_note]
+es = ["crea una nota {title}", "nueva nota {title}", "anota en una nota nueva {body}",
+      "haz una nota llamada {title}", "crea una nota con {body}", "escribe una nota nueva {title}",
+      "guarda una nota que diga {body}", "toma nota de {body}", "apunta en una nota {body}",
+      "nota nueva que se llame {title}", "crea la nota {title} con {body}", "cree una nota {title}",
+      "abre una nota nueva", "empieza una nota {title}", "hazme una nota de {body}"]
+en = ["create a note {title}", "new note {title}", "make a note called {title}",
+      "write a new note {body}", "take a note {body}", "note down {body}", "start a note {title}",
+      "create a note saying {body}", "jot down {body}", "new note with {body}",
+      "make a note that says {body}", "save a note {body}", "create the note {title} with {body}",
+      "add a new note {title}", "write this down {body}"]
+stt = ["crea una nota nuev"]
+
+[append_to_note]
+es = ["agrega {text} a la nota {title}", "añade {text} a {title}", "pon {text} en mi nota {title}",
+      "suma {text} a la nota {title}", "escribe {text} en la nota {title}", "añade a {title} {text}",
+      "mete {text} en {title}", "agrega a mi nota {title} {text}", "apunta {text} en {title}",
+      "en la nota {title} agrega {text}", "incluye {text} en {title}", "agregue {text} a la nota {title}",
+      "añade esto a {title} {text}", "actualiza la nota {title} con {text}", "a la lista {title} agrega {text}"]
+en = ["add {text} to the note {title}", "append {text} to {title}", "put {text} in my {title} note",
+      "add {text} to {title}", "write {text} in the note {title}", "add to my {title} note {text}",
+      "include {text} in {title}", "update the note {title} with {text}", "stick {text} in {title}",
+      "add this to {title} {text}", "append to {title} {text}", "jot {text} in {title}",
+      "in the {title} note add {text}", "add {text} to my list {title}", "put {text} on {title}"]
+stt = ["agrega leche a la nota conpras"]
+
+[read_note]
+es = ["lee la nota {title}", "léeme {title}", "qué dice la nota {title}", "lee mi nota {title}",
+      "dime qué hay en {title}", "abre y lee {title}", "contenido de la nota {title}",
+      "lee lo que tengo en {title}", "qué tengo en la nota {title}", "léame la nota {title}",
+      "repasa la nota {title}", "lee en voz alta {title}", "qué apunté en {title}",
+      "muéstrame la nota {title}", "dime la nota {title}"]
+en = ["read the note {title}", "read me {title}", "what does the note {title} say", "read my {title} note",
+      "what's in {title}", "open and read {title}", "read out {title}", "contents of the note {title}",
+      "tell me what's in {title}", "what did I write in {title}", "show me the note {title}",
+      "read the {title} note aloud", "go over the note {title}", "read {title} to me", "what's on {title}"]
+stt = ["leeme la nota conpras"]
+
+[delete_note]
+es = ["borra la nota {title}", "elimina la nota {title}", "quita la nota {title}", "borra {title}",
+      "elimina mi nota {title}", "tira la nota {title}", "ya no necesito la nota {title}",
+      "deshazte de la nota {title}", "manda a la basura {title}", "suprime la nota {title}",
+      "borre la nota {title}", "puedes borrar la nota {title}", "elimina {title} de mis notas",
+      "quita {title} de notas", "bórrame la nota {title}"]
+en = ["delete the note {title}", "remove the note {title}", "trash {title}", "delete my {title} note",
+      "get rid of the note {title}", "erase the note {title}", "throw away {title}",
+      "I don't need the note {title}", "remove {title} from my notes", "delete {title}",
+      "bin the note {title}", "can you delete {title}", "wipe the note {title}",
+      "delete note {title}", "drop the note {title}"]
+stt = ["borra la nota conpras"]
+
+[merge_notes]
+es = ["agrupa la nota {source_title} con {target_title}", "fusiona {source_title} en {target_title}",
+      "une las notas {source_title} y {target_title}", "pasa {source_title} a {target_title}",
+      "combina {source_title} con {target_title}", "mete {source_title} dentro de {target_title}",
+      "mezcla las notas {source_title} y {target_title}", "reúne {source_title} en {target_title}",
+      "une {source_title} a {target_title}", "agrega la nota {source_title} a {target_title}",
+      "consolida {source_title} en {target_title}", "fusione {source_title} con {target_title}",
+      "integra {source_title} en {target_title}", "pon {source_title} al final de {target_title}",
+      "combina estas dos notas {source_title} y {target_title}"]
+en = ["merge {source_title} into {target_title}", "combine {source_title} with {target_title}",
+      "join the notes {source_title} and {target_title}", "move {source_title} into {target_title}",
+      "fold {source_title} into {target_title}", "merge the notes {source_title} and {target_title}",
+      "append {source_title} to the end of {target_title}", "consolidate {source_title} into {target_title}",
+      "put {source_title} inside {target_title}", "combine these two notes {source_title} and {target_title}",
+      "join {source_title} to {target_title}", "merge note {source_title} with {target_title}",
+      "mash {source_title} into {target_title}", "unite {source_title} and {target_title}",
+      "integrate {source_title} into {target_title}"]
+stt = ["fusiona conpras en pendientes"]
+
+[list_notes]
+es = ["qué notas tengo", "lista mis notas", "cuáles son mis notas", "enséñame mis notas",
+      "dime mis notas", "muéstrame las notas", "qué tengo en notas", "cuántas notas tengo",
+      "lista de notas", "mis notas recientes", "qué notas hay", "lee los títulos de mis notas",
+      "qué he anotado", "dígame mis notas", "notas que tengo guardadas"]
+en = ["what notes do I have", "list my notes", "show my notes", "my notes", "which notes are there",
+      "how many notes do I have", "recent notes", "read my note titles", "what have I noted",
+      "list the notes", "tell me my notes", "notes list", "what notes are saved",
+      "show me all my notes", "what's in my notes"]
+stt = ["que notas tengo guardadas en notas"]
+
+# ---- reminders, calendar, timers -------------------------------------------------------
+
+[add_reminder]
+es = ["recuérdame {title}", "pon un recordatorio de {title}", "crea un recordatorio {title}",
+      "agrega un recordatorio para {title}", "no me dejes olvidar {title}", "avísame de {title}",
+      "recordatorio para {title}", "anota un recordatorio {title}", "hazme acordar de {title}",
+      "pon en recordatorios {title}", "recuérdeme {title}", "agrega a recordatorios {title}",
+      "quiero un recordatorio de {title}", "recuérdame mañana {title}", "programa un recordatorio de {title}"]
+en = ["remind me to {title}", "set a reminder to {title}", "create a reminder {title}",
+      "add a reminder for {title}", "don't let me forget to {title}", "reminder to {title}",
+      "remind me tomorrow to {title}", "make a reminder {title}", "put a reminder {title}",
+      "remember to remind me {title}", "add to reminders {title}", "set a reminder for {title}",
+      "can you remind me to {title}", "new reminder {title}", "schedule a reminder {title}"]
+stt = ["recuerdame mañana yamar"]
+
+[list_today]
+es = ["qué recordatorios tengo hoy", "mis pendientes de hoy", "qué me toca hoy",
+      "qué tengo pendiente hoy", "recordatorios para hoy", "lee mis recordatorios", "qué tareas tengo hoy",
+      "dime mis pendientes", "qué vence hoy", "lista de pendientes de hoy", "pendientes del día",
+      "qué debo hacer hoy", "recordatorios del día", "dígame mis pendientes", "qué me falta hoy"]
+en = ["what reminders do I have today", "my reminders for today", "what's due today", "today's to-dos",
+      "read my reminders", "what tasks do I have today", "pending for today", "what do I need to do today",
+      "reminders due today", "my to-do list for today", "what's left for today", "list today's reminders",
+      "today's tasks", "anything due today", "what's on my list today"]
+stt = ["mis recordatorios de oy"]
+
+[today_events]
+es = ["qué tengo en la agenda hoy", "mi agenda de hoy", "eventos de hoy", "qué reuniones tengo hoy",
+      "cómo está mi día", "qué hay en mi calendario hoy", "tengo reuniones hoy", "lee mi agenda",
+      "qué citas tengo hoy", "calendario de hoy", "mi día de hoy", "qué compromisos tengo hoy",
+      "dígame mi agenda", "cuántas reuniones tengo hoy", "qué hay hoy en el calendario"]
+en = ["what's on my calendar today", "my agenda for today", "today's events", "what meetings do I have today",
+      "how does my day look", "read my calendar", "any meetings today", "what appointments do I have today",
+      "calendar for today", "my schedule today", "what's my day like", "today's schedule",
+      "what do I have on today", "how many meetings today", "what's planned today"]
+stt = ["que tengo oy en el calendario"]
+
+[next_event]
+es = ["cuál es mi próximo evento", "qué sigue en mi agenda", "mi próxima reunión", "qué viene después",
+      "cuándo es mi siguiente reunión", "próximo evento", "qué tengo a continuación", "mi siguiente cita",
+      "a qué hora es mi próxima reunión", "qué es lo siguiente en el calendario", "cuál es la próxima reunión",
+      "lo próximo en mi agenda", "siguiente compromiso", "dígame mi próximo evento", "qué toca después"]
+en = ["what's my next event", "what's next on my calendar", "my next meeting", "what's coming up",
+      "when is my next meeting", "next event", "what do I have next", "my next appointment",
+      "what time is my next meeting", "what's next", "upcoming event", "next on my schedule",
+      "what's after this", "next thing on my agenda", "when's my next call"]
+stt = ["cual es mi siguiente ebento"]
+
+[start_timer]
+es = ["pon un temporizador de {duration_min} minutos", "timer de {duration_min} minutos",
+      "cuenta {duration_min} minutos", "avísame en {duration_min} minutos", "temporizador {duration_min} minutos",
+      "pon una alarma en {duration_min} minutos", "inicia un timer de {duration_min}",
+      "cronómetro de {duration_min} minutos", "pon un timer para {label}", "temporizador para {label}",
+      "pon un temporizador", "ponga un temporizador de {duration_min} minutos",
+      "timer de {duration_min} minutos para {label}", "cuenta regresiva de {duration_min} minutos",
+      "arranca un temporizador"]
+en = ["set a timer for {duration_min} minutes", "timer {duration_min} minutes", "start a {duration_min} minute timer",
+      "count down {duration_min} minutes", "alert me in {duration_min} minutes", "set a timer",
+      "timer for {label}", "start a timer", "{duration_min} minute timer", "countdown {duration_min} minutes",
+      "set a {duration_min} minute timer for {label}", "remind me in {duration_min} minutes",
+      "kitchen timer {duration_min} minutes", "time {duration_min} minutes", "start the timer"]
+stt = ["pon un taimer de cinco minutos"]
+
+[list_timers]
+es = ["qué temporizadores tengo", "cuánto le queda al timer", "mis timers", "qué timers hay activos",
+      "cuánto falta del temporizador", "lista mis temporizadores", "hay algún timer corriendo",
+      "cuánto queda", "temporizadores activos", "dime mis timers", "qué cuenta regresiva tengo",
+      "cuántos timers tengo", "estado del temporizador", "cuánto le falta", "qué timers corren"]
+en = ["what timers do I have", "how much time is left on the timer", "my timers", "active timers",
+      "list my timers", "any timers running", "how long is left", "timer status", "check my timers",
+      "how many timers are running", "time left on the timer", "show my timers", "which timers are on",
+      "what's left on the countdown", "timers"]
+stt = ["que taimers tengo"]
+
+# ---- memory and recall --------------------------------------------------------------------
+
+[remember_fact]
+es = ["recuerda que {content}", "acuérdate de que {content}", "guarda que {content}", "no olvides que {content}",
+      "ten en cuenta que {content}", "anota que {content}", "quiero que sepas que {content}",
+      "memoriza que {content}", "toma en cuenta que {content}", "aprende que {content}",
+      "recuerde que {content}", "que no se te olvide que {content}", "guarda este dato {content}",
+      "un dato sobre mí {content}", "registra que {content}"]
+en = ["remember that {content}", "keep in mind that {content}", "don't forget that {content}",
+      "note that {content}", "save that {content}", "I want you to know {content}", "memorize that {content}",
+      "learn that {content}", "store the fact that {content}", "a fact about me {content}",
+      "make a note that {content}", "remember this {content}", "keep this in mind {content}",
+      "log that {content}", "for future reference {content}"]
+stt = ["recuerda ke {content}"]
+
+[recall_facts]
+es = ["qué recuerdas de mí", "qué sabes sobre mí", "dime lo que sabes de mí", "qué tienes guardado de mí",
+      "qué datos tienes de mí", "qué te acuerdas de mí", "qué sabes de {query}", "qué recuerdas sobre {query}",
+      "qué te he contado", "qué sabes de mi vida", "lo que sabes de mí", "qué has aprendido de mí",
+      "qué sabe usted de mí", "qué tienes anotado de mí", "qué recuerdas de {query}"]
+en = ["what do you remember about me", "what do you know about me", "tell me what you know about me",
+      "what have you saved about me", "what do you know about {query}", "what do you remember about {query}",
+      "what have I told you", "what facts do you have on me", "what have you learned about me",
+      "recall what you know about me", "anything you know about me", "what's in your memory about me",
+      "what do you know regarding {query}", "do you remember anything about {query}", "my info you have"]
+stt = ["que sabes de mi vida privada"]
+
+[recall_last_action]
+es = ["hazlo una vez más", "otra vez", "repite lo que hiciste", "vuelve a hacerlo", "lo mismo de antes",
+      "haz lo mismo", "de nuevo", "repítelo", "una vez más", "vuelve a hacer lo último",
+      "lo de hace rato otra vez", "hágalo otra vez", "haz lo de antes", "repite la acción",
+      "lo mismo otra vez"]
+en = ["do it again", "again", "repeat that action", "same as before", "do the same thing", "one more time",
+      "redo that", "do that again", "repeat the last action", "same again", "once more please",
+      "repeat what you did", "do the last thing again", "again please", "run that again"]
+stt = ["asló otra ves"]
+
+[repeat_last]
+es = ["repite lo que dijiste", "qué dijiste", "no te oí", "repítelo por favor", "dilo otra vez",
+      "cómo dijiste", "no te escuché bien", "otra vez lo último que dijiste", "vuelve a decirlo",
+      "perdón, qué", "me lo repites", "repita por favor", "no entendí, repite", "puedes repetir",
+      "lo último que dijiste"]
+en = ["repeat what you said", "what did you say", "say that again", "I didn't hear you", "come again",
+      "pardon", "could you repeat that", "repeat that please", "say it again", "what was that",
+      "I missed that", "repeat yourself", "one more time what you said", "sorry, what", "can you repeat"]
+stt = ["repite eso no te escuche bien"]
+
+[what_did_you_do]
+es = ["qué hiciste hoy", "qué acciones hiciste", "qué hiciste {when}", "qué hiciste por mí {when}",
+      "resumen de lo que hiciste", "qué cosas hiciste", "dime qué hiciste", "historial de acciones",
+      "qué hiciste esta semana", "qué hiciste el lunes", "qué pasó hoy contigo", "lo que hiciste {when}",
+      "qué hizo usted hoy", "qué has hecho hoy", "cuéntame qué hiciste"]
+en = ["what did you do today", "what did you do {when}", "what actions did you take", "your activity log",
+      "summary of what you did", "what have you done today", "tell me what you did", "action history",
+      "what did you do this week", "what did you do on monday", "what have you been doing",
+      "what did you do for me {when}", "list what you did", "recap your actions", "what did you get done"]
+stt = ["que isiste aller"]
+
+# ---- GitHub, code, terminal, files ----------------------------------------------------
+
+[my_repos]
+es = ["mis repositorios", "lista mis repos", "qué repositorios tengo", "enséñame mis repositorios",
+      "muéstrame mis repos de github", "cuáles son mis repos", "mis proyectos en github",
+      "repos que tengo en github", "lista de mis repositorios", "qué proyectos tengo en github",
+      "abre la lista de mis repos", "dime mis repos", "mis repos más recientes", "cuántos repos tengo",
+      "muéstreme mis repositorios"]
+en = ["my repos", "list my repos", "what repos do I have", "show my repositories", "my github repos",
+      "my projects on github", "list my repositories", "which repos are mine", "my recent repos",
+      "how many repos do I have", "show me my github projects", "repos I own", "my repositories please",
+      "pull up my repos", "what's in my github"]
+stt = ["mis repositorios de gitjab"]
+
+[search_github]
+es = ["busca en github {query}", "busca repos de {query}", "busca un repositorio de {query}",
+      "encuentra un repo de {query}", "hay algún repo de {query}", "repositorios sobre {query}",
+      "busca proyectos de {query} en github", "qué repos hay de {query}", "busca código de {query} en github",
+      "búscame un repositorio de {query}", "repos populares de {query}", "busca librerías de {query}",
+      "busque en github {query}", "github {query}", "proyectos de github sobre {query}"]
+en = ["search github for {query}", "find a repo for {query}", "look for {query} repos",
+      "any repos for {query}", "github search {query}", "find {query} on github", "repositories about {query}",
+      "search repos for {query}", "popular {query} repos", "find a {query} library on github",
+      "look up {query} on github", "find projects about {query}", "search code for {query} on github",
+      "is there a repo for {query}", "github repos for {query}"]
+stt = ["busca en gitjab {query}"]
+
+[ide_terminal_send]
+es = ["escribe en la terminal {text}", "manda a la terminal {text}", "en la terminal del editor escribe {text}",
+      "corre en la terminal integrada {text}", "teclea en la terminal {text}", "pon en la terminal {text}",
+      "envía a la terminal {text}", "ejecuta en la terminal del editor {text}", "escribe {text} en la consola",
+      "manda {text} a la consola del editor", "en la consola escribe {text}", "escriba en la terminal {text}",
+      "terminal del editor {text}", "en la terminal de {ide} escribe {text}", "dale enter a {text} en la terminal"]
+en = ["type {text} in the terminal", "send {text} to the terminal", "in the editor terminal type {text}",
+      "run {text} in the integrated terminal", "write {text} in the console", "enter {text} in the terminal",
+      "send {text} to the console", "in {ide}'s terminal type {text}", "type into the terminal {text}",
+      "put {text} in the terminal", "execute {text} in the editor terminal", "terminal type {text}",
+      "send the command {text} to the terminal", "in the terminal write {text}", "terminal input {text}"]
+stt = ["escribe ele ese en la terminal"]
+
+[toggle_ide_terminal]
+es = ["abre la terminal del editor", "cierra la terminal del editor", "muestra la terminal integrada",
+      "oculta la terminal", "abre la consola del editor", "quiero la terminal de abajo", "esconde la terminal",
+      "abre la terminal en {ide}", "muestra la consola", "terminal integrada", "abre el panel de terminal",
+      "cierra el panel de terminal", "abra la terminal del editor", "saca la terminal", "quita la terminal"]
+en = ["open the editor terminal", "toggle the terminal", "show the integrated terminal", "hide the terminal",
+      "open the terminal panel", "close the terminal panel", "bring up the console", "open the terminal in {ide}",
+      "show the console", "integrated terminal", "toggle the console", "hide the console",
+      "open the bottom terminal", "close the editor terminal", "pop open the terminal"]
+stt = ["abre la terminal del editór"]
+
+[run_command]
+es = ["corre el comando {command}", "ejecuta {command}", "corre {command}", "lanza el comando {command}",
+      "ejecuta el comando {command}", "en la terminal corre {command}", "corre esto {command}",
+      "ejecuta en consola {command}", "haz {command} en la terminal", "dame la salida de {command}",
+      "qué devuelve {command}", "comando {command}", "ejecute {command}", "corra el comando {command}",
+      "corre en shell {command}"]
+en = ["run the command {command}", "run {command}", "execute {command}", "execute the command {command}",
+      "run this {command}", "shell {command}", "what does {command} return", "give me the output of {command}",
+      "run {command} in the shell", "fire {command}", "launch the command {command}", "command {command}",
+      "can you run {command}", "do {command} in the terminal", "exec {command}"]
+stt = ["corre el comando aptaim"]
+
+[run_in_terminal]
+es = ["abre una terminal y corre {command}", "corre {command} en una terminal nueva",
+      "quiero ver {command} en la terminal", "abre terminal con {command}", "lanza {command} en la terminal",
+      "en una terminal ejecuta {command}", "abre la terminal y ejecuta {command}", "corre {command} a la vista",
+      "abre una consola y corre {command}", "terminal nueva con {command}", "abre una terminal",
+      "abre la terminal", "quiero una terminal", "abra una terminal", "dame una terminal"]
+en = ["open a terminal and run {command}", "run {command} in a new terminal", "open terminal with {command}",
+      "launch {command} in a terminal", "in a terminal execute {command}", "open a terminal",
+      "give me a terminal", "open the terminal app", "new terminal window", "start a terminal",
+      "open a console and run {command}", "show {command} running in a terminal", "terminal please",
+      "open terminal and execute {command}", "bring up a terminal"]
+stt = ["abre una terminál"]
+
+[open_in_ide]
+es = ["abre {path} en el editor", "abre el archivo {path}", "abre {path} en {ide}", "edita {path}",
+      "abre la carpeta {path} en el editor", "quiero editar {path}", "abre el proyecto {path}",
+      "pon {path} en el editor", "abre {path} para editar", "abre en el editor el archivo {path}",
+      "abra {path} en el editor", "abre el código de {path}", "carga {path} en el editor",
+      "ábreme {path} en {ide}", "abre una ventana nueva de {ide}"]
+en = ["open {path} in the editor", "open the file {path}", "open {path} in {ide}", "edit {path}",
+      "open the folder {path} in the editor", "I want to edit {path}", "open the project {path}",
+      "load {path} in the editor", "open {path} for editing", "open {path} in my IDE",
+      "open a new {ide} window", "pull up {path} in the editor", "bring {path} into the editor",
+      "show {path} in {ide}", "open the code for {path}"]
+stt = ["abre el arcivo {path}"]
+
+[open_item]
+es = ["abre el archivo {path} con su programa", "abre {path} en el finder", "abre la carpeta {path}",
+      "abre el documento {path}", "muéstrame la carpeta {path}", "abre el pdf {path}",
+      "abre esa carpeta {path}", "ábreme el documento {path}", "abre {path} normal",
+      "abre el elemento {path}", "abra la carpeta {path}", "abre en finder {path}",
+      "enséñame el archivo {path}", "abre la imagen {path}", "abre el archivo de {path}"]
+en = ["open the file {path} with its app", "open {path} in finder", "open the folder {path}",
+      "open the document {path}", "show me the folder {path}", "open the pdf {path}",
+      "open that folder {path}", "reveal {path}", "open the item {path}", "open the image {path}",
+      "open {path} normally", "show the file {path}", "launch the document {path}",
+      "open the downloads folder", "open my documents folder"]
+stt = ["abre la carpéta {path}"]
+
+[find_file]
+es = ["busca el archivo {query}", "dónde está el archivo {query}", "encuentra el archivo {query}",
+      "dónde guardé {query}", "busca el documento {query}", "encuentra el pdf de {query}",
+      "dónde está mi {query}", "busca en mi mac {query}", "localiza el archivo {query}",
+      "busca archivos de {query}", "dónde quedó {query}", "busque el archivo {query}",
+      "encuéntrame {query}", "busca la carpeta {query}", "en qué carpeta está {query}"]
+en = ["find the file {query}", "where is the file {query}", "search for the file {query}",
+      "where did I save {query}", "find the document {query}", "find the pdf about {query}",
+      "where's my {query}", "search my mac for {query}", "locate the file {query}",
+      "find files about {query}", "where did {query} go", "look for the file {query}",
+      "which folder has {query}", "search for {query} on my computer", "find the folder {query}"]
+stt = ["busca el arcivo {query}"]
+
+[edit_file_append]
+es = ["agrega al final de {path} {text}", "añade {text} al archivo {path}", "escribe al final de {path} {text}",
+      "agrega una línea a {path} {text}", "pon al final del archivo {path} {text}", "añade al archivo {path} {text}",
+      "en {path} agrega {text} al final", "suma {text} al final de {path}", "agregue al final de {path} {text}",
+      "añade esta línea a {path} {text}", "mete {text} al final de {path}", "agrega {text} hasta abajo de {path}",
+      "escribe {text} al final del archivo {path}", "anexa {text} a {path}", "pon {text} al final de {path}"]
+en = ["append {text} to {path}", "add {text} to the end of {path}", "add a line to {path} {text}",
+      "write {text} at the end of {path}", "put {text} at the end of the file {path}", "append to {path} {text}",
+      "in {path} add {text} at the end", "tack {text} onto {path}", "add this line to {path} {text}",
+      "stick {text} at the bottom of {path}", "append a line {text} to {path}", "add to the file {path} {text}",
+      "write {text} to the end of the file {path}", "append the text {text} to {path}", "end {path} with {text}"]
+stt = ["agrega al final de tmp punto te equis te"]
+
+[edit_file_replace]
+es = ["reemplaza el contenido de {path} con {content}", "sobrescribe {path} con {content}",
+      "cambia todo {path} por {content}", "reescribe el archivo {path} con {content}",
+      "deja {path} solo con {content}", "borra {path} y pon {content}", "remplaza {path} por {content}",
+      "pon en {path} únicamente {content}", "sustituye el archivo {path} con {content}",
+      "sobreescribe el archivo {path}", "reemplace {path} con {content}", "vacía {path} y escribe {content}",
+      "cambia el contenido de {path} a {content}", "reescribe {path} completo con {content}",
+      "que {path} diga solo {content}"]
+en = ["overwrite {path} with {content}", "replace the contents of {path} with {content}",
+      "rewrite the file {path} with {content}", "make {path} contain only {content}",
+      "replace {path} with {content}", "wipe {path} and write {content}", "set the file {path} to {content}",
+      "overwrite the file {path}", "change {path} to say {content}", "rewrite {path} entirely as {content}",
+      "swap the contents of {path} for {content}", "replace everything in {path} with {content}",
+      "clear {path} and put {content}", "overwrite {path} completely", "make the file {path} just {content}"]
+stt = ["sobrescribe tmp punto te equis te"]
+
+[delegate_to_codex]
+es = ["pídele al agente de código que {task}", "programa esto {task}", "haz el cambio en el código {task}",
+      "que el agente programe {task}", "encarga al agente de código {task}", "implementa {task}",
+      "arregla el bug {task}", "refactoriza {task}", "escribe el código para {task}",
+      "dale esta tarea al agente de código {task}", "agrega la función {task}", "corrige el código {task}",
+      "programe esto {task}", "que el agente de código haga {task}", "manda al agente {task}"]
+en = ["have the coding agent {task}", "implement {task}", "fix the bug {task}", "refactor {task}",
+      "write the code for {task}", "give this coding task to the agent {task}", "code this {task}",
+      "make the code change {task}", "add the feature {task}", "let the agent program {task}",
+      "delegate this coding task {task}", "patch the code {task}", "build {task}",
+      "ask the coding agent to {task}", "send this to the coding agent {task}"]
+stt = ["que el ajente de codigo"]
+
+[delegate_to_claude_code]
+es = ["pásale esto a claude code {task}", "que claude code haga {task}", "dale a claude code la tarea {task}",
+      "usa claude code para {task}", "encárgaselo a claude code {task}", "claude code {task}",
+      "manda a claude code {task}", "abre claude code para {task}", "pídele a claude code {task}",
+      "que lo haga claude code {task}", "delega en claude code {task}", "con claude code haz {task}",
+      "use claude code para {task}", "trabajo para claude code {task}", "envía a claude code {task}"]
+en = ["hand this to claude code {task}", "have claude code do {task}", "give claude code the task {task}",
+      "use claude code to {task}", "delegate to claude code {task}", "claude code please {task}",
+      "send to claude code {task}", "open claude code for {task}", "ask claude code to {task}",
+      "let claude code handle {task}", "with claude code {task}", "claude code task {task}",
+      "pass this to claude code {task}", "run claude code on {task}", "get claude code to {task}"]
+stt = ["que clod cod haga"]
+
+[app_keystroke]
+es = ["presiona {keys} en {app}", "manda el atajo {keys} a {app}", "teclea {keys} en {app}",
+      "aprieta {keys}", "usa el atajo {keys}", "haz {keys} en {app}", "pulsa {keys} en {app}",
+      "envía {keys} a {app}", "atajo de teclado {keys}", "presione {keys}", "dale {keys} en {app}",
+      "combinación {keys} en {app}", "oprime {keys}", "en {app} presiona {keys}", "ejecuta el atajo {keys}"]
+en = ["press {keys} in {app}", "send {keys} to {app}", "hit {keys}", "use the shortcut {keys}",
+      "keyboard shortcut {keys}", "press {keys}", "send the shortcut {keys} to {app}", "type the keys {keys}",
+      "in {app} press {keys}", "trigger {keys} in {app}", "do {keys} in {app}", "key combo {keys}",
+      "shortcut {keys} in {app}", "hit the keys {keys}", "send keystroke {keys}"]
+stt = ["presiona comand te"]
+
+# ---- screen ------------------------------------------------------------------------------
+
+[describe_screen]
+es = ["qué hay en la pantalla", "describe la pantalla", "qué ves", "qué estás viendo en mi pantalla",
+      "dime qué hay en la ventana", "describe esta ventana", "qué tengo enfrente", "mira mi pantalla",
+      "qué aparece en pantalla", "qué botones hay", "explícame la pantalla", "describe lo que ves",
+      "qué ve usted en la pantalla", "dime qué hay abierto enfrente", "qué muestra la ventana"]
+en = ["what's on the screen", "describe the screen", "what do you see", "what's in this window",
+      "describe this window", "look at my screen", "what's showing", "what buttons are there",
+      "tell me what's on screen", "explain the screen", "what am I seeing", "describe what you see",
+      "what's in front of me", "what does the window show", "what's on my display"]
+stt = ["que ay en la pantaya"]
+
+[look_at_screen]
+es = ["lee la pantalla con visión", "mira la imagen en pantalla", "lee el texto de la imagen",
+      "lee lo que hay en el pdf", "usa la vista para leer la pantalla", "toma una captura y léela",
+      "no puedes leerlo, mira la imagen", "lee el texto escaneado", "mira bien la pantalla",
+      "fíjate en la imagen", "haz una captura y dime qué dice", "lee la foto en pantalla",
+      "observe la pantalla", "revisa la imagen de la pantalla", "lee con ocr la pantalla"]
+en = ["look at the screen", "read the image on screen", "read the text in the image",
+      "read what's in the pdf", "take a screenshot and read it", "use vision to read the screen",
+      "look closely at the screen", "read the scanned text", "check the picture on screen",
+      "ocr the screen", "screenshot and tell me what it says", "read the photo on screen",
+      "look at this image", "you can't read it, look at the image", "visually read the screen"]
+stt = ["mira la pantaya"]
+
+[summarize_screen]
+es = ["resume la pantalla", "resúmeme lo que hay en pantalla", "de qué trata lo que estoy viendo",
+      "dame un resumen de la pantalla", "en resumen qué hay en la pantalla", "resume esta página que veo",
+      "qué dice en resumen la ventana", "hazme un resumen de lo que ves", "resuma la pantalla",
+      "lo importante de la pantalla", "resumen rápido de la ventana", "resume lo que tengo abierto",
+      "qué es lo principal en pantalla", "explícame en corto la pantalla", "resumen de lo que se ve"]
+en = ["summarize the screen", "sum up what's on screen", "what's this about", "give me a summary of the screen",
+      "summarize what I'm looking at", "summary of this window", "tl;dr the screen", "summarize this page I see",
+      "what's the gist of the screen", "the main points on screen", "quick summary of the window",
+      "summarize what's open", "brief me on the screen", "short version of the screen", "recap the screen"]
+stt = ["resumeme la pantaya"]
+
+[summarize_pane]
+es = ["resume el panel", "resume solo este panel", "qué dice este panel en resumen", "resumen del panel activo",
+      "resume la parte donde estoy", "de qué trata este panel", "resume lo que tengo enfocado",
+      "resumen del panel enfocado", "resume esta sección", "qué hay en este panel en corto",
+      "resuma el panel", "lo importante de este panel", "resumen de la sección activa",
+      "resume solo esta parte", "dame el resumen del panel"]
+en = ["summarize the pane", "summarize just this pane", "summary of the active pane",
+      "what's this pane about", "summarize the focused pane", "summarize this section",
+      "gist of this pane", "summarize where I am", "short summary of this panel", "summarize this panel",
+      "recap this pane", "the main points of this pane", "summarize the part I'm in",
+      "brief me on this pane", "this pane in short"]
+stt = ["resume el panél"]
+
+[read_pane_text]
+es = ["lee el panel", "lee este panel", "qué dice el panel", "lee la terminal", "lee lo que dice este panel",
+      "léeme el panel activo", "lee la sección donde estoy", "lee solo este panel", "lee el texto del panel",
+      "qué dice aquí", "léame el panel", "lee la salida de la terminal", "lee lo que tengo enfocado",
+      "lee esta parte", "qué pone en el panel"]
+en = ["read the pane", "read this pane", "what does the pane say", "read the terminal output",
+      "read me the active pane", "read the section I'm in", "read just this pane", "read the pane text",
+      "what does it say here", "read the focused panel", "read this panel aloud", "read this part",
+      "what's written in this pane", "read out the panel", "read the console output"]
+stt = ["lee el panél"]
+
+[read_window_text]
+es = ["lee la ventana", "lee lo que dice la ventana", "lee el texto de la ventana", "léeme esta ventana",
+      "qué dice la ventana", "lee todo lo de la ventana", "lee en voz alta la ventana",
+      "lee el contenido de la ventana", "léame la ventana", "lee la ventana completa",
+      "qué está escrito en la ventana", "lee la ventana de adelante", "lee el mensaje de la ventana",
+      "lee lo que aparece en la ventana", "dime qué dice esta ventana"]
+en = ["read the window", "read what the window says", "read the window text", "read me this window",
+      "what does the window say", "read everything in the window", "read the window aloud",
+      "read the window contents", "read the whole window", "what's written in the window",
+      "read the front window", "read the dialog", "read the message in the window",
+      "read out this window", "what's this window saying"]
+stt = ["lee la bentana"]
+
+[find_button]
+es = ["hay un botón de {name}", "existe el botón {name}", "ves un botón de {name}", "dónde está el botón {name}",
+      "busca el botón {name}", "encuentra el botón {name}", "hay algún botón que diga {name}",
+      "está el botón {name}", "aparece el botón {name}", "tiene botón de {name}", "ve un botón de {name}",
+      "hay opción de {name}", "dónde le doy a {name}", "busca el botón que dice {name}", "localiza el botón {name}"]
+en = ["is there a {name} button", "do you see a {name} button", "where is the {name} button",
+      "find the {name} button", "look for the {name} button", "is there a button that says {name}",
+      "can you find {name}", "where do I click {name}", "is {name} on screen", "locate the {name} button",
+      "any {name} button", "find {name} on the screen", "is there an option for {name}",
+      "check for a {name} button", "where's {name}"]
+stt = ["ay un boton de {name}"]
+
+[click_button]
+es = ["dale click a {name}", "haz clic en {name}", "presiona el botón {name}", "aprieta {name}",
+      "da clic en {name}", "selecciona {name}", "toca el botón {name}", "pulsa {name}", "dale a {name}",
+      "haga clic en {name}", "presiona {name}", "haz click en el botón {name}", "oprime {name}",
+      "elige {name}", "clic en {name}"]
+en = ["click {name}", "click the {name} button", "press {name}", "hit {name}", "tap {name}",
+      "select {name}", "push the {name} button", "click on {name}", "press the button {name}",
+      "choose {name}", "click the button that says {name}", "go ahead and click {name}", "smash {name}",
+      "activate {name}", "hit the {name} button"]
+stt = ["dale clik a {name}"]
+
+[where_am_i]
+es = ["en qué panel tengo el foco", "dónde estoy en la ventana", "dónde está mi cursor", "en qué parte estoy",
+      "qué tengo seleccionado", "en qué sección estoy", "dónde está el foco", "qué está enfocado",
+      "en dónde estoy parado", "en qué campo estoy", "dónde está la atención", "en qué panel está el foco",
+      "dígame dónde estoy", "qué parte está activa", "dónde quedé"]
+en = ["which pane am I in", "where am I in the window", "where's my cursor", "what's focused",
+      "which section am I in", "where's the focus", "what do I have selected", "which field am I in",
+      "what part is active", "where is my attention", "which panel has focus", "tell me where I am",
+      "what's in focus", "where did I leave off", "current focus"]
+stt = ["en ke panel estoy"]
+
+[window_layout]
+es = ["qué paneles hay", "cómo está organizada la ventana", "qué partes tiene la ventana",
+      "describe el diseño de la ventana", "cuántos paneles hay", "qué secciones tiene esta ventana",
+      "dónde está cada panel", "estructura de la ventana", "qué regiones hay en pantalla",
+      "lista los paneles", "cómo se divide la ventana", "qué columnas hay", "qué paneles tiene esta app",
+      "dígame los paneles", "qué hay a la izquierda y a la derecha"]
+en = ["what panes are there", "how is the window laid out", "what parts does the window have",
+      "describe the window layout", "how many panes are there", "what sections does this window have",
+      "where is each pane", "window structure", "list the panels", "how is the window split",
+      "what's on the left and right", "what regions are on screen", "layout of this app",
+      "which panels are open", "map the window"]
+stt = ["ke paneles ay"]
+
+# ---- in-app resources, preferences, remembering things ---------------------------------
+
+[open_in_app]
+es = ["abre la conexión {target}", "abre el canal {target} en {app}", "abre {target} en {app}",
+      "entra a la conexión {target}", "abre el recurso {target}", "ve al canal {target}",
+      "crea una tarea en {app} {target}", "abre la base {target}", "conéctate a {target}",
+      "abre {target} dentro de {app}", "llévame al canal {target}", "abra la conexión {target}",
+      "en {app} abre {target}", "abre mi conexión {target}", "nueva tarea en {app} {target}"]
+en = ["open the connection {target}", "open the channel {target} in {app}", "open {target} in {app}",
+      "go to the {target} channel", "connect to {target}", "open the resource {target}",
+      "create a task in {app} {target}", "open the database {target}", "take me to the {target} channel",
+      "in {app} open {target}", "open my connection {target}", "new task in {app} {target}",
+      "jump to {target} in {app}", "open {target} inside {app}", "pull up the {target} connection"]
+stt = ["abre la conecsion {target}"]
+
+[remember_connection]
+es = ["recuerda la conexión {name} de {app}", "guarda la conexión {name} en {app}",
+      "aprende la conexión {name} de {app}", "anota la conexión {name} de {app}",
+      "guarda {name} como conexión de {app}", "registra la conexión {name}", "memoriza la conexión {name}",
+      "agrega la conexión {name} de {app}", "nueva conexión {name} en {app}", "recuerde la conexión {name}",
+      "guarda el canal {name} de {app}", "acuérdate de la conexión {name}", "apunta la conexión {name} de {app}",
+      "toma nota de la conexión {name}", "agrega {name} a mis conexiones"]
+en = ["remember the connection {name} in {app}", "save the {app} connection {name}", "learn the connection {name}",
+      "note the connection {name} in {app}", "store {name} as a {app} connection", "register the connection {name}",
+      "add the connection {name} in {app}", "new {app} connection {name}", "save the channel {name} in {app}",
+      "keep the connection {name}", "remember {name} in {app}", "add {name} to my connections",
+      "memorize the connection {name}", "save connection {name}", "log the connection {name} for {app}"]
+stt = ["recuerda la conecsion {name}"]
+
+[remember_page]
+es = ["recuerda que mi {name} es {url}", "guarda mi {name} como {url}", "mi {name} está en {url}",
+      "guarda la página {name} {url}", "anota que mi {name} es {url}", "aprende que mi {name} es {url}",
+      "mi página de {name} es {url}", "guarda el enlace de mi {name} {url}", "registra mi {name} en {url}",
+      "recuerde que mi {name} es {url}", "agrega mi {name} {url}", "la dirección de mi {name} es {url}",
+      "guarda {url} como mi {name}", "memoriza mi {name} {url}", "nueva página {name} {url}"]
+en = ["remember that my {name} is {url}", "save my {name} as {url}", "my {name} is at {url}",
+      "save the page {name} {url}", "note that my {name} is {url}", "my {name} page is {url}",
+      "store the link to my {name} {url}", "add my {name} {url}", "the address of my {name} is {url}",
+      "save {url} as my {name}", "learn that my {name} is {url}", "register my {name} at {url}",
+      "new page {name} {url}", "keep my {name} link {url}", "my {name} url is {url}"]
+stt = ["recuerda que mi portafolyo es"]
+
+[remember_user_profile]
+es = ["mi usuario de github es {value}", "me llamo {value}", "mi nombre es {value}", "mi linkedin es {value}",
+      "mi sitio web es {value}", "guarda que mi usuario es {value}", "mi nombre completo es {value}",
+      "llámame {value}", "mi idioma preferido es {value}", "mi cuenta de github es {value}",
+      "soy {value}", "anota que me llamo {value}", "mi usuario en github se llama {value}",
+      "mi página personal es {value}", "puedes decirme {value}"]
+en = ["my github username is {value}", "my name is {value}", "call me {value}", "my linkedin is {value}",
+      "my website is {value}", "my full name is {value}", "save my username as {value}",
+      "my preferred language is {value}", "my github account is {value}", "I go by {value}",
+      "remember my name is {value}", "my handle on github is {value}", "my personal site is {value}",
+      "note my name is {value}", "my username is {value}"]
+stt = ["mi usuario de gitjab es"]
+
+[remember_contact]
+es = ["recuerda que mi {relation} es {name}", "guarda el contacto {name}", "el correo de {name} es {email}",
+      "mi {relation} se llama {name}", "agrega a {name} a mis contactos", "anota a {name} con correo {email}",
+      "guarda a {name} como mi {relation}", "nuevo contacto {name}", "registra a {name} {email}",
+      "recuerda a {name}", "guarde el contacto {name}", "el email de {name} es {email}",
+      "apunta el contacto de {name}", "mi {relation} {name} tiene el correo {email}", "agrega el contacto {name}"]
+en = ["remember that my {relation} is {name}", "save the contact {name}", "{name}'s email is {email}",
+      "my {relation} is called {name}", "add {name} to my contacts", "save {name} as my {relation}",
+      "new contact {name}", "store {name} with email {email}", "remember {name}", "note the contact {name}",
+      "{name}'s address is {email}", "add the contact {name}", "my {relation} {name} uses {email}",
+      "keep {name} in my contacts", "contact {name} email {email}"]
+stt = ["recuerda que mi mama es"]
+
+[remember_app]
+es = ["recuerda que {name} usa el esquema {url_scheme}", "aprende a usar {name}", "enséñate a controlar {name}",
+      "la app {name} se abre con {url_scheme}", "guarda la app {name}", "{name} tiene el esquema {url_scheme}",
+      "registra la aplicación {name}", "aprende la app {name}", "nueva app {name} con {url_scheme}",
+      "anota que {name} usa {url_scheme}", "recuerde la app {name}", "agrega la app {name}",
+      "el enlace de {name} es {url_scheme}", "memoriza cómo abrir {name}", "aprende el esquema de {name}"]
+en = ["remember that {name} uses the scheme {url_scheme}", "learn to use {name}", "teach yourself {name}",
+      "the app {name} opens with {url_scheme}", "save the app {name}", "{name} has the scheme {url_scheme}",
+      "register the application {name}", "learn the app {name}", "new app {name} with {url_scheme}",
+      "note that {name} uses {url_scheme}", "add the app {name}", "{name}'s link scheme is {url_scheme}",
+      "memorize how to open {name}", "learn {name}'s url scheme", "store the app {name}"]
+stt = ["recuerda que lainear usa"]
+
+[set_preferred_app]
+es = ["prefiero {app_name} para {category}", "usa {app_name} para {category}", "mi app de {category} es {app_name}",
+      "de ahora en adelante usa {app_name}", "quiero usar {app_name} para {category}",
+      "cambia mi {category} a {app_name}", "pon {app_name} como predeterminado", "usa siempre {app_name}",
+      "mi {category} favorito es {app_name}", "elige {app_name} para {category}", "prefiero usar {app_name}",
+      "use {app_name} para {category}", "{app_name} es mi {category}", "configura {app_name} para {category}",
+      "para {category} usa {app_name}"]
+en = ["I prefer {app_name} for {category}", "use {app_name} for {category}", "my {category} app is {app_name}",
+      "from now on use {app_name}", "I want to use {app_name} for {category}", "switch my {category} to {app_name}",
+      "make {app_name} the default", "always use {app_name}", "my favorite {category} is {app_name}",
+      "pick {app_name} for {category}", "set {app_name} for {category}", "{app_name} is my {category}",
+      "default {category} {app_name}", "prefer {app_name}", "for {category} use {app_name}"]
+stt = ["prefiero zet para programar"]
+
+[remember_app_preference]
+es = ["mi app preferida para {category} es {app}", "guarda {app} como mi app de {category}",
+      "recuerda que para {category} uso {app}", "quiero {app} por defecto para {category}",
+      "anota que prefiero {app} en {category}", "para {category} me gusta {app}",
+      "guarda mi preferencia {app} para {category}", "recuerda mi app de {category}",
+      "mi preferencia de {category} es {app}", "acuérdate que uso {app} para {category}",
+      "recuerde que uso {app}", "deja {app} como preferida", "registra {app} para {category}",
+      "guarda {app} para {category}", "{app} es la que uso para {category}"]
+en = ["my preferred app for {category} is {app}", "save {app} as my {category} app",
+      "remember that I use {app} for {category}", "I want {app} by default for {category}",
+      "note that I prefer {app} for {category}", "for {category} I like {app}", "save my preference {app}",
+      "remember my {category} app", "my {category} preference is {app}", "keep {app} as preferred",
+      "register {app} for {category}", "I use {app} for {category}, remember that", "{app} for {category} please",
+      "store {app} as my {category} choice", "remember I prefer {app}"]
+stt = ["recuerda que prefiero zet"]
+
+[remember_term]
+es = ["recuerda que {key} significa {expansion}", "{key} quiere decir {expansion}", "guarda el término {key}",
+      "aprende la sigla {key}", "anota que {key} es {expansion}", "{key} son las siglas de {expansion}",
+      "agrega al glosario {key}", "el término {key} significa {expansion}", "recuerde que {key} es {expansion}",
+      "nuevo término {key}", "memoriza que {key} es {expansion}", "cuando digo {key} me refiero a {expansion}",
+      "guarda {key} como {expansion}", "define {key} como {expansion}", "glosario {key} {expansion}"]
+en = ["remember that {key} means {expansion}", "{key} stands for {expansion}", "save the term {key}",
+      "learn the acronym {key}", "note that {key} is {expansion}", "add {key} to the glossary",
+      "the term {key} means {expansion}", "new term {key}", "when I say {key} I mean {expansion}",
+      "define {key} as {expansion}", "store {key} as {expansion}", "glossary {key} {expansion}",
+      "{key} is short for {expansion}", "memorize that {key} is {expansion}", "acronym {key} {expansion}"]
+stt = ["recuerda que eipiai significa"]
+
+[remember_stt_correction]
+es = ["no es {wrong}, es {right}", "se dice {right} no {wrong}", "corrige {wrong} por {right}",
+      "entendiste mal, es {right}", "no dije {wrong}, dije {right}", "es {right}, no {wrong}",
+      "escuchaste {wrong} pero es {right}", "la palabra es {right}", "corrígelo, es {right}",
+      "se escribe {right}", "aprende que {wrong} es {right}", "cuando oigas {wrong} es {right}",
+      "no {wrong}, {right}", "te equivocaste, era {right}", "deletreado es {right}"]
+en = ["it's not {wrong}, it's {right}", "I said {right} not {wrong}", "correct {wrong} to {right}",
+      "you heard it wrong, it's {right}", "not {wrong}, {right}", "the word is {right}",
+      "fix that, it's {right}", "it's spelled {right}", "learn that {wrong} is {right}",
+      "when you hear {wrong} it's {right}", "you misheard, I said {right}", "{right}, not {wrong}",
+      "that should be {right}", "wrong word, it's {right}", "spelled out it's {right}"]
+stt = ["no es nil es nill"]
+
+[add_vocabulary_word]
+es = ["agrega {canonical} al vocabulario", "aprende la palabra {canonical}", "{canonical} se pronuncia así",
+      "nueva palabra {canonical}", "añade {canonical} a tu vocabulario", "aprende a decir {canonical}",
+      "guarda la palabra {canonical}", "cómo se dice {canonical}", "registra el nombre {canonical}",
+      "agregue {canonical} al vocabulario", "enséñate {canonical}", "pronuncia {canonical} bien",
+      "palabra nueva para tu vocabulario {canonical}", "aprende cómo se escribe {canonical}",
+      "suma {canonical} al diccionario"]
+en = ["add {canonical} to the vocabulary", "learn the word {canonical}", "new word {canonical}",
+      "{canonical} is pronounced like this", "teach yourself {canonical}", "learn to say {canonical}",
+      "save the word {canonical}", "register the name {canonical}", "add {canonical} to your dictionary",
+      "learn how {canonical} is spelled", "vocabulary word {canonical}", "pronounce {canonical} right",
+      "remember how to say {canonical}", "add the term {canonical} to your words", "learn {canonical}"]
+stt = ["agrega cubernetes al vocabulario"]
+
+[birthday_remember]
+es = ["el cumpleaños de {name} es el {date}", "guarda el cumpleaños de {name}", "{name} cumple el {date}",
+      "anota que {name} cumple años el {date}", "recuerda el cumpleaños de {name}",
+      "el {date} es el cumpleaños de {name}", "cumpleaños de {name} {date}", "registra el cumple de {name}",
+      "nació el {date} {name}", "agrega el cumpleaños de {name}", "recuerde que {name} cumple el {date}",
+      "apunta el cumple de {name} el {date}", "{name} celebra su cumpleaños el {date}",
+      "la fecha de cumpleaños de {name} es {date}", "no olvides que {name} cumple el {date}"]
+en = ["{name}'s birthday is {date}", "save {name}'s birthday", "{name} turns a year older on {date}",
+      "note that {name}'s birthday is {date}", "remember {name}'s birthday", "birthday for {name} {date}",
+      "add {name}'s birthday", "{name} was born on {date}", "log {name}'s birthday on {date}",
+      "{date} is {name}'s birthday", "don't forget {name}'s birthday {date}", "store {name}'s birthday",
+      "{name} celebrates on {date}", "birthday {name} {date}", "keep {name}'s birthday {date}"]
+stt = ["el cumpleaños de ana es el ocho de junyo"]
+
+[remember_secret]
+es = ["guarda mi contraseña de {label}", "guarda la clave de {label}", "guarda un secreto {label}",
+      "almacena mi contraseña de {label}", "recuerda mi clave de {label}", "nueva contraseña para {label}",
+      "guarda el pin de {label}", "guarda la contraseña del {label}", "anota mi clave de {label} segura",
+      "guarde mi contraseña de {label}", "registra el secreto {label}", "guarda de forma segura {label}",
+      "quiero guardar mi contraseña de {label}", "protege mi clave de {label}", "guarda el número de cuenta {label}"]
+en = ["save my {label} password", "store the {label} password", "save a secret {label}",
+      "remember my {label} password", "keep my {label} key safe", "new password for {label}",
+      "save the {label} pin", "securely store {label}", "store my {label} credentials",
+      "I want to save my {label} password", "save the account number for {label}", "protect my {label} key",
+      "add a secret for {label}", "store a password {label}", "save {label} to the keychain"]
+stt = ["guarda mi contraseña del vanco"]
+
+[recall_secret]
+es = ["cuál es mi contraseña de {label}", "dime la clave de {label}", "léeme el secreto {label}",
+      "qué contraseña tengo para {label}", "recuérdame la clave de {label}", "cuál es el pin de {label}",
+      "dime mi contraseña del {label}", "necesito la clave de {label}", "dame la contraseña de {label}",
+      "cuál era mi clave de {label}", "dígame la contraseña de {label}", "qué pin tiene {label}",
+      "lee mi clave de {label}", "recupera la contraseña de {label}", "cuál es la clave del {label}"]
+en = ["what's my {label} password", "tell me the {label} password", "read me the secret {label}",
+      "what password do I have for {label}", "remind me of the {label} key", "what's the {label} pin",
+      "I need the {label} password", "give me the {label} password", "what was my {label} key",
+      "read my {label} password", "retrieve the {label} password", "my {label} password please",
+      "say the {label} secret", "look up my {label} password", "which password for {label}"]
+stt = ["cual es la contraseña de mi guaifai"]
+
+[post_to_x]
+es = ["publica en twitter {text}", "tuitea {text}", "postea en x {text}", "haz un tuit que diga {text}",
+      "sube a twitter {text}", "publica en x que {text}", "escribe un post en x {text}",
+      "manda un tuit {text}", "comparte en twitter {text}", "publique en twitter {text}",
+      "pon en twitter {text}", "haz un post que diga {text}", "twittea esto {text}",
+      "publica esto en x {text}", "nuevo tuit {text}"]
+en = ["post on twitter {text}", "tweet {text}", "post on x {text}", "tweet that {text}",
+      "send a tweet {text}", "share on twitter {text}", "write a post on x {text}", "post this {text}",
+      "put on twitter {text}", "make a post saying {text}", "new tweet {text}", "tweet this out {text}",
+      "post to x that {text}", "publish on x {text}", "share this on x {text}"]
+stt = ["tuitea olá"]
+
+[describe_capabilities]
+es = ["qué sabes hacer", "en qué me puedes ayudar", "qué funciones tienes", "para qué sirves",
+      "qué cosas haces", "cuáles son tus habilidades", "qué herramientas tienes disponibles",
+      "qué puedo pedirte", "dime lo que puedes hacer", "qué eres capaz de hacer", "qué puede hacer usted",
+      "qué comandos entiendes", "en qué eres buena", "qué tareas haces", "cómo me puedes ayudar"]
+en = ["what can you do", "what are you able to do", "what are your features", "how can you help me",
+      "what tools do you have", "what can I ask you", "tell me what you can do", "what are your skills",
+      "what commands do you understand", "what are you good at", "what tasks can you do",
+      "list your abilities", "what's possible with you", "what do you do", "help, what can you do"]
+stt = ["que puedes aser"]
