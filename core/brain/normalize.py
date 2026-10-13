@@ -66,7 +66,11 @@ def normalize(utterance: str) -> Normalized:
     kept.append(raw[pos:])
     text = _SPACE.sub(" ", "".join(kept))
     text = re.sub(r"\s+([,.;:?!])", r"\1", text).strip(" ,.;:")
-    words = tuple(w for w in _WORD.findall(text) if w[0].isalnum() or w[0] == "_")
+    # Outer apostrophes are quotes, not part of the word: Scribe writes "mi carpeta
+    # 'Home'", and the bare token "'home'" used to be dropped whole (VOICE-1: it
+    # hid a safety refusal). Inner ones stay: "don't", "it's".
+    stripped = (w.strip("'\u2019") for w in _WORD.findall(text))
+    words = tuple(w for w in stripped if w and (w[0].isalnum() or w[0] == "_"))
     tokens = tuple(fold(w) for w in words)
     return Normalized(
         original=utterance, text=text, folded=fold(text), tokens=tokens, words=words
