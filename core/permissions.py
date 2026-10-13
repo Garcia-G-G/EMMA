@@ -26,7 +26,8 @@ def harden_local_files() -> dict[str, int]:
 
     Personal + secret-adjacent data lives here; tighten the dir to 0700 and every
     file under it to 0600 so nothing is group/other-readable even if FileVault is
-    off or the file was created with a looser umask. Returns {dir_fixed, files_fixed}.
+    off or the file was created with a looser umask. Executables stay executable
+    by the owner (0700). Returns {dir_fixed, files_fixed}.
     """
     home = Path.home() / ".emma"
     fixed = {"dirs": 0, "files": 0}
@@ -48,9 +49,14 @@ def harden_local_files() -> dict[str, int]:
             if p.is_dir() and mode != 0o700:
                 os.chmod(p, 0o700)
                 fixed["dirs"] += 1
-            elif p.is_file() and mode != 0o600:
-                os.chmod(p, 0o600)
-                fixed["files"] += 1
+            elif p.is_file():
+                # Drop group/other, keep the owner's exec bit. A flat 0600 also
+                # stripped EmmaDaemon.app's own executable, so the daemon booted
+                # once and every launchd respawn after it failed to exec (78).
+                want = 0o600 | (mode & 0o100)
+                if mode != want:
+                    os.chmod(p, want)
+                    fixed["files"] += 1
     if fixed["dirs"] or fixed["files"]:
         log.info("local_files_hardened", **fixed)
     return fixed
