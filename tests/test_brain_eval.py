@@ -10,8 +10,8 @@ declining something the user asked a tool for. A change that lowers coverage or
 adds a wrong decision fails; raising coverage means re-pinning in the commit
 that earns it.
 
-The prompt's bar is >= 50 % local at <= 1 % wrong. Measured: 34.3 % at 0 %. The
-bar is NOT met; see BRAIN-1-VERIFY Part 5 for why and what moves it.
+BRAIN-1 measured 34.3 % served at 0 wrong; BRAIN-1.5 (phrasebook + gate variant
+D) 55.0 % at 0 wrong — see BRAIN-1.5-VERIFY.
 """
 
 from __future__ import annotations
@@ -46,7 +46,9 @@ needs_model = pytest.mark.skipif(
     reason="local embedder missing: python -c 'from core.brain.embed import fetch; fetch()'",
 )
 
-PIN = {"coverage": 48, "local": 22, "wrong": 0}  # of 140, 2026-10-13
+# Of 140. BRAIN-1 (be86cfc): coverage 48, local 22. BRAIN-1.5 (phrasebook +
+# gate variant D, 2026-10-13): coverage 77, local 51. Wrong stays 0.
+PIN = {"coverage": 77, "local": 51, "wrong": 0}
 DOCS = {d.name: d for d in tool_docs()}
 
 
@@ -118,7 +120,10 @@ def test_thresholds_live_in_settings() -> None:
     assert th == Thresholds(
         knn_min=s.BRAIN_KNN_MIN, margin_min=s.BRAIN_MARGIN_MIN,
         max_content_tokens=s.BRAIN_MAX_CONTENT_TOKENS, slot_floor=s.BRAIN_SLOT_FLOOR,
+        relaxed_agreement=s.BRAIN_RELAXED_AGREEMENT, bm25_single_min=s.BRAIN_BM25_SINGLE_MIN,
+        bm25_single_gap=s.BRAIN_BM25_SINGLE_GAP, knn_single_min=s.BRAIN_KNN_SINGLE_MIN,
     )
+    assert th.require_slots, "argument completeness is never a setting"
 
 
 # ---- the closed phrase lists, each on a labelled utterance --------------------------

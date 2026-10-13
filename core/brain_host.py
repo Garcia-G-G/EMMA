@@ -132,6 +132,10 @@ def thresholds_from_settings() -> Thresholds:
         margin_min=settings.BRAIN_MARGIN_MIN,
         max_content_tokens=settings.BRAIN_MAX_CONTENT_TOKENS,
         slot_floor=settings.BRAIN_SLOT_FLOOR,
+        relaxed_agreement=settings.BRAIN_RELAXED_AGREEMENT,
+        bm25_single_min=settings.BRAIN_BM25_SINGLE_MIN,
+        bm25_single_gap=settings.BRAIN_BM25_SINGLE_GAP,
+        knn_single_min=settings.BRAIN_KNN_SINGLE_MIN,
     )
 
 

@@ -543,6 +543,20 @@ class Settings(BaseSettings):
     BRAIN_MARGIN_MIN: float = 0.0
     BRAIN_MAX_CONTENT_TOKENS: int = 12
     BRAIN_SLOT_FLOOR: float = 0.85
+    # BRAIN-1.5 gate study (BRAIN-1.5-VERIFY Part 3) — variant D shipped: the
+    # highest local % among variants with 0 wrong on the 140 (rule fixed before
+    # the study). Tuned ON the eval set, and we know it: shadow data is the test.
+    # - RELAXED_AGREEMENT: kNN top-1 in BM25 top-3, or BM25 top-1 in kNN top-3.
+    # - BM25_SINGLE_MIN (θ1): None = off. No value separates right from wrong:
+    #   a WRONG BM25 top-1 scored 51.4 while the best RIGHT one scored 27.0.
+    # - KNN_SINGLE_MIN (θ2): kNN top-1 alone may pick. Local % is flat from 0.94
+    #   down to the 0.85 novelty floor (all 0 wrong); 0.94 is the most
+    #   conservative value at that plateau. kNN top-1 cosine on the 140: right
+    #   quartiles 0.874/0.925/0.947/0.962/0.997, wrong 0.819/0.877/0.899/0.928/0.963.
+    BRAIN_RELAXED_AGREEMENT: bool = True
+    BRAIN_BM25_SINGLE_MIN: float | None = None
+    BRAIN_BM25_SINGLE_GAP: float = 0.0
+    BRAIN_KNN_SINGLE_MIN: float | None = 0.94
 
     # ---- Proactive engine (Prompt 17) -------------------------------
     # Master switch + global behavior. Conservative defaults: only the

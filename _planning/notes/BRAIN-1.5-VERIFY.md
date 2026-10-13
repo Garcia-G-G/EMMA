@@ -8,7 +8,7 @@ from them enters the phrasebook (test-enforced).
 | | Served without an LLM (local + templates) | Local tool decisions | Wrong |
 |---|---:|---:|---:|
 | **Before** (BRAIN-1, `be86cfc`) | **34.3 %** (48/140) | **15.7 %** (22/140) | 0 |
-| **After** (BRAIN-1.5) | *(Part 3)* | *(Part 3)* | |
+| **After** (BRAIN-1.5, phrasebook + gate D) | **55.0 %** (77/140) | **36.4 %** (51/140) | **0** |
 
 "Wrong" = a local tool the label doesn't accept, a wrong argument value against
 the slot fixtures, or declining (none/clarify/refuse) a request that wanted a
@@ -102,3 +102,77 @@ the gate; these are the "A" numbers.)
 
 Pinned: retriever floors re-pinned upward in `tests/test_brain_retrieve.py`;
 gate floors unchanged until Part 3. Gates: 1436 passed, 2 xfailed; ruff, mypy clean.
+
+## Part 3 — honest gate study
+
+Step 3 of the gate now *chooses* a tool and records how (`choice_path`):
+`agree`, `relaxed:knn_in_bm25_top3`, `relaxed:bm25_in_knn_top3`,
+`single:knn`, `single:bm25`. If kNN's best is the no-tool pseudo-label
+`__none__`, the gate defers (`knn_none`) — declining a real request is a wrong
+answer, and kNN alone can't tell. τ (novelty) applies to the *chosen* tool's
+kNN score, except on a BM25-only pick. Reproduce: `scripts/brain/gate_study.py`.
+
+### Thresholds, and the distributions they came from (all 140, LOO + holdout)
+
+| Source, top-1 | Right (quartiles) | Wrong (quartiles) |
+|---|---|---|
+| BM25 score | 5.8 / 11.7 / 13.6 / 16.8 / **27.0** | 2.5 / 4.9 / 7.9 / 13.6 / **51.4** |
+| BM25 relative gap | 0.004 / 0.30 / 0.42 / 0.55 / 1.0 | 0.003 / 0.01 / 0.11 / 0.25 / 1.0 |
+| kNN cosine | 0.874 / 0.925 / 0.947 / 0.962 / 0.997 | 0.819 / 0.877 / 0.899 / 0.928 / 0.963 |
+
+- **θ₁ (BM25 alone): off.** The highest-scoring *wrong* BM25 top-1 (51.4,
+  `log_16` → delegate_to_claude_code; 33.6 `log_46`) beats every *right* one
+  (max 27.0), and the gap doesn't separate them either. Any θ₁ that admits no
+  wrong pick admits no right one.
+- **θ₂ (kNN alone): 0.94.** Among items where the sources disagree, before the
+  argument check: θ₂ = 0.97 admits 1 right / 0 wrong, 0.96 → 5 / 1, 0.95 → 11 / 2.
+  Through the full gate, local % is **flat from 0.94 down to the 0.85 novelty
+  floor, all at 0 wrong** (51 local) — the extra kNN-only picks all fail the
+  argument check. 0.94 is the most conservative value on that plateau.
+- **δ (margin) stays 0.0** (BRAIN-1 finding unchanged).
+
+### The study (each variant ± the argument-completeness check)
+
+| Variant | Args check | Served | Local | Wrong | Defer reasons |
+|---|---|---:|---:|---:|---|
+| A. agreement required (BRAIN-1) | on | 64 (45.7 %) | 38 (27.1 %) | **0** | disagree 46, slots 27, complex 2, question_not_statement 1 |
+| A | off | 91 (65.0 %) | 65 (46.4 %) | 4: sc_V41, sc_V42, sc_V69, log_27 | disagree 46, complex 2, question 1 |
+| B. relaxed agreement (top-3) | on | 72 (51.4 %) | 46 (32.9 %) | **0** | slots 43, disagree 21, complex 2, question 2 |
+| B | off | 115 (82.1 %) | 89 (63.6 %) | 12 | disagree 21, complex 2, question 2 |
+| C. single source (θ₁ off, θ₂ = 0.94) | on | 73 (52.1 %) | 47 (33.6 %) | **0** | slots 37, disagree 27, complex 2, question 1 |
+| C | off | 110 (78.6 %) | 84 (60.0 %) | 8 | disagree 27, complex 2, question 1 |
+| **D. B + C — shipped** | **on** | **77 (55.0 %)** | **51 (36.4 %)** | **0** | slots 46, disagree 13, complex 2, question 2 |
+| D | off | 123 (87.9 %) | 97 (69.3 %) | 12 | disagree 13, complex 2, question 2 |
+
+(Wrong with the check off, B/D: sc_A14, sc_A21, sc_A23, sc_A26, sc_V26, sc_V34,
+sc_V41, sc_V42, sc_V69, log_27, syn_00, syn_02.)
+
+**Decision rule** (fixed before running): highest local % among variants with
+0 wrong on the 140 → **D**. Settings: `BRAIN_RELAXED_AGREEMENT=True`,
+`BRAIN_BM25_SINGLE_MIN=None`, `BRAIN_BM25_SINGLE_GAP=0.0`,
+`BRAIN_KNN_SINGLE_MIN=0.94`. Argument completeness is never a setting
+(`Thresholds.require_slots` exists for this study only; a test asserts it's on).
+
+**What each layer is worth:** relaxing step 3 adds 13 local decisions; the
+argument check removes 12 wrong ones. Every relaxation is only as safe as that
+check — including its rule that a tool with no slot/frame spec can never go
+local (e.g. "silencia el audio": kNN picks `mute_mic` at 0.963, the check
+defers it). **This was tuned on the eval set and we know it**: the shadow week
+is the real test, and every feature is still logged.
+
+### Shipped, per path
+
+| Path | n | Verdicts |
+|---|---:|---|
+| L1 | 24 | **local 21**, defer 3 |
+| L2 | 44 | **local 30**, defer 14 |
+| L3 | 4 | defer 4 |
+| TPL | 28 | none 14, refuse 7, clarify 4, defer 3 |
+| READ | 12 | none 1, defer 11 |
+| LLM | 28 | defer 28 |
+
+How the 51 local decisions were chosen: agree 38, relaxed (kNN in BM25 top-3)
+5, kNN alone 5, relaxed (BM25 in kNN top-3) 3.
+
+Pinned (`tests/test_brain_eval.py`): coverage 77, local 51, wrong 0. Gates:
+1436 passed, 2 xfailed; ruff, mypy clean.

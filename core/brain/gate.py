@@ -25,10 +25,17 @@ from core.brain.slots import FILLER, STOP, TOOLS, Vocab, resolve
 
 @dataclass(frozen=True)
 class Thresholds:
-    knn_min: float = 0.85  # τ: cosine to the nearest labelled example
+    knn_min: float = 0.85  # τ: cosine to the nearest example (novelty floor)
     margin_min: float = 0.15  # δ: top-1 vs top-2, on both sources
     max_content_tokens: int = 12
     slot_floor: float = 0.85
+    # BRAIN-1.5 gate study. How step 3 may pick a tool besides strict agreement:
+    relaxed_agreement: bool = False  # B: kNN top-1 in BM25 top-3, or BM25 top-1 in kNN top-3
+    bm25_single_min: float | None = None  # C: θ1, BM25 top-1 score alone is enough …
+    bm25_single_gap: float = 0.0  # … with this relative gap to BM25 top-2 (δ1)
+    knn_single_min: float | None = None  # C: θ2, kNN top-1 cosine alone is enough
+    # Study only — never a setting: what the argument check is worth on its own.
+    require_slots: bool = True
 
 
 # ---- closed phrase lists (both languages, neutral) ------------------------------------
@@ -194,22 +201,28 @@ def decide(
     bm1 = bm_sorted[0].tool if bm_sorted else None
     kn1 = kn_sorted[0].tool if kn_sorted else None
 
-    # 3. agreement
-    agree = bm1 is not None and bm1 == kn1
+    # 3. choose a tool: agreement, or (study variants) relaxed / single-source
+    chosen, how = _choose(bm_sorted, kn_sorted, th)
     f.append(Feature("bm25_top1", bm1 or ""))
     f.append(Feature("knn_top1", kn1 or ""))
-    f.append(Feature("agree", agree, passed=agree))
-    if not agree:
-        return _decision(norm, "defer", "disagree", f, retrieval)
-    assert bm1 is not None
-    chosen = bm1
+    f.append(Feature("agree", how == "agree", passed=chosen is not None))
+    f.append(Feature("choice_path", how))
+    if chosen is None:
+        return _decision(norm, "defer", "disagree" if how in ("none", "disagree") else how, f, retrieval)
+    if chosen == NONE_TOOL:
+        # The nearest examples wanted no tool — but declining a real request is a
+        # wrong answer, and kNN alone can't tell. Ask the LLM.
+        return _decision(norm, "defer", "knn_none", f, retrieval)
 
-    # 4. kNN distance
-    cos = kn_sorted[0].knn_score
-    ok_cos = cos >= th.knn_min
-    f.append(Feature("knn_cosine", cos, threshold=th.knn_min, passed=ok_cos))
-    if not ok_cos:
-        return _decision(norm, "defer", "novel", f, retrieval, chosen=chosen)
+    # 4. kNN distance — of the CHOSEN tool. A pick BM25 made alone is BM25's call.
+    cos = next((c.knn_score for c in kn_sorted if c.tool == chosen), 0.0)
+    if how == "single:bm25":
+        f.append(Feature("knn_cosine", cos, threshold=th.knn_min, passed=None))
+    else:
+        ok_cos = cos >= th.knn_min
+        f.append(Feature("knn_cosine", cos, threshold=th.knn_min, passed=ok_cos))
+        if not ok_cos:
+            return _decision(norm, "defer", "novel", f, retrieval, chosen=chosen)
 
     # 5. margin, both sources
     bm_margin = _rel_margin(bm_sorted)
@@ -247,7 +260,7 @@ def decide(
     if stores and asks:
         return _decision(norm, "defer", "question_not_statement", f, retrieval, chosen=chosen,
                          slots=res.slots)
-    if res.missing or res.leftover or chosen not in TOOLS:
+    if th.require_slots and (res.missing or res.leftover or chosen not in TOOLS):
         return _decision(norm, "defer", "slots", f, retrieval, chosen=chosen, slots=res.slots)
 
     # 8. risk class: local, but the confirmation flow runs first
@@ -257,6 +270,39 @@ def decide(
         norm, "local", "ok", f, retrieval, chosen=chosen, slots=res.slots,
         needs_confirmation=risky,
     )
+
+
+def _choose(
+    bm: list[Candidate], kn: list[Candidate], th: Thresholds
+) -> tuple[str | None, str]:
+    """(tool, how). ``how``: agree | relaxed:* | single:* | conflict | disagree | none."""
+    bm1 = bm[0].tool if bm else None
+    kn1 = kn[0].tool if kn else None
+    if bm1 is None and kn1 is None:
+        return None, "none"
+    if bm1 is not None and bm1 == kn1:
+        return bm1, "agree"
+    if th.relaxed_agreement:
+        if kn1 is not None and kn1 in [c.tool for c in bm[:3]]:
+            return kn1, "relaxed:knn_in_bm25_top3"
+        if bm1 is not None and bm1 in [c.tool for c in kn[:3]]:
+            return bm1, "relaxed:bm25_in_knn_top3"
+    single_bm = (
+        bm1 if th.bm25_single_min is not None and bm
+        and bm[0].bm25_score >= th.bm25_single_min and _rel_margin(bm) >= th.bm25_single_gap
+        else None
+    )
+    single_kn = (
+        kn1 if th.knn_single_min is not None and kn and kn[0].knn_score >= th.knn_single_min
+        else None
+    )
+    if single_bm and single_kn and single_bm != single_kn:
+        return None, "conflict"
+    if single_kn:
+        return single_kn, "single:knn"
+    if single_bm:
+        return single_bm, "single:bm25"
+    return None, "disagree"
 
 
 def _rel_margin(ranked: list[Candidate]) -> float:
