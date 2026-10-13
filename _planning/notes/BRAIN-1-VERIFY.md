@@ -387,3 +387,33 @@ times; both are wrong 12 times. Two causes, measured:
 **Not done to hit the number:** loosening agreement, tuning τ on these items,
 or writing frames until the test set passes. Coverage at 0 % wrong is the
 honest starting point; shadow data decides the rest.
+
+## Part 6 — templates, confirmation, clarification (no LLM)
+
+`core/brain/respond.py`, text only (TTS is VOICE-1).
+
+- **Templates**: 40 tools — every tool on an L1/L2 route — with 4–6 phrasings
+  per language (326 total), plus phrasings per verdict: confirm, cancelled,
+  unclear answer, clarify (by verb: search / send / close / generic / numbered
+  options), refuse (safety / no phone calls), small talk. Weighted random,
+  never the same phrasing twice in a row per key (60 draws: no repeat, ≥ 4
+  distinct). Language follows the utterance (stopword hint; type `SpokenLang`
+  from `core/runtime.py`). Neutral wording, no regionalisms. Noise answers with
+  silence (""); a `defer` raises — it is the LLM's to answer.
+- **Confirmation questions name the concrete action and its target** ("¿Borrar
+  la nota Compras? Dime sí o no.") — 18 action phrases cover every destructive
+  or sink tool on an L1/L2 route; a test fails if a risky tool would read its
+  code name. Found while building: the first draft said `delete_note(Compras)`.
+- **Confirmation turn** (`answer_confirmation`): closed yes/no/cancel lists from
+  Part 2 — the answer must OPEN with yes; "borra la nota compras, sí" is
+  `unclear`, not a yes. `execute` is the brain's only producer of
+  `confirmed=True`; the dispatch guard still independently requires the spoken
+  yes after the question.
+- **Clarification turn** (`answer_clarification`): ordinals ES/EN ("el
+  primero", "la segunda", "el 3", "the last one") or fuzzy on the option label,
+  matched on content words ("el de la oficina" → "Juan García (oficina)" — the
+  first draft scored the filler words and missed it). Ties ("Juan" against two
+  Juans and a Juana) → None: ask again, don't guess.
+- Refusals: one calm sentence, no lecture (test: one sentence, < 40 chars).
+
+Pinned: 31 tests (`tests/test_brain_respond.py`). Gates: 1417 passed, 2 xfailed.
