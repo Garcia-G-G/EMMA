@@ -45,6 +45,9 @@ class ExampleIndex:
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        if self.path != ":memory:":
+            # Personal tier once BRAIN-2 appends learned utterances: born 0600.
+            Path(self.path).chmod(0o600)
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.conn.enable_load_extension(False)

@@ -417,3 +417,87 @@ honest starting point; shadow data decides the rest.
 - Refusals: one calm sentence, no lecture (test: one sentence, < 40 chars).
 
 Pinned: 31 tests (`tests/test_brain_respond.py`). Gates: 1417 passed, 2 xfailed.
+
+## Part 7 — shadow mode in the live session
+
+`core/brain_shadow.py`, wired into `core/conversation.py` behind
+`BRAIN_SHADOW` (default on): a fresh `Shadow` per wake session (next to the
+injection guard), VAD onset → new turn, transcript → decision, each Realtime
+tool call → recorded on the turn, session end → flush. **It executes nothing**:
+no dispatch, no tool, no audio (test: `registry.dispatch` replaced by a function
+that fails the test if called, across a 140-turn session).
+
+- **Turns start at VAD onset, not at the transcript** — Realtime can call a tool
+  before its transcript lands. A decision is attached to the turn its words came
+  from even if it finishes after the user started the next turn (tested with a
+  deliberately slow brain).
+- **Never hurts the live path**: the decision runs in a worker thread as a
+  detached task (the frame tap never awaits it); every hook swallows its own
+  errors. **No record, no decision**: a brain still loading logs `defer /
+  brain_not_ready`; a brain that raises logs `defer / brain_error:<Type>`; a VAD
+  onset with no words (a cough) logs nothing.
+- The live brain loads once per daemon in a background thread: available tools,
+  installed apps (a listing of the Applications folders — the environment cache
+  only holds one app per category), the dictionary's pages/contacts/connections,
+  `~/.emma/brain.db` (labelled set + canonical phrases, created 0600 — it becomes
+  personal-tier when BRAIN-2 appends learned utterances).
+- Each log line: the full `Decision` (features, slots, timings) + `session`,
+  `turn`, `brain_verdict`, `brain_tool`, `realtime_tool`, `realtime_args`
+  (redacted, `confirmed` dropped), `realtime_tools_in_turn`, `agree`
+  (local: same tool; none/clarify/refuse: live path used no tool; defer: null).
+- `python -m emma.brain report` — turns, served-without-LLM rate, local rate,
+  agreement on local verdicts, no-tool agreement, every disagreement with both
+  sides, defer-reason histogram, p50/p95 latency. Also `decide "<text>"` and
+  `fetch-model`.
+
+**The live comparison can't start yet**: there is no OpenAI key, so Realtime
+doesn't run. The wiring ships and is tested against the 140; the week of data
+starts when a voice path is live (BRAIN-2 / VOICE-1), as the prompt allows.
+
+### Simulated session over the 140 (live path = each label's first tool)
+
+```
+turns logged: 140
+served without an LLM:  34.3% (48/140)   clarify 4  defer 92  local 22  none 15  refuse 7
+local verdicts:  15.7% (22/140)
+agreement with the live path on local verdicts:  95.5% (21/22)
+no-tool verdicts where the live path also used no tool:  88.5% (23/26)
+decision latency: p50 7.6 ms   p95 18.4 ms   (n=140)
+```
+
+All 4 "disagreements" are the brain choosing a *different acceptable* answer
+than the label's first tool (`current_datetime_speak` for `current_time`;
+small talk / refuse where the label also accepts `__none__`) — the simulation
+can't tell; real Realtime data will.
+
+**On this Mac** (`python -m emma.brain decide "Hey Emma, abre espotify"`):
+`defer / disagree` — BM25 `toggle_ide_terminal` (the missing Spanish trigger on
+`open_application`, Part 3) vs kNN `open_application`. The gate fails closed,
+exactly as Part 5 measured.
+
+### Pinned
+
+- **Decision latency p95 < 100 ms** (`test_decision_latency_p95_under_100ms`,
+  best of 3 rounds over the 140): measured p95 18.4–46.8 ms across runs on this
+  Mac under load; p50 7.6–10.1 ms.
+- 8 tests (`tests/test_brain_shadow.py`), incl. the REAL `_UserSpeechTap`
+  driving the hooks.
+
+Gates: 1425 passed, 14 deselected, 2 xfailed; acceptance `--mock-external`
+99/99; ruff, mypy clean.
+
+---
+
+## Definition of done — status
+
+| # | Item | Status |
+|---|---|---|
+| 1 | User data in `~/.emma/`, survives an installer re-run; Qwen run scored; `brain_path` on all 140 | **Done** (0a tested; 0b in LAUNCH-12 Part 4a; 0c 140/140) |
+| 2 | `core/brain/` exists; import guard green; `mypy --strict` clean | **Done** (guard is transitive and proven to catch a 2-hop violation) |
+| 3 | Taint + sink policy + mic-only confirmation in dispatch; 20 injection tests green | **Done** (20 attacks; 25/33 fail with the guard off) |
+| 4 | BM25 + kNN, recall and agreement pinned | **Done** (BM25 r@1 52.2 %, kNN r@1 40.0 % LOO, agreement 17.4 %) |
+| 5 | Every L1/L2 item resolves its expected values; fixtures pinned | **42 / 44 L2 + 24 / 24 L1**; 2 declared hard (xfail strict) |
+| 6 | Gate ≥ 50 % local, ≤ 1 % wrong; every defer has a reason; thresholds in settings | **Not met: 34.3 % at 0 % wrong.** Reasons, thresholds: done. δ changed 0.15 → 0.0 on measurement |
+| 7 | Templates, confirmation, clarification without an LLM | **Done** |
+| 8 | Shadow mode live; report works; decision p95 < 100 ms | **Wired + tested; live data waits for a voice path** (no OpenAI key). p95 18–47 ms |
+| 9 | Full suite + ruff + mypy green; this doc records every pinned number and the per-item results | **Done** |

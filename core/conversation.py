@@ -80,6 +80,7 @@ from config.settings import settings
 from core import (
     affect,
     audio_devices,
+    brain_shadow,
     capability_gaps,
     dictionary,
     events_bus,
@@ -195,6 +196,7 @@ class TranscriptCollector(FrameProcessor):
 
 # Strong refs for fire-and-forget sticky pre-loads (asyncio keeps only weak ones).
 _PRELOADS: set[asyncio.Task[list[str]]] = set()
+_SHADOW_TASKS: set[asyncio.Task[None]] = set()  # BRAIN-1 shadow decisions in flight
 
 
 class _UserSpeechTap(FrameProcessor):
@@ -220,6 +222,9 @@ class _UserSpeechTap(FrameProcessor):
             # VAD onset arrives immediately; self-talk still can't fake it
             # (no new onset occurs between a question and same-turn consent).
             session_memory.push_event("user", "speech_started", "")
+            shadow = brain_shadow.current()
+            if shadow is not None:
+                shadow.on_speech_started()  # BRAIN-1 shadow: a new turn
         elif isinstance(frame, TranscriptionFrame) and frame.text:
             # 22.1-B36: STT corrections apply HERE now (the dead collector
             # used to) so session memory, the invariant, anaphora AND
@@ -231,6 +236,14 @@ class _UserSpeechTap(FrameProcessor):
             guard = injection.current()
             if guard is not None:
                 guard.note_user_transcript(cleaned)  # "olvida eso" clears the taint
+            shadow = brain_shadow.current()
+            if shadow is not None:
+                # BRAIN-1 shadow: decide in a worker thread and log beside what
+                # Realtime does. Never awaited here, never executes anything.
+                st = shadow.on_transcript(cleaned)
+                if st is not None:
+                    _SHADOW_TASKS.add(st)
+                    st.add_done_callback(_SHADOW_TASKS.discard)
             if settings.TOOL_RETRIEVAL:
                 # LAUNCH-12 sticky set: pre-load what this utterance is about so
                 # the follow-up turns have it without a find_tools round-trip.
@@ -944,6 +957,9 @@ def _make_function_handler(
         # tokens) must not reach the logs even before the redaction processor.
         log.info("tool_started", name=name, args_keys=list(args.keys()))
         events_bus.publish("tool_started", name=name)
+        shadow = brain_shadow.current()
+        if shadow is not None:
+            shadow.on_tool(name, args)  # BRAIN-1 shadow: what the live path chose
         if settings.EMMA_TEST_MODE:
             # Voice-harness hook (19.7-VAH3): the runner asserts on argument
             # VALUES, which production logs deliberately omit. Test-mode only;
@@ -1356,6 +1372,8 @@ async def build_pipeline(
     # BRAIN-1 Part 2: a fresh injection guard per wake session — taint from the
     # last conversation never carries into this one.
     injection.install()
+    if settings.BRAIN_SHADOW:
+        brain_shadow.start_session()
     return pipeline, task, transport, context, auth_watcher, llm
 
 
@@ -1456,6 +1474,7 @@ async def run_session(immediate_command: bool = False) -> None:
         _active_task = None  # session over; nothing to interrupt
         tool_selection.set_applier(None)  # the task it pushed into is gone
         injection.uninstall()
+        brain_shadow.end_session()
         log.info("conversation_end")
 
     if auth_watcher.terminal_error is not None:
