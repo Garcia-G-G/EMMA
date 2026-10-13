@@ -401,7 +401,7 @@ def resolve(
             m = _regex_span(text, _URL)
             if m:
                 take(param, _canon_url(m[0]), "regex:url", 1.0, m[1], m[2])
-            else:
+            elif tool == "open_url":  # a site NAME means "open it", never "store it"
                 site = _site(text, vocab, floor)
                 if site:
                     take(param, SITES[site[0]], site[1], site[2], site[3], site[4])

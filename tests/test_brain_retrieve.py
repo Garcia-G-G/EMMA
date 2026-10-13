@@ -37,10 +37,10 @@ PIN = {
     "items": 115,
     "bm25_r1": 80,  # 69.6 %  (was 60, 52.2 %)
     "bm25_r5": 102,  # 88.7 %  (was 78)
-    "knn_r1": 89,  # 77.4 %  (was 46, 40.0 %)
+    "knn_r1": 82,  # 71.3 %  (was 46; 89 before LLM-labelled rows voted "__llm__")
     "knn_r5": 107,  # 93.0 %  (was 66)
-    "agree": 70,  # 60.9 % — BM25 top-1 == kNN top-1  (was 20, 17.4 %)
-    "agree_correct": 65,  # 93 % of the agreements are the right tool  (was 18)
+    "agree": 65,  # 56.5 % — BM25 top-1 == kNN top-1  (was 20, 17.4 %; 70 pre-review)
+    "agree_correct": 61,  # 94 % of the agreements are the right tool  (was 18)
 }
 
 

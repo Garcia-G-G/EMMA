@@ -8,7 +8,7 @@ from them enters the phrasebook (test-enforced).
 | | Served without an LLM (local + templates) | Local tool decisions | Wrong |
 |---|---:|---:|---:|
 | **Before** (BRAIN-1, `be86cfc`) | **34.3 %** (48/140) | **15.7 %** (22/140) | 0 |
-| **After** (BRAIN-1.5: phrasebook + gate D + site table) | **55.7 %** (78/140) | **37.1 %** (52/140) | **0** |
+| **After** (BRAIN-1.5, final, after review fixes) | **55.0 %** (77/140) | **36.4 %** (51/140) | **0** |
 
 "Wrong" = a local tool the label doesn't accept, a wrong argument value against
 the slot fixtures, or declining (none/clarify/refuse) a request that wanted a
@@ -267,4 +267,44 @@ Gates: 1443 passed, 0 xfailed; acceptance `--mock-external` 99/99; ruff, mypy cl
 | 3 | Gate study A–D ± argument completeness; variant by the rule; thresholds in settings with provenance | **Done** — D shipped; θ₁ off, θ₂ 0.94 |
 | 4 | Embedder in the installer; honest defer without it; latency re-pinned | **Done** — `_landing` committed + pushed, **not deployed** (needs the release with `core/brain`) |
 | 5 | Known-hard items resolved or reclassified; one mapping | **Done** — `sc_V26` fixed, `log_26` → LLM |
-| 6 | This doc, with the headline | **Done** — served 34.3 → 55.7 %, local 15.7 → 37.1 %, wrong 0 → 0 |
+| 6 | This doc, with the headline | **Done** — served 34.3 → 55.0 %, local 15.7 → 36.4 %, wrong 0 → 0 |
+
+## Review fixes (independent review of `be86cfc..aed253f`)
+
+A reviewer read the BRAIN-1.5 diff for correctness and reproduced four bugs on
+this machine in **production shape** — labelled rows in the index, only this
+Mac's tools — a shape the leave-one-out evaluation never exercises. All six
+findings were real; each now has a regression test
+(`tests/test_brain_review_fixes.py`), and **8 of its 9 tests fail on the
+pre-fix code**.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | kNN-alone could pick a tool **this Mac doesn't have** — "pon el brillo al 30" → local `set_brightness`; `required` then came back empty | kNN votes only for tools the brain was handed; a chosen tool not among them defers (`unavailable`) |
+| 2 | The site table filled **every** `url` slot: "guarda github como mi portafolio" → local `remember_page(url=github.com, name=junk)` | Sites fill `open_url` only — a site name means "open it", never "store it" |
+| 3 | The request's own transcript, landing late (Realtime fires tools before Whisper finishes), became "the next utterance" and **blocked a real "sí"** | The answer window opens at the first new VAD onset after the question |
+| 4 | Labelled items the brain isn't meant to serve (LLM/READ/L3) **voted for a tool** in production; repeating one went local with a junk residue | Those rows vote `__llm__`; a pseudo-label top can't be overridden by the relaxed or single-source rules (`knn_llm` / `knn_none`) |
+| 5 | The confirmation question had **no length cap** — a long (possibly attacker-written) body would be read aloud | 60 chars a value, 3 values |
+| 6 | The index fingerprint **missed inputs** (fill tables, normalization), so a stale index could be reused | It hashes the full source of every module that shapes a row |
+
+Noted, not changed: a dev checkout and the installed daemon share
+`~/.emma/brain.db`; when their code differs each rebuilds over the other. Only
+a developer hits this. Also, "que" opens a question after accent folding, so
+"que no se te olvide que…" defers — coverage only, never a wrong answer.
+
+**Cost of honesty:** fix 4 moved `sc_A20` ("busca un repo de pytorch en GitHub")
+to defer — its nearest neighbor is the READ item `sc_V56` ("…y dime qué
+encontraste"), which before the fix was voting for `search_github`. Re-pinned
+deliberately:
+
+| | Before review | After review |
+|---|---:|---:|
+| Served on the 140 | 78 (55.7 %) | **77 (55.0 %)** |
+| Local | 52 (37.1 %) | **51 (36.4 %)** |
+| Wrong | 0 | **0** |
+| kNN top-1 / agreement / agreed-correct | 89 / 70 / 65 | 82 / 65 / 61 |
+
+The test fixtures for the confirmation guard now give every answer the VAD
+onset the live speech tap always records (they used to push words alone).
+
+Gates: 1452 passed, 0 xfailed; ruff, mypy clean.

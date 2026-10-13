@@ -8,6 +8,7 @@ the labelled set.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from core.brain.embed import Embedder
 from core.brain.gate import Thresholds
 from core.brain.index import Example, ExampleIndex
 from core.brain.normalize import fold, lang_hint, normalize
-from core.brain.retrieve import ToolDoc, embed_text
+from core.brain.retrieve import LLM_TOOL, ToolDoc, embed_text
 from core.brain.slots import Vocab
 
 LABELLED = Path(__file__).resolve().parent.parent / "scripts" / "spike_cascade" / "data" / "labelled.json"
@@ -57,6 +58,9 @@ def tool_docs(available_only: bool = False) -> list[ToolDoc]:
     return docs
 
 
+_NOT_LOCAL = frozenset({"LLM", "READ", "L3"})
+
+
 def labelled_examples(path: Path = LABELLED) -> list[Example]:
     out: list[Example] = []
     for it in json.loads(path.read_text(encoding="utf-8")):
@@ -72,6 +76,16 @@ def labelled_examples(path: Path = LABELLED) -> list[Example]:
             )
         )
     return out
+
+
+def index_rows(examples: list[Example]) -> list[Example]:
+    """Labelled rows as the INDEX holds them: an item the brain isn't meant to serve
+    (LLM / READ / L3) votes ``__llm__`` — repeating it must defer, not pick the
+    first of its accepted tools with a residue full of junk (review, BRAIN-1.5)."""
+    return [
+        dataclasses.replace(e, accept_tools=(LLM_TOOL,)) if e.brain_path in _NOT_LOCAL else e
+        for e in examples
+    ]
 
 
 LEAK_COSINE = 0.97
@@ -96,7 +110,7 @@ def build_index(
     with_phrasebook: bool = True,
 ) -> ExampleIndex:
     """Labelled examples (+ the phrasebook). Never the LLM tool descriptions."""
-    rows = list(examples if examples is not None else labelled_examples())
+    rows = index_rows(list(examples if examples is not None else labelled_examples()))
     if with_phrasebook:
         rows += phrasebook_examples()
     vecs = embedder.embed([embed_text(normalize(e.text)) for e in rows])
@@ -106,18 +120,20 @@ def build_index(
 
 
 def index_fingerprint() -> str:
-    """What the shipped rows depend on: phrasebook, labelled set, model, embed rule."""
+    """Everything the stored rows depend on: the data files, the model revision,
+    and the FULL source of every module that shapes a row or its vector (fill
+    tables, normalization, ids, embed text). Any change rebuilds; a boot with no
+    change doesn't."""
     import hashlib
-    import inspect
 
-    from core.brain import embed, retrieve
+    from core.brain import embed, index, retrieve
+    from core.brain import normalize as normalize_mod
 
     h = hashlib.sha256()
-    h.update(phrasebook.PATH.read_bytes())
-    h.update(LABELLED.read_bytes())
+    for f in (phrasebook.PATH, LABELLED, Path(phrasebook.__file__), Path(normalize_mod.__file__),
+              Path(index.__file__), Path(retrieve.__file__), Path(embed.__file__), Path(__file__)):
+        h.update(f.read_bytes())
     h.update(embed.REVISION.encode())
-    h.update(inspect.getsource(retrieve.embed_text).encode())
-    h.update(inspect.getsource(phrasebook.expand).encode())
     return h.hexdigest()
 
 

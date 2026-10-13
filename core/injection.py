@@ -201,26 +201,28 @@ class SessionGuard:
     async def _yes_after(self, t_req: float) -> bool:
         """Is the user's VERY NEXT utterance after the question a yes?
 
-        Only the first transcript after the question is matched — one word
-        ("sí") confirms; anything else closes the window and the next attempt
-        asks again. A later stray "sí" can't confirm an old question.
+        The answer window opens at the first VAD onset after the question. A
+        transcript landing after the question but belonging to speech that began
+        before it — the request itself, transcribed late (Realtime fires tools
+        before Whisper finishes) — is not the answer and is skipped. Then the
+        first transcript decides: one "sí" confirms, anything else closes the
+        window and the next attempt asks again.
         """
         deadline = time.monotonic() + TRANSCRIPT_WAIT_S
         while True:
-            started = False
+            onset: float | None = None
             for ev in session_memory.recent(200):
                 if ev.role != "user" or ev.ts <= t_req:
                     continue
-                if ev.kind == "speech_started":
-                    started = True
-                elif ev.kind == "speech":
+                if ev.kind == "speech_started" and onset is None:
+                    onset = ev.ts
+                elif ev.kind == "speech" and onset is not None and ev.ts > onset:
                     if ev.ts in self._used_yes or not is_yes(ev.content):
                         return False
                     self._used_yes.add(ev.ts)
                     return True
-            # Only wait while the user is known to have spoken but no words have
-            # landed yet; silence is final.
-            if not started or time.monotonic() >= deadline:
+            # Only wait while an answer has started but its words haven't landed.
+            if onset is None or time.monotonic() >= deadline:
                 return False
             await asyncio.sleep(_POLL_S)
 
@@ -229,7 +231,10 @@ class SessionGuard:
         """Short, and names the action: "¿Borrar la nota Compras?" — one word answers it."""
         from core.brain.respond import action_phrase
 
-        clean = {k: redact(v) for k, v in _strings(args) if k not in ("confirmed", "cancelled")}
+        # Bounded: 60 chars a value, 3 values — a long body (possibly attacker
+        # text, when tainted) is never read aloud as "the short question".
+        pairs = [(k, redact(v)) for k, v in _strings(args) if k not in ("confirmed", "cancelled")]
+        clean = {k: (v if len(v) <= 60 else v[:57] + "...") for k, v in pairs[:3]}
         return f"¿{action_phrase(name, clean, 'es')}?"
 
 

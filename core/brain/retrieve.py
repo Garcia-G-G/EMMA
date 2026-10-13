@@ -24,6 +24,10 @@ from core.brain.normalize import Normalized
 from core.tool_selection import BM25, doc_tokens, query_tokens
 
 NONE_TOOL = "__none__"
+# A labelled example the brain is NOT meant to serve (brain_path LLM / READ / L3)
+# votes for this instead of its tools: "people who say this need the LLM".
+LLM_TOOL = "__llm__"
+PSEUDO_TOOLS = frozenset({NONE_TOOL, LLM_TOOL})
 
 
 def embed_text(norm: Normalized) -> str:
@@ -113,6 +117,10 @@ class DualRetriever:
             neighbors = self.index.search(vec, k=k, exclude_id=exclude_id, exclude_ids=exclude_ids)
             for nb in neighbors:  # nearest first, so the first sighting is the max
                 for tool in nb.example.accept_tools:
+                    # Only tools the brain was handed (the AVAILABLE ones in the
+                    # daemon) may get a vote; the index holds rows for every tool.
+                    if tool not in self.tools and tool not in PSEUDO_TOOLS:
+                        continue
                     if tool not in knn_score:
                         knn_score[tool] = nb.cosine
                         knn_near[tool] = nb.example.id

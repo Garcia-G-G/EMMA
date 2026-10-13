@@ -78,6 +78,12 @@ def _sink(sp: Spies, name: str) -> None:
     sp.overrides[name] = fn
 
 
+def _answer(text: str) -> None:
+    """A user answer as the live speech tap records it: VAD onset, then words."""
+    session_memory.push_event("user", "speech_started", "")
+    session_memory.push_event("user", "speech", text)
+
+
 def _run(coro: Any) -> Any:
     return asyncio.run(coro)
 
@@ -181,7 +187,7 @@ def test_even_a_spoken_yes_cannot_launder_attacker_text(spies: Spies) -> None:
     _run(registry.dispatch("recent_from", {}))
     args = {"recipient": ATTACKER, "subject": "x", "body": "y"}
     _run(registry.dispatch("send_to", dict(args)))
-    session_memory.push_event("user", "speech", "sí")
+    _answer("sí")
     _run(registry.dispatch("send_to", {**args, "confirmed": True}))
     assert not spies.ran("send_to")
 
@@ -208,7 +214,7 @@ def test_tainted_sink_with_the_users_own_words_asks_then_runs(spies: Spies) -> N
     first = _run(registry.dispatch("send_to", dict(args)))
     assert first.requires_confirmation and not spies.ran("send_to")
     session_memory.push_event("tool", "requires_confirmation:send_to")
-    session_memory.push_event("user", "speech", "sí, mándalo")
+    _answer("sí, mándalo")
     second = _run(registry.dispatch("send_to", dict(args)))
     assert second.success and spies.ran("send_to")
     assert spies.calls[-1][1].get("confirmed") is True  # the mic's yes reached the tool
@@ -254,7 +260,7 @@ def test_preemptive_yes_now_gets_a_question_first(spies: Spies) -> None:
     first = _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True}))
     assert not spies.ran("delete_note") and first.requires_confirmation
     session_memory.push_event("tool", "requires_confirmation:delete_note")
-    session_memory.push_event("user", "speech", "sí")
+    _answer("sí")
     assert _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True})).success
     assert spies.ran("delete_note")
 
@@ -262,7 +268,7 @@ def test_preemptive_yes_now_gets_a_question_first(spies: Spies) -> None:
 def test_a_yes_is_spent_once(spies: Spies) -> None:
     _sink(spies, "delete_note")
     session_memory.push_event("tool", "requires_confirmation:delete_note")
-    session_memory.push_event("user", "speech", "sí")
+    _answer("sí")
     assert _run(registry.dispatch("delete_note", {"title": "a", "confirmed": True})).success
     replay = _run(registry.dispatch("delete_note", {"title": "b", "confirmed": True}))
     assert replay.requires_confirmation
@@ -277,7 +283,7 @@ def test_a_late_transcript_of_a_real_yes_is_waited_for(spies: Spies) -> None:
     async def scenario() -> ToolResult:
         async def late_words() -> None:
             await asyncio.sleep(0.3)
-            session_memory.push_event("user", "speech", "sí")
+            _answer("sí")
 
         t = asyncio.create_task(late_words())
         res = await registry.dispatch("delete_note", {"title": "x", "confirmed": True})
@@ -324,10 +330,10 @@ def test_the_question_is_short_and_names_the_action(spies: Spies) -> None:
 def test_only_the_very_next_utterance_confirms(spies: Spies) -> None:
     _sink(spies, "delete_note")
     session_memory.push_event("tool", "requires_confirmation:delete_note")
-    session_memory.push_event("user", "speech", "espera, ¿qué nota era?")  # the next utterance
-    session_memory.push_event("user", "speech", "sí")  # a later, stray yes
+    _answer("espera, ¿qué nota era?")  # the next utterance
+    _answer("sí")  # a later, stray yes
     r = _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True}))
     assert not spies.ran("delete_note") and r.requires_confirmation  # asked again
     session_memory.push_event("tool", "requires_confirmation:delete_note")
-    session_memory.push_event("user", "speech", "sí")  # one word, right after
+    _answer("sí")  # one word, right after
     assert _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True})).success

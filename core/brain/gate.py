@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from core.brain.decision import Candidate, Decision, Feature, Verdict
 from core.brain.normalize import Normalized, fold
-from core.brain.retrieve import NONE_TOOL, Retrieval, ToolDoc
+from core.brain.retrieve import NONE_TOOL, PSEUDO_TOOLS, Retrieval, ToolDoc
 from core.brain.sinks import PERSIST, is_sink
 from core.brain.slots import FILLER, STOP, TOOLS, Vocab, resolve
 
@@ -210,7 +210,11 @@ def decide(
     f.append(Feature("agree", how == "agree", passed=chosen is not None))
     f.append(Feature("choice_path", how))
     if chosen is None:
-        return _decision(norm, "defer", "disagree" if how in ("none", "disagree") else how, f, retrieval)
+        return _decision(norm, "defer", "disagree" if how in ("none", "disagree") else how, f,
+                         retrieval)
+    if chosen not in tools:
+        # The index knows every tool; this machine may not have this one.
+        return _decision(norm, "defer", "unavailable", f, retrieval, chosen=chosen)
     if chosen == NONE_TOOL:
         # The nearest examples wanted no tool — but declining a real request is a
         # wrong answer, and kNN alone can't tell. Ask the LLM.
@@ -284,6 +288,10 @@ def _choose(
         return None, "none"
     if bm1 is not None and bm1 == kn1:
         return bm1, "agree"
+    if kn1 in PSEUDO_TOOLS:
+        # The nearest examples say "no tool" or "needs the LLM": no relaxed or
+        # single-source rule may talk over that.
+        return None, "knn_none" if kn1 == NONE_TOOL else "knn_llm"
     if th.relaxed_agreement:
         if kn1 is not None and kn1 in [c.tool for c in bm[:3]]:
             return kn1, "relaxed:knn_in_bm25_top3"
