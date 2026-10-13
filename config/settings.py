@@ -529,6 +529,21 @@ class Settings(BaseSettings):
     # retrieval). False = the old full-set session (capped at 128).
     TOOL_RETRIEVAL: bool = True
 
+    # ---- BRAIN-1: the local brain's gate (core/brain/gate.py) ----------------
+    # Starting values, NOT tuned — BRAIN-2 tunes them on shadow-mode logs. Every
+    # decision logs each feature next to its threshold for exactly that purpose.
+    # Measured on the 140 labelled items (BRAIN-1-VERIFY Part 5):
+    # - KNN_MIN: every correct agreement had cosine >= 0.879; e5 puts unrelated
+    #   commands near 0.82, so 0.85 is the floor that still means "seen this".
+    # - MARGIN_MIN: the prompt's 0.15 rejected ALL agreements (e5's top-1/top-2
+    #   gaps are 0.00-0.10) and separated nothing — the wrong agreements sat
+    #   inside the right ones' range. 0.0 = computed and logged, not gating.
+    BRAIN_SHADOW: bool = True  # run the brain beside Realtime and log; never executes
+    BRAIN_KNN_MIN: float = 0.85
+    BRAIN_MARGIN_MIN: float = 0.0
+    BRAIN_MAX_CONTENT_TOKENS: int = 12
+    BRAIN_SLOT_FLOOR: float = 0.85
+
     # ---- Proactive engine (Prompt 17) -------------------------------
     # Master switch + global behavior. Conservative defaults: only the
     # smallest set of proactivities is ON; everything else is opt-in.

@@ -273,3 +273,117 @@ bug had mangled, so the new floor is the honest one.
 - `core/vocabulary.alias_map()` (public copy of the alias index) for the host.
 
 Gates: 1363 passed, 2 xfailed; ruff, mypy clean.
+
+## Part 5 — the gate
+
+`core/brain/gate.py` (pure: retrieval + normalized text + plain tool metadata
+→ `Decision`), `core/brain/brain.py` (`Brain.decide`: normalize → retrieve →
+gate, per-stage timings). Order, each step recorded as a `Feature`:
+1. noise → `none` (empty, closed STT-artifact list, one repeated token, a single
+   word nothing explains); 2. closed lists → `refuse` (destroy home, `rm -rf`,
+   secret aloud / sent out, total control; unsupported: a phone call — the
+   pattern is **anchored**, see below), `clarify` (an action with only a generic
+   object: "búscame algo"), `none` (small talk, when it is ALL small talk);
+3. BM25 top-1 == kNN top-1; 4. kNN cosine ≥ τ; 5. margins on both sources ≥ δ;
+6. "y luego"/"después"/"and then", **or a conjunction followed by a second
+   imperative** ("… y dime qué encontraste"), or > 12 content tokens → `complex`;
+7. every required slot above the floor, no unexplained content word, no
+   dangling pronoun; 8. destructive or sink → `local` with `needs_confirmation`.
+Thresholds: `BRAIN_KNN_MIN`, `BRAIN_MARGIN_MIN`, `BRAIN_MAX_CONTENT_TOKENS`,
+`BRAIN_SLOT_FLOOR` in `config/settings.py`; the host builds `Thresholds` from
+them (the brain never imports settings).
+
+### Starting thresholds: τ kept, δ changed — measured, not tuned for score
+
+At the prompt's τ = 0.85, δ = 0.15: **coverage 19.3 %, zero local verdicts** —
+every one of the 20 agreements failed the margin. On the agreed items:
+
+- correct agreements: kNN margin 0.000–0.097, BM25 relative margin 0.058–1.000;
+- the two wrong agreements (`sc_A27`, `syn_02`): 0.036 / 0.221 and 0.000 / 0.245
+  — inside the correct items' range on both sources.
+
+δ separated nothing and rejected everything, so **`BRAIN_MARGIN_MIN = 0.0`**:
+computed and logged on every decision, not gating, until shadow data says
+otherwise. τ = 0.85 rejects no correct agreement (min 0.879) and stays above
+e5's "unrelated" level (~0.82), so it stays. **What actually rejects wrong
+agreements here is step 7 (slots)** — both wrong agreements died there.
+
+### The index: 140 + Emma's shipped canonical phrases (leak-checked)
+
+`build_index(seed_docs=…)` adds the 293 whole phrases quoted in the tools' own
+descriptions (CORE-LOCAL §1: L1 = aliases + canonical phrases). For
+evaluation, any phrase within cosine 0.97 of a labelled item is held out (14
+of them) — the score can't come from a docstring that quotes a test item.
+Production keeps all of them.
+
+| Index | Coverage | Local | Wrong |
+|---|---:|---:|---:|
+| 140 only | 28.6 % | 14 | 0 |
+| 140 + phrases (all) | 35.0 % | 23 | 0 |
+| 140 + phrases (14 leaked held out) | 35.0 % | 23 | 0 |
+
+### Pinned (`tests/test_brain_eval.py`)
+
+**Coverage 48 / 140 = 34.3 %, local 22, wrong 0 / 140 = 0 %** — wrong counting
+a wrong tool, a wrong argument value against the Part 4 fixtures, or declining a
+request that wanted a tool. Decision latency p50 10.1 ms, p95 46.8 ms (Part 7
+pins it).
+
+| Path | n | Verdicts |
+|---|---:|---|
+| L1 | 24 | local 9, defer 15 |
+| L2 | 44 | local 13, defer 31 |
+| L3 | 4 | defer 4 |
+| TPL | 28 | none 14, refuse 7, clarify 4, defer 3 |
+| READ | 12 | none 1 (`sc_A08`, accepts `__none__`), defer 11 |
+| LLM | 28 | defer 28 |
+
+Defer reasons: `disagree` 75, `slots` 16, `complex` 1.
+
+**Every local decision**: `sc_A11` current_datetime_speak · `sc_A20`
+search_github(pytorch) · `sc_A23` ide_terminal_send(ls, Cursor) · `sc_A28`
+list_browser_tabs · `sc_V13`/`log_02` delete_note(Compras) · `sc_V17`
+close_duplicate_tabs · `sc_V31` my_repos · `sc_V34` open_my_page(github) ·
+`sc_V39` remember_connection(analytics-prod, TablePlus) · `sc_V40`
+open_in_app(general, Slack) · `sc_V62`/`log_06`/`log_32` close_current_tab ·
+`sc_V67`/`log_09` play_playlist(Classical Essentials, Music) · `log_03`
+open_application(Spotify) · `log_05` open_in_app(learning-rots-local) ·
+`log_30` shutdown_emma · `syn_07` remember_app(Linear, linear://) · `syn_09`
+repeat_last · `syn_16` click_button(cancelar). 13 of the 22 carry
+`needs_confirmation` (destructive or sink).
+
+**Mutation check:** with step 7 disabled, 5 wrong local decisions appear —
+including "silencia el audio" → `mute_mic` (would cut Emma's microphone) and
+"abre cursor" → `toggle_ide_terminal`. The wrong-ceiling catches them.
+
+### Bugs found while building the gate
+
+- My phone-call refusal matched "**llamar** al dentista" inside a reminder
+  (`sc_A16`) — 1 wrong. The pattern is now anchored: a call request opens with
+  the verb.
+- `sc_V56` went local with `query="pytorch y qué encontraste"` — right tool,
+  wrong value; the original "wrong" metric (tool only) missed it. Fixed twice:
+  the conjunction-plus-second-verb rule defers it as `complex`, and the eval now
+  counts wrong VALUES as wrong.
+
+### The bar: ≥ 50 % local at ≤ 1 % wrong — **not met (34.3 % at 0 %)**
+
+This prompt's reach is 68.6 % (L1 + L2 + TPL). The gap is step 3: **75 items
+defer on disagreement**. On the L1/L2 ones, BM25 is right 23 times and kNN 20
+times; both are wrong 12 times. Two causes, measured:
+
+1. **kNN has too little data.** One or two labelled phrasings per tool.
+   Seeding with shipped phrases moved coverage 28.6 → 35.0 %. More phrasings per
+   tool is exactly BRAIN-2's learning loop.
+2. **14 tools have no Spanish trigger** (Part 3). A counterfactual — generic
+   Spanish triggers on all 14, in memory, never shipped — moves coverage only
+   **35.0 → 35.7 %**: once BM25 is right, kNN is the binding source. Editing
+   descriptions would also change what the live Realtime model reads, which
+   BRAIN-1 must not; it's not worth doing for this.
+3. Three disagreements are both right (`current_time` vs
+   `current_datetime_speak`, `sc_A11`/`log_07`/`log_08`). An equivalence group
+   would serve them; not built (it's a judgement the owner should make).
+
+**Not done to hit the number:** loosening agreement, tuning τ on these items,
+or writing frames until the test set passes. Coverage at 0 % wrong is the
+honest starting point; shadow data decides the rest.

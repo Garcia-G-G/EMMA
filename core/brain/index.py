@@ -98,17 +98,22 @@ class ExampleIndex:
             "ORDER BY distance",
             (sqlite_vec.serialize_float32(vector.astype(np.float32).tolist()), want),
         ).fetchall()
+        if not hits:
+            return []
+        dist = {int(r): float(d) for r, d in hits}
+        marks = ",".join("?" * len(dist))
+        rows = self.conn.execute(
+            "SELECT rowid, id, text, normalized, brain_path, accept_tools, lang_hint "
+            f"FROM examples WHERE rowid IN ({marks})",
+            tuple(dist),
+        ).fetchall()
         out: list[Neighbor] = []
-        for rowid, dist in hits:
-            r = self.conn.execute(
-                "SELECT id, text, normalized, brain_path, accept_tools, lang_hint "
-                "FROM examples WHERE rowid = ?",
-                (rowid,),
-            ).fetchone()
-            if r is None or r[0] == exclude_id:
+        for r in rows:
+            if r[1] == exclude_id:
                 continue
-            ex = Example(r[0], r[1], r[2], r[3], tuple(json.loads(r[4])), r[5])
-            out.append(Neighbor(ex, 1.0 - float(dist)))
+            ex = Example(r[1], r[2], r[3], r[4], tuple(json.loads(r[5])), r[6])
+            out.append(Neighbor(ex, 1.0 - dist[int(r[0])]))
+        out.sort(key=lambda nb: -nb.cosine)
         return out[:k]
 
     def close(self) -> None:
