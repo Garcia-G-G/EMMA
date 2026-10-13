@@ -81,3 +81,27 @@ verified byte-identical before and after). Rule, applied to each accepted tool's
   `my_repos`/`search_github`). The brain's regression suite scores against
   **every registered tool**, not this machine's available set, so the pinned
   numbers don't depend on whose Mac runs them.
+
+## Part 1 — the package and the decision log
+
+`core/brain/`: `decision.py` (`Decision`, `SlotValue`, `Feature`, `Candidate`,
+`Verdict`), `log.py` (append-only JSONL, redacted, 0600, rotates at 50 MB),
+`normalize.py` (wake/vocative removal, accent folding for matching only).
+
+- **The brain never imports `config.settings`.** Settings lazily import
+  `core.secrets`, which shells out to the Keychain; that would put `subprocess`
+  in the brain's closure. Thresholds arrive as a plain dataclass built by the
+  caller (Part 5). Same for tool metadata and app lists (plain data in).
+- **Import guard is transitive** (`tests/test_brain_imports.py`): every import
+  inside `core/brain` (function-level too), then the module-level imports of
+  everything it reaches. Forbidden: `actions`, `core.platform._mac`, `tools`,
+  `subprocess`, PyObjC frameworks. Its self-test proves the walk is transitive:
+  `core.orchestrator` has no platform import of its own and is still caught
+  through `core.conversation`.
+- **Wake stripping** removes a *leading* run of wake forms only (the live
+  `_QUERY_STOP` plus the STT renderings observed in the labelled logs: `ayema`,
+  `aima`, `ay`, `ey`), and `emma` anywhere as a vocative. "hola" inside a
+  dictated post (`log_21`) survives.
+- `mypy --strict` clean on `core/brain` (already covered by `[mypy-core.*]`).
+
+Pinned: 16 tests (`test_brain_imports.py` 3, `test_brain_skeleton.py` 13).
