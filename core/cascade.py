@@ -37,6 +37,7 @@ import asyncio
 import contextlib
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import aiohttp
@@ -47,9 +48,11 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     EndTaskFrame,
+    ErrorFrame,
     Frame,
     InterruptionFrame,
     TranscriptionFrame,
+    TTSAudioRawFrame,
     TTSTextFrame,
     VADUserStartedSpeakingFrame,
     VADUserStoppedSpeakingFrame,
@@ -72,6 +75,7 @@ from core import (
     session_memory,
     speaker,
     vocabulary,
+    voice,
 )
 from core.brain import log as brain_log
 from core.brain.decision import Decision
@@ -100,6 +104,68 @@ class ScribeSTT(ElevenLabsRealtimeSTTService):
     async def _on_committed_transcript_with_timestamps(self, data: dict[str, Any]) -> None:
         if self._include_timestamps:
             await super()._on_committed_transcript_with_timestamps(data)
+
+
+class CachedTTS(ElevenLabsHttpTTSService):
+    """v4 Turbo over HTTP, with Emma's fixed lines served from ``core.voice``'s cache.
+
+    A cacheable line (a slot-free template or a system line) plays from
+    ``~/.emma/voice_cache`` with no network and no TTFB; a miss streams as usual
+    and, if it completes uninterrupted, fills the cache. The cached word timings
+    are replayed too, so ``_SpokenTap`` records what was heard either way.
+    Anything else (a tool's result, a filled slot) streams and is never stored.
+    """
+
+    def __init__(self, *args: Any, cacheable: frozenset[str] = frozenset(), **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._cacheable = cacheable
+        self._capture: list[tuple[str, float]] | None = None
+        self._capture_base = 0.0
+
+    async def add_word_timestamps(
+        self, word_times: list[tuple[str, float]], context_id: str | None = None,
+        includes_inter_frame_spaces: bool | None = None,
+    ) -> None:
+        if self._capture is not None:
+            self._capture.extend((w, t - self._capture_base) for w, t in word_times)
+        await super().add_word_timestamps(word_times, context_id, includes_inter_frame_spaces)
+
+    async def run_tts(  # type: ignore[override]  # pipecat annotates it as a coroutine
+        self, text: str, context_id: str
+    ) -> AsyncGenerator[Frame | None, None]:
+        line = text.strip()
+        if line not in self._cacheable or self.sample_rate != voice.RATE_HZ:
+            async for f in super().run_tts(text, context_id):
+                yield f
+            return
+        hit = voice.cached(line)
+        if hit is not None:
+            pcm, words = hit
+            log.debug("voice_cache_hit", chars=len(line))
+            base = float(self._cumulative_time)
+            if words:
+                await self.add_word_timestamps([(w, base + t) for w, t in words], context_id)
+            step = self.sample_rate // 50 * 2  # 20 ms frames
+            for i in range(0, len(pcm), step):
+                yield TTSAudioRawFrame(pcm[i:i + step], self.sample_rate, 1, context_id=context_id)
+            self._cumulative_time = base + len(pcm) / 2 / self.sample_rate  # type: ignore[assignment]
+            return
+        audio = bytearray()
+        failed = False
+        self._capture, self._capture_base = [], float(self._cumulative_time)
+        try:
+            async for f in super().run_tts(text, context_id):
+                if isinstance(f, TTSAudioRawFrame):
+                    audio += f.audio
+                elif isinstance(f, ErrorFrame):
+                    failed = True
+                yield f
+            if audio and not failed:  # reached only if the stream ran to its end
+                words = list(self._capture)
+                await asyncio.to_thread(voice.store, line, bytes(audio), words)
+                log.debug("voice_cache_filled", chars=len(line))
+        finally:
+            self._capture = None
 
 
 class _UserTurnTap(FrameProcessor):
@@ -276,6 +342,13 @@ class _Host:
                        asks=bool(result.requires_confirmation))
 
 
+def cacheable_lines() -> frozenset[str]:
+    """Fixed text only: every slot-free template plus the pregenerated system lines."""
+    from core.brain.respond import fixed_phrasings
+
+    return frozenset([t for _k, _l, t in fixed_phrasings()] + voice.pregenerated())
+
+
 def _decide_getter() -> Any:
     brain = brain_shadow.loaded()
     return brain.decide if brain is not None else None
@@ -326,13 +399,14 @@ async def build_pipeline(
         settings=ElevenLabsRealtimeSTTService.Settings(model=settings.ELEVENLABS_STT_MODEL),
         audio_passthrough=False,
     )
-    tts = ElevenLabsHttpTTSService(
+    tts = CachedTTS(
         api_key=settings.ELEVENLABS_API_KEY,
         aiohttp_session=http,
         sample_rate=SPEAKER_RATE_HZ,
         settings=ElevenLabsHttpTTSService.Settings(
             voice=settings.VOICE_ID, model=settings.ELEVENLABS_TTS_MODEL
         ),
+        cacheable=cacheable_lines(),
     )
     turns = _Turns()
     host = host or _Host()

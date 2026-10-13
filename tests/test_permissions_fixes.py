@@ -31,28 +31,40 @@ def _restore_loop():
 # --- Bug B: _say is blocking, with a timeout -------------------------------
 
 
-def test_say_uses_blocking_run_with_timeout() -> None:
-    """`_say` must call subprocess.run (blocking) with a timeout kwarg."""
+def test_say_uses_blocking_run_with_timeout(tmp_path, monkeypatch) -> None:
+    """`_say` blocks until the audio has drained (afplay via subprocess.run, with a timeout).
+
+    VOICE-1 Part 4: the same blocking contract, now through Emma's own cached voice.
+    """
+    from core import voice
+
+    clip = tmp_path / "clip.wav"
+    clip.write_bytes(b"")
+    monkeypatch.setattr(voice, "ensure", lambda text: clip)
     with (
-        patch("core.permissions.subprocess.run") as mock_run,
-        patch("core.permissions.subprocess.Popen") as mock_popen,
+        patch("core.voice.subprocess.run") as mock_run,
+        patch("core.voice.subprocess.Popen") as mock_popen,
     ):
         permissions._say("hola")
 
     assert mock_run.called, "_say must use subprocess.run (blocking)"
     assert not mock_popen.called, "_say must NOT use subprocess.Popen (non-blocking)"
-
     _args, kwargs = mock_run.call_args
     assert "timeout" in kwargs, "blocking _say must pass a timeout"
     assert kwargs["timeout"] > 0
 
 
-def test_say_keeps_monica_voice() -> None:
-    """Voice must remain 'Mónica' (constraint)."""
-    with patch("core.permissions.subprocess.run") as mock_run:
+def test_say_is_emmas_voice_not_macos_say(tmp_path, monkeypatch) -> None:
+    """VOICE-1 retired `say -v Mónica` (a regional default): the clip player speaks."""
+    from core import voice
+
+    clip = tmp_path / "clip.wav"
+    clip.write_bytes(b"")
+    monkeypatch.setattr(voice, "ensure", lambda text: clip)
+    with patch("core.voice.subprocess.run") as mock_run:
         permissions._say("hola")
     cmd = mock_run.call_args.args[0]
-    assert cmd[:3] == ["say", "-v", "Mónica"]
+    assert cmd == ["afplay", str(clip)]
 
 
 # --- Bug A: _ping_automation launches then queries -------------------------

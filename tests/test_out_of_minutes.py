@@ -12,7 +12,7 @@ asks the balance route, which is authoritative either way.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -85,9 +85,8 @@ async def test_zero_minutes_speaks_and_publishes_once() -> None:
         patch("core.pairing.authed_client", _balance(0.0)),
         patch.object(orchestrator.events_bus, "publish",
                      side_effect=lambda ev, **kw: published.append((ev, kw))),
-        patch("asyncio.create_subprocess_exec") as spawn,
+        patch("core.voice.speak", new_callable=AsyncMock) as spawn,
     ):
-        spawn.return_value.wait = _noop
         assert await orchestrator._check_out_of_minutes() is True
         # Second call: state persists, but she must NOT nag.
         assert await orchestrator._check_out_of_minutes() is True
@@ -98,8 +97,7 @@ async def test_zero_minutes_speaks_and_publishes_once() -> None:
     assert spawn.call_count == 1
     said = " ".join(str(a) for a in spawn.call_args[0])
     assert "minutos" in said and "app" in said
-    # `say`, not the Realtime API — the session that would have spoken it is gone.
-    assert spawn.call_args[0][0] == "say"
+    # Emma's voice player, not the Realtime API — that session is gone (VOICE-1: no `say`).
 
 
 async def _noop() -> int:

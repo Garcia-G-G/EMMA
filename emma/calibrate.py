@@ -92,8 +92,9 @@ def _record(seconds: float) -> np.ndarray:
 
 
 async def _say(text: str) -> None:
-    proc = await asyncio.create_subprocess_exec("say", text)
-    await proc.wait()
+    from core import voice
+
+    await voice.speak(text)  # the real voice: the echo measured is the echo she makes
 
 
 async def run_calibration(write: bool = True) -> dict[str, Any]:

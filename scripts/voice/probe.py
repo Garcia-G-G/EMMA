@@ -136,11 +136,12 @@ async def main(texts: list[str], execute: bool = False) -> None:
             include_language_detection=True, audio_passthrough=False,
             settings=cascade.ScribeSTT.Settings(model=settings.ELEVENLABS_STT_MODEL),
         )
-        tts = ElevenLabsHttpTTSService(
+        tts = cascade.CachedTTS(
             api_key=settings.ELEVENLABS_API_KEY, aiohttp_session=http,
             sample_rate=cascade.SPEAKER_RATE_HZ,
             settings=ElevenLabsHttpTTSService.Settings(voice=settings.VOICE_ID,
                                                        model=settings.ELEVENLABS_TTS_MODEL),
+            cacheable=cascade.cacheable_lines(),
         )
         vad = VADProcessor(vad_analyzer=SileroVADAnalyzer(
             sample_rate=cascade.MIC_RATE_HZ, params=VADParams(stop_secs=settings.CASCADE_VAD_STOP_S)))

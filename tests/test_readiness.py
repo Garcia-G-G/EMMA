@@ -37,8 +37,8 @@ def test_new_keys_are_secret_tier_and_migrate_to_keychain() -> None:
         assert name not in settings_mod._BYOK_ONLY_CREDENTIALS  # read in every tier
 
 
-def test_readiness_is_four_local_checks_and_never_openai() -> None:
-    assert readiness.REQUIREMENTS == ("mic", "wake_model", "elevenlabs_key", "embedder")
+def test_readiness_is_local_checks_and_never_openai() -> None:
+    assert readiness.REQUIREMENTS == ("mic", "wake_model", "elevenlabs_key", "embedder", "voice")
     src = inspect.getsource(readiness)
     assert "OPENAI_API_KEY" not in src and "openai_api_key" not in src and "pairing" not in src
     assert "openrouter" not in readiness.REQUIREMENTS  # optional until BRAIN-2
@@ -145,3 +145,12 @@ async def test_cascade_main_loop_parks_on_readiness_not_pairing(
 async def test_cascade_never_asks_the_minutes_meter(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings_mod.Settings, "_is_managed", lambda self: True)
     assert await orchestrator._check_out_of_minutes() is False
+
+
+def test_no_voice_means_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VOICE-1 Part 4: VOICE_ID is required and has no shipped default."""
+    assert settings_mod.Settings.model_fields["VOICE_ID"].default == ""
+    monkeypatch.setattr(settings, "VOICE_ID", "")
+    assert not readiness.has_voice()
+    monkeypatch.setattr(settings, "VOICE_ID", "abc")
+    assert readiness.has_voice()

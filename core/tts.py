@@ -13,7 +13,6 @@ Phase 13 was "do not touch actions/*.py".
 
 from __future__ import annotations
 
-import subprocess
 from typing import Literal
 
 import structlog
@@ -34,12 +33,10 @@ def say_fallback(text: str, language: SpokenLang) -> None:
     """
     if not text.strip():
         return
-    voice = "Mónica" if language == "es" else "Samantha"
-    try:
-        subprocess.Popen(
-            ["say", "-v", voice, text],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception as exc:
-        log.error("say_fallback_failed", error=str(exc))
+    del language  # one voice for both languages (VOICE-1): no per-language `say` voice
+    import threading
+
+    from core import voice
+
+    # Non-blocking contract: synthesis on a cache miss is a network call.
+    threading.Thread(target=voice.speak_sync, args=(text,), daemon=True).start()

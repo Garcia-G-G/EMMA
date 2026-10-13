@@ -307,6 +307,11 @@ SPEAKS_RESULT: frozenset[str] = frozenset({
     "today_events", "what_did_you_do",
 })
 
+_DONE: Phrasings = {
+    "es": ("Listo.", "Hecho.", "Ya está.", "Va."),
+    "en": ("Done.", "There.", "All set.", "Okay."),
+}
+
 # Right after Emma acted, the user said it was wrong (VOICE-1 Part 3).
 _CORRECTED: Phrasings = {
     "es": ("Perdón, lo anoto.", "Entendido, lo anoté.", "Perdón. Ya quedó anotado.",
@@ -376,8 +381,7 @@ class Responder:
     def ack(self, tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
         phr = _TOOL.get(tool)
         if phr is None:
-            return self.pick(f"done:{lang}", ("Listo.", "Hecho.", "Ya está.", "Va.")
-                             if lang == "es" else ("Done.", "There.", "All set.", "Okay."))
+            return self.pick(f"done:{lang}", _DONE[lang])
         usable = [p for p in phr[lang] if _fills(p, slots)]
         return self.pick(f"{tool}:{lang}", usable or phr[lang]).format_map(_Default(slots))
 
@@ -498,3 +502,27 @@ def answer_clarification(options: Sequence[str], transcript: str) -> int | None:
     if best < CLARIFY_FLOOR or scores.count(best) > 1:
         return None
     return scores.index(best)
+
+
+def fixed_phrasings() -> list[tuple[str, SpokenLang, str]]:
+    """Every phrasing with no slot to fill, as (key, lang, text), most frequent first.
+
+    What can be rendered ahead of time and cached (VOICE-1 Part 4). Order is the
+    verdict's share on the 140 (BRAIN-1.5: defer 63, local 51, then no-tool
+    templates), until the live log can rank them; Spanish before English.
+    """
+    ordered: list[tuple[str, Phrasings]] = [
+        ("not_yet", _NOT_YET), ("done", _DONE),
+        *((f"tool:{name}", phr) for name, phr in _TOOL.items()),
+        ("smalltalk", _SMALLTALK), ("refuse:safety", _REFUSE["safety"]),
+        *((f"clarify:{k}", v) for k, v in _CLARIFY.items() if k != "options"),
+        ("cancelled", _CANCELLED), ("unclear", _UNCLEAR_ANSWER), ("corrected", _CORRECTED),
+        ("refuse:phone_call", _REFUSE["phone_call"]),
+    ]
+    out: list[tuple[str, SpokenLang, str]] = []
+    for lang in ("es", "en"):
+        for key, phr in ordered:
+            out.extend((key, lang, t) for t in phr[lang] if "{" not in t)
+    order = {k: i for i, (k, _) in enumerate(ordered)}
+    out.sort(key=lambda r: (order[r[0]], r[1] != "es"))
+    return out

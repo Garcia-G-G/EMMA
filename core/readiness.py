@@ -1,8 +1,9 @@
 """Is Emma ready to serve a wake word? (VOICE-1 Part 0)
 
-The cascade (Scribe STT -> brain -> ElevenLabs TTS) needs four things and
-nothing else: a microphone, the wake model, the ElevenLabs key, and the brain's
-embedder. OpenAI is not on the list — the Realtime path keeps its own
+The cascade (Scribe STT -> brain -> ElevenLabs TTS) needs these and nothing
+else: a microphone, the wake model, the ElevenLabs key, the brain's embedder,
+and a chosen voice (VOICE-1 Part 4: ``VOICE_ID`` is required, with no shipped
+default that would assume a gender or an accent). OpenAI is not on the list — the Realtime path keeps its own
 credential preflight behind ``VOICE_BACKEND=realtime``. OpenRouter is optional
 until BRAIN-2 plugs a thinker in.
 
@@ -22,7 +23,7 @@ from config.settings import settings
 
 log = structlog.get_logger("emma.readiness")
 
-REQUIREMENTS = ("mic", "wake_model", "elevenlabs_key", "embedder")
+REQUIREMENTS = ("mic", "wake_model", "elevenlabs_key", "embedder", "voice")
 
 # What the user (or the onboarding window) is told to do for each missing piece.
 FIXES = {
@@ -30,6 +31,7 @@ FIXES = {
     "wake_model": "re-run the installer (step 5: wake-word model)",
     "elevenlabs_key": "add your ElevenLabs API key in onboarding",
     "embedder": "re-run the installer (step 5.2), or: python -m emma.brain fetch-model",
+    "voice": "choose Emma's voice in onboarding (an ElevenLabs voice id, VOICE_ID)",
 }
 
 
@@ -63,6 +65,10 @@ def has_elevenlabs_key() -> bool:
     return bool((settings.ELEVENLABS_API_KEY or "").strip())
 
 
+def has_voice() -> bool:
+    return bool((settings.VOICE_ID or "").strip())
+
+
 def has_embedder() -> bool:
     from core.brain.embed import Embedder
 
@@ -74,6 +80,7 @@ _PROBES = {
     "wake_model": has_wake_model,
     "elevenlabs_key": has_elevenlabs_key,
     "embedder": has_embedder,
+    "voice": has_voice,
 }
 
 

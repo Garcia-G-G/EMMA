@@ -174,16 +174,17 @@ def _run_pairing(log: structlog.BoundLogger) -> int:
         spoken = " ".join(code.replace("-", " guion "))
         # await, don't block: these run on the event loop (4i). An audio
         # pipeline that stalls its loop is audible, and `say` here is seconds long.
-        await _spawn(
-            "say", "-v", "Paulina",
-            f"Tu código de vinculación es: {spoken}. Ábrelo en tu navegador",
-        )
+        from core import voice
+
+        # keep=False: a pairing code is never written to the clip cache.
+        await voice.speak(f"Tu código de vinculación es: {spoken}. Ábrelo en tu navegador",
+                          keep=False)
         await _spawn("open", uri)
         result = await pairing.poll_until_authorized(
             info["device_code"], int(info.get("interval", 5)), int(info.get("expires_in", 900))
         )
         if result:
-            await _spawn("say", "-v", "Paulina", "Emma vinculada. Ya puedes usarme")
+            await voice.speak("Emma vinculada. Ya puedes usarme")
             print("\n  ✓ Vinculada exitosamente.\n")
             return 0
         print("\n  ✗ Vinculación no completada (código expiró o fue rechazado).\n")

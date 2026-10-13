@@ -134,12 +134,11 @@ def _open_terminal(report: Path, repo_root: Path) -> None:
 
 
 def _say_failure() -> None:
+    """Emma's own voice, from the pregenerated clip only: no network in a crash."""
     with contextlib.suppress(Exception):
-        subprocess.Popen(
-            ["say", "-v", "Mónica", "Tuve un error, dejé los detalles en una terminal."],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        from core import voice
+
+        voice.play_cached(voice.CRASH_LINE)
 
 
 def handle_crash(

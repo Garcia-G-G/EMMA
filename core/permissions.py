@@ -66,19 +66,47 @@ Pane = Literal[
 ]
 
 
-def _say(text: str, *, voice: str = "Mónica") -> None:
-    """Speak `text` via macOS `say`. BLOCKING — returns when speech ends.
+# Every fixed line this module speaks, as constants: core.voice pregenerates
+# exactly these (VOICE-1 Part 4), so the walkthrough never waits on TTS.
+MIC_LINE = "Primero necesito el micrófono, para oírte. Dale Permitir."
+ALL_GRANTED_LINE = "Listo, todos los permisos concedidos."
+SOME_PENDING_LINE = (
+    "Terminé. Algunos permisos quedaron pendientes; puedes darlos después "
+    "desde la app o volviendo a correr la configuración."
+)
+MIC_DENIED_LINE = (
+    "No tengo permiso para usar el micrófono. Abre Configuración del Sistema, "
+    "Privacidad y Seguridad, Micrófono, y activa Emma."
+)
+AX_DENIED_LINE = (
+    "No tengo permiso de accesibilidad, así que no puedo leer la pantalla. "
+    "Abre Configuración del Sistema, Privacidad y Seguridad, Accesibilidad, "
+    "y activa Emma."
+)
 
-    Bootstrap relies on this: each prompt should finish before the next so
-    the Spanish phrases don't overlap.
+
+def automation_line(app: str) -> str:
+    return f"Ahora, permiso para controlar {app}. Dale Permitir."
+
+
+def spoken_lines() -> list[str]:
+    """Every line the walkthrough and preflight can speak, in walkthrough order."""
+    return [MIC_LINE, *(automation_line(a) for a in _AUTOMATION_APPS),
+            *(instruction for _pane, instruction, _req in _MANUAL_PANES),
+            ALL_GRANTED_LINE, SOME_PENDING_LINE, MIC_DENIED_LINE, AX_DENIED_LINE]
+
+
+def _say(text: str) -> None:
+    """Speak `text` in Emma's voice. BLOCKING — returns when the audio has DRAINED.
+
+    Bootstrap relies on this: each prompt finishes before the next, and none is
+    cut off mid-word (the old `say` path lost the last syllable: "dale perm.t.").
+    Cached clip + afplay via core.voice; before a voice exists, it prints.
     """
+    from core import voice
+
     try:
-        subprocess.run(
-            ["say", "-v", voice, text],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=15.0,
-        )
+        voice.speak_sync(text)
     except Exception as exc:
         log.error("say_failed", error=str(exc))
 
@@ -313,10 +341,7 @@ def preflight() -> bool:
         from core import boot_guard
 
         if boot_guard.should_speak("microphone_denied"):
-            _say(
-                "No tengo permiso para usar el micrófono. Abre Configuración del Sistema, "
-                "Privacidad y Seguridad, Micrófono, y activa Emma."
-            )
+            _say(MIC_DENIED_LINE)
             _open_settings("Microphone")
 
     # Accessibility: the real AX-trust probe, plus a functional smoke test.
@@ -341,11 +366,7 @@ def preflight() -> bool:
         from core import boot_guard
 
         if boot_guard.should_speak("ax_denied"):
-            _say(
-                "No tengo permiso de accesibilidad, así que no puedo leer la pantalla. "
-                "Abre Configuración del Sistema, Privacidad y Seguridad, Accesibilidad, "
-                "y activa Emma."
-            )
+            _say(AX_DENIED_LINE)
             _open_settings("Accessibility")
         # Not fatal — everything that isn't screen vision still works.
     else:
@@ -613,7 +634,7 @@ async def bootstrap() -> dict[str, Any]:
     try:
         # 1. Microphone — the one Emma can't work without.
         print("→ Micrófono — para oír tu palabra clave y tus peticiones de voz.")
-        _say("Primero necesito el micrófono, para oírte. Dale Permitir.")
+        _say(MIC_LINE)
         await _ping_microphone()  # first stream-open surfaces the mic prompt
         results["Microphone"] = await _await_grant(check_microphone, tty=tty)
         print(f"   {results['Microphone']}")
@@ -622,7 +643,7 @@ async def bootstrap() -> dict[str, Any]:
         #    the user's answer, so this is already user-paced; we say why first.
         for app in _AUTOMATION_APPS:
             print(f"→ Controlar {app} — para leer y actuar en {app} cuando lo pidas.")
-            _say(f"Ahora, permiso para controlar {app}. Dale Permitir.")
+            _say(automation_line(app))
             _, status = await _ping_automation(app)
             results[f"Automation:{app}"] = status
             print(f"   {status}")
@@ -670,11 +691,8 @@ async def bootstrap() -> dict[str, Any]:
             + ".\n  Concédelos en Configuración → Privacidad y Seguridad, o re-corre:"
             "\n    emma.permissions retry\n"
         )
-        _say(
-            "Terminé. Algunos permisos quedaron pendientes; puedes darlos después "
-            "desde la app o volviendo a correr la configuración."
-        )
+        _say(SOME_PENDING_LINE)
     else:
         print("\nTodo concedido. ✓\n")
-        _say("Listo, todos los permisos concedidos.")
+        _say(ALL_GRANTED_LINE)
     return results

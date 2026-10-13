@@ -30,12 +30,12 @@ async def _run_timer(tid: str, duration_min: int, label: str) -> None:
     _timers.pop(tid, None)
     phrase = f"{_mins(label, duration_min).capitalize()} terminó."
     platform_notify.get().send("Emma — Timer", phrase)  # 30: via the platform layer
-    # Spoken alert that works even with no live session (macOS TTS).
+    # Spoken alert that works even with no live session: Emma's own voice.
+    # keep=False: the label is the user's words, not a template to cache.
     try:
-        proc = await asyncio.create_subprocess_exec(
-            "say", phrase, stderr=asyncio.subprocess.DEVNULL
-        )
-        await proc.wait()
+        from core import voice
+
+        await voice.speak(phrase, keep=False)
     except Exception as exc:
         log.warning("timer_say_failed", error=str(exc))
 

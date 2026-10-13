@@ -222,15 +222,14 @@ async def _check_out_of_minutes() -> bool:
     _out_of_minutes = True
     log.error("out_of_minutes", left_min=left)
     events_bus.publish("state", state="out_of_minutes")
-    # `say`, not the Realtime API: the session that would have spoken this is
-    # exactly the one that just got cut off.
+    # The voice player, not the Realtime API: the session that would have spoken
+    # this is exactly the one that just got cut off.
     with contextlib.suppress(Exception):
-        proc = await asyncio.create_subprocess_exec(
-            "say", "-v", "Mónica",
-            "Se acabaron tus minutos gratis del mes. Abre la app para conseguir más.",
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=15.0)
+        from core import voice
+
+        await asyncio.wait_for(voice.speak(
+            "Se acabaron tus minutos gratis del mes. Abre la app para conseguir más."
+        ), timeout=30.0)
     return True
 
 

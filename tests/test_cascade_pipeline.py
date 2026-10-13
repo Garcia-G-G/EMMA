@@ -49,7 +49,7 @@ async def test_pipeline_is_vad_scribe_brain_tts_with_formats_at_the_boundary() -
     procs = _flat(task.pipeline)
     names = [type(p).__name__ for p in procs]
     order = ["VADProcessor", "ScribeSTT", "_UserTurnTap", "BrainProcessor",
-             "ElevenLabsHttpTTSService", "_SpokenTap", "EchoGateProcessor"]
+             "CachedTTS", "_SpokenTap", "EchoGateProcessor"]
     assert [n for n in names if n in order] == order
     assert "OpenAIRealtimeLLMService" not in " ".join(names)
     assert "TruncateAccurateRealtimeLLMService" not in names
