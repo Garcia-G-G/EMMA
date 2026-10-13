@@ -150,3 +150,8 @@ stt_aliases = ["espotify", "espotifai"]
 canonical = "YouTube"
 description = "Video platform."
 stt_aliases = ["yutub", "yutu"]
+
+[WhatsApp]
+canonical = "WhatsApp"
+description = "Messaging app."
+stt_aliases = ["guasap", "wasap", "whatsap"]

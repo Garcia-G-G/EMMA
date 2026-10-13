@@ -211,3 +211,65 @@ itself; both sources populated on every candidate (absent = 0); retrieval
 p95 < 100 ms; embedder p95 < 100 ms; without the model, kNN is absent and BM25
 still ranks (no crash). The kNN tests **skip** with an explicit reason when the
 model isn't fetched, rather than passing on BM25 alone.
+
+## Part 4 — closed-vocabulary slots
+
+`core/brain/slots.py`. Slot kinds: `app`/`ide` (vocabulary alias table, then
+rapidfuzz against the installed apps + their Spanish display names), `page`
+(dictionary keys + titles), `note`/`playlist`/`connection`/`contact` (the
+tool's own listing, handed in as a plain list), `number` (digits + ES/EN number
+words, compounds, "la mitad", trailing "por ciento"), `url` ("github punto com"
+→ `github.com`), `url_scheme`, `profile_field` / `app_category` (closed
+tables), and `residue` — only for a tool with exactly one free-text field.
+Every `SlotValue` carries `source`, `confidence`, `raw_span`. **Below the floor
+(0.85) a slot is unresolved, not guessed.** No time parsing (L3).
+
+Each tool has a **frame** — its command words ("borra la nota", "pon música
+de") — consumed before the residue; what nothing explains comes back as
+`leftover` for the gate. Frames exist for every tool on an L1/L2 item's
+route. They were written knowing the labelled set; whether they generalize is
+what shadow mode measures.
+
+**Fixtures written before the resolver** (`tests/brain_slot_fixtures.py`):
+expected values for all 44 L2 items, from the utterances — canonical names
+for enumerated things, lowercase display text for residue, ints, bare URLs.
+Two are declared hard, `xfail(strict=True)` so a surprise pass fails:
+`sc_V26` ("abre yutub" → open_url needs youtube.com; no site gazetteer) and
+`log_26` (the intended query paraphrases two fragments the user said).
+
+### Pinned
+
+| | Result |
+|---|---|
+| L2 items resolving every expected value exactly | **42 / 44** (the 2 declared hard xfail) |
+| L1 items with no required parameter missing | **24 / 24** |
+| L1/L2 items with a route (≥1 accepted tool has a spec) | 68 / 68 |
+
+### Bugs the fixtures caught before commit
+
+1. **Normalization re-joined tokens**: "analytics-prod" became
+   "analytics- prod", "example.com/portfolio" became "example. com/ portfolio".
+   `normalize` now cuts the wake run out of the original string and never
+   rebuilds it.
+2. **A repeat mention ate content**: "agrega **comprar** café a mi nota
+   Compras" — "comprar" scored 0.857 against the note "Compras" and was taken
+   as a second mention. Repeats now need 0.95.
+
+### Re-pin of Part 3 (deliberate, explained)
+
+Fix 1 changed the text the embedder sees, and the Part 3 floor caught it:
+kNN r@5 68 → 66. kNN now embeds the words only (`retrieve.embed_text`), so
+punctuation and spacing can't move a neighbor. Net through the retriever:
+**r@1 45 → 46, r@5 68 → 66** — flips on near-ties (lost `sc_V40`, `sc_V69`,
+`log_12`; gained `log_15`, `log_22`). Part 3's pin was measured on text a
+bug had mangled, so the new floor is the honest one.
+
+### Data added
+
+- `rapidfuzz>=3.9` (uv lock: one package added, nothing upgraded).
+- `config/vocabulary.toml`: `[WhatsApp]` with `stt_aliases = ["guasap",
+  "wasap", "whatsap"]` — the prompt names "guasap" → WhatsApp as a case and the
+  vocabulary had no WhatsApp entry. Also feeds STT bias.
+- `core/vocabulary.alias_map()` (public copy of the alias index) for the host.
+
+Gates: 1363 passed, 2 xfailed; ruff, mypy clean.

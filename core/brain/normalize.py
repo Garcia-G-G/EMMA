@@ -36,39 +36,41 @@ class Normalized:
     text: str  # lowercase, wake/vocative removed, whitespace collapsed; accents kept
     folded: str  # ``text`` with accents folded — what matchers compare
     tokens: tuple[str, ...]  # word tokens of ``folded``, punctuation dropped
+    words: tuple[str, ...] = ()  # the same tokens in display form (accents kept), 1:1
 
 
 def normalize(utterance: str) -> Normalized:
-    raw = _SPACE.sub(" ", utterance or "").strip()
-    pieces = _WORD.findall(raw.lower())
-    out: list[str] = []
+    """Cut the wake run and vocatives out of the ORIGINAL string; never re-join tokens.
+
+    Re-joining turned "example.com/portfolio" into "example. com/ portfolio" and
+    "analytics-prod" into "analytics- prod" — values the slots must return intact.
+    """
+    raw = _SPACE.sub(" ", utterance or "").strip().lower()
+    drop: list[tuple[int, int]] = []
     leading = True
-    for p in pieces:
+    for m in _WORD.finditer(raw):
+        p = m.group()
         is_word = p[0].isalnum() or p[0] == "_"
         f = fold(p)
-        if is_word and leading and f in _WAKE_LEADING:
-            continue
-        if is_word and f in _VOCATIVE:
+        if is_word and ((leading and f in _WAKE_LEADING) or f in _VOCATIVE):
+            drop.append(m.span())
             continue
         if is_word:
             leading = False
         elif leading:
-            continue  # punctuation between wake words ("Ay, Emma, …")
-        out.append(p)
-    text = _detok(out)
-    folded = fold(text)
-    tokens = tuple(t for t in _WORD.findall(folded) if t[0].isalnum() or t[0] == "_")
-    return Normalized(original=utterance, text=text, folded=folded, tokens=tokens)
-
-
-def _detok(pieces: list[str]) -> str:
-    s = ""
-    for p in pieces:
-        if not s or (not (p[0].isalnum() or p[0] == "_") and p not in "¿¡("):
-            s += p
-        else:
-            s += " " + p
-    return _SPACE.sub(" ", s).strip(" ,.;:")
+            drop.append(m.span())  # punctuation between wake words ("Ay, Emma, …")
+    kept, pos = [], 0
+    for a, b in drop:
+        kept.append(raw[pos:a])
+        pos = b
+    kept.append(raw[pos:])
+    text = _SPACE.sub(" ", "".join(kept))
+    text = re.sub(r"\s+([,.;:?!])", r"\1", text).strip(" ,.;:")
+    words = tuple(w for w in _WORD.findall(text) if w[0].isalnum() or w[0] == "_")
+    tokens = tuple(fold(w) for w in words)
+    return Normalized(
+        original=utterance, text=text, folded=fold(text), tokens=tokens, words=words
+    )
 
 
 _ES = frozenset({"el", "la", "los", "las", "de", "que", "en", "un", "una", "mi", "mis", "por",

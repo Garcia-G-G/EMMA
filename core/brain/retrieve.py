@@ -25,6 +25,12 @@ from core.tool_selection import BM25, doc_tokens, query_tokens
 NONE_TOOL = "__none__"
 
 
+def embed_text(norm: Normalized) -> str:
+    """What the embedder sees: the words only. Punctuation and spacing (which
+    normalization rules may change) must not move a neighbor."""
+    return " ".join(norm.words)
+
+
 @dataclass(frozen=True)
 class ToolDoc:
     """What the brain knows about a tool — plain data, handed in by the caller."""
@@ -81,7 +87,7 @@ class DualRetriever:
         knn_near: dict[str, str] = {}
         if self.has_knn and norm.tokens:
             assert self.index is not None and self.embedder is not None
-            vec = self.embedder.embed_one(norm.text)
+            vec = self.embedder.embed_one(embed_text(norm))
             neighbors = self.index.search(vec, k=k, exclude_id=exclude_id)
             for nb in neighbors:  # nearest first, so the first sighting is the max
                 for tool in nb.example.accept_tools:

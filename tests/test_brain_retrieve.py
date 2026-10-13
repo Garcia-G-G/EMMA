@@ -35,8 +35,12 @@ PIN = {
     "items": 115,
     "bm25_r1": 60,  # 52.2 %
     "bm25_r5": 78,  # 67.8 %
-    "knn_r1": 45,  # 39.1 %
-    "knn_r5": 68,  # 59.1 %
+    # Re-pinned in BRAIN-1 Part 4 (was 45 / 68): Part 3 embedded text that a
+    # normalize bug had mangled ("analytics- prod"); kNN now embeds the words
+    # only. Net -2 at r@5 on near-ties (lost sc_V40, sc_V69, log_12; gained
+    # log_15, log_22) — see BRAIN-1-VERIFY Part 4.
+    "knn_r1": 46,  # 40.0 %
+    "knn_r5": 66,  # 57.4 %
     "agree": 20,  # 17.4 % — BM25 top-1 == kNN top-1
     "agree_correct": 18,  # 90 % of the agreements are the right tool
 }

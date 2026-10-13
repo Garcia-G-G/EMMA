@@ -65,6 +65,11 @@ def _build_alias_index(
     return alias_to_canonical, pattern
 
 
+def alias_map() -> dict[str, str]:
+    """Lowercased STT alias -> canonical name (a copy). Read by the brain's slots."""
+    return dict(_alias_to_canonical)
+
+
 def reload() -> int:
     """Re-parse the TOML file, rebuild the alias index, return entry count."""
     global _entries, _alias_to_canonical, _alias_pattern

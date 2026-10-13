@@ -13,8 +13,9 @@ from pathlib import Path
 
 from core.brain.embed import Embedder
 from core.brain.index import Example, ExampleIndex
-from core.brain.normalize import lang_hint, normalize
-from core.brain.retrieve import ToolDoc
+from core.brain.normalize import fold, lang_hint, normalize
+from core.brain.retrieve import ToolDoc, embed_text
+from core.brain.slots import Vocab
 
 LABELLED = Path(__file__).resolve().parent.parent / "scripts" / "spike_cascade" / "data" / "labelled.json"
 
@@ -72,5 +73,32 @@ def build_index(
 ) -> ExampleIndex:
     rows = examples if examples is not None else labelled_examples()
     index = ExampleIndex(path)
-    index.replace_all(rows, embedder.embed([e.normalized for e in rows]))
+    index.replace_all(rows, embedder.embed([embed_text(normalize(e.text)) for e in rows]))
     return index
+
+
+def vocab(
+    apps: tuple[str, ...] = (),
+    notes: tuple[str, ...] = (),
+    playlists: tuple[str, ...] = (),
+    connections: tuple[str, ...] = (),
+) -> Vocab:
+    """Emma's closed sets as plain data: STT aliases, saved pages, contacts.
+
+    The installed-app list and the per-tool listings (notes, playlists,
+    connections) come from the caller, which owns the platform reads.
+    """
+    from core import dictionary, vocabulary
+
+    aliases = {fold(k): v for k, v in vocabulary.alias_map().items()}
+    pages = {k: p.title for k, p in dictionary.pages().items()}
+    contacts = {c.name: tuple(c.aliases) for c in dictionary.contacts().values() if c.name}
+    return Vocab(
+        apps=apps,
+        aliases=aliases,
+        pages=pages,
+        notes=notes,
+        playlists=playlists,
+        connections=connections or tuple(dictionary.connections()),
+        contacts=contacts,
+    )
