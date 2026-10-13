@@ -10,11 +10,17 @@ import pytest
 from core import platform
 from core.platform import UnsupportedOnPlatform, app_control, fs, notes, notify
 
+# The factory follows the host, so these three only hold on macOS. The Windows
+# release job runs this file on windows-latest.
+mac_only = pytest.mark.skipif(sys.platform != "darwin", reason="asserts the macOS host")
 
+
+@mac_only
 def test_current_os_is_mac_here() -> None:
-    assert platform.current_os() == "mac"  # the dev/CI host
+    assert platform.current_os() == "mac"
 
 
+@mac_only
 def test_factory_returns_mac_impls() -> None:
     assert type(notify.get()).__name__ == "MacNotify"
     assert type(fs.get()).__name__ == "MacFs"
@@ -22,6 +28,7 @@ def test_factory_returns_mac_impls() -> None:
     assert type(notes.get()).__name__ == "MacNotes"
 
 
+@mac_only
 def test_mac_fs_paths() -> None:
     f = fs.get()
     assert f.data_dir() == Path.home() / ".emma"
@@ -37,8 +44,9 @@ def test_win_fs_uses_localappdata(monkeypatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", "/C/Users/g/AppData/Local")
     monkeypatch.setenv("APPDATA", "/C/Users/g/AppData/Roaming")
     w = WinFs()
-    assert str(w.data_dir()).endswith("AppData/Local/Emma")
-    assert str(w.app_support_dir()).endswith("AppData/Roaming/Emma")
+    # Compare path parts, not a "/"-joined string: on Windows str() uses "\\".
+    assert w.data_dir().parts[-3:] == ("AppData", "Local", "Emma")
+    assert w.app_support_dir().parts[-3:] == ("AppData", "Roaming", "Emma")
 
 
 @pytest.mark.asyncio

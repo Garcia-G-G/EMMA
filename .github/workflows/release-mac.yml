@@ -2,9 +2,12 @@
 # Secrets (repo settings → Actions): APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,
 # EMMA_SIGN_IDENTITY, EMMA_INSTALLER_IDENTITY, APPLE_ID, TEAM_ID, APP_SPECIFIC_PASSWORD.
 name: release-mac
+# NOT on tag push. Emma ships via install.sh (CLAUDE.md, "Distribution"): no
+# .pkg/.msi, no notarization, no Apple Developer Program, and this repo has no
+# signing secrets, so on tags this failed for every release v0.1.0-v0.3.0 and
+# published nothing. Run it by hand once signing secrets exist.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build-mac:
@@ -13,8 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install uv + deps
         run: |
+          brew install portaudio   # pyaudio builds from source and needs portaudio.h
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          uv sync
+          uv sync --python 3.12    # the runner's default is 3.14; install.sh ships 3.12
       - name: Import signing cert
         env:
           P12: ${{ secrets.APPLE_CERT_P12_BASE64 }}
