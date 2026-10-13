@@ -9,7 +9,7 @@ per utterance: the transcript, the brain's verdict, what Emma said, and the
 latency from the end of speech (VAD stop) to her first audio byte.
 
 Live services, real money (a few cents). No speaker, no mic, no tools run unless
-``--execute`` (Part 2+) is on.
+``--execute`` is on (then they run for real, through dispatch and its guard).
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ class Tap(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
-async def main(texts: list[str]) -> None:
+async def main(texts: list[str], execute: bool = False) -> None:
     if brain_shadow.loaded() is None:
         await asyncio.to_thread(brain_shadow._load_brain)
     async with aiohttp.ClientSession() as http:
@@ -145,7 +145,8 @@ async def main(texts: list[str]) -> None:
         vad = VADProcessor(vad_analyzer=SileroVADAnalyzer(
             sample_rate=cascade.MIC_RATE_HZ, params=VADParams(stop_secs=settings.CASCADE_VAD_STOP_S)))
         pipeline = Pipeline([source, vad, Tap(marks), stt, cascade._UserTurnTap(),
-                             BrainProcessor(cascade._decide_getter, record=record),
+                             BrainProcessor(cascade._decide_getter, record=record,
+                                            host=cascade._Host() if execute else None),
                              Tap(marks), tts, Tap(marks)])
         task = PipelineTask(pipeline, params=PipelineParams(
             audio_in_sample_rate=cascade.MIC_RATE_HZ, audio_out_sample_rate=cascade.SPEAKER_RATE_HZ))
@@ -164,4 +165,6 @@ async def main(texts: list[str]) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("texts", nargs="+")
-    asyncio.run(main(ap.parse_args().texts))
+    ap.add_argument("--execute", action="store_true", help="really run the tools (Part 2)")
+    a = ap.parse_args()
+    asyncio.run(main(a.texts, a.execute))

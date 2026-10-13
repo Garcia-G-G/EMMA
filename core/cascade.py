@@ -46,6 +46,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    EndTaskFrame,
     Frame,
     InterruptionFrame,
     TranscriptionFrame,
@@ -74,9 +75,10 @@ from core import (
 )
 from core.brain import log as brain_log
 from core.brain.decision import Decision
-from core.brain.processor import BrainProcessor
+from core.brain.processor import BrainProcessor, Outcome
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
+from core.redaction import redact
 
 log = structlog.get_logger("emma.cascade")
 
@@ -157,10 +159,10 @@ class _SpokenTap(FrameProcessor):
     come. So what this collects is what the user heard, not what was planned.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, host: _Host | None = None) -> None:
         super().__init__()
         self._words: list[str] = []
-        self.first_audio_at = 0.0
+        self._host = host
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -170,6 +172,10 @@ class _SpokenTap(FrameProcessor):
             self._flush(interrupted=True)
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self._flush(interrupted=False)
+            if self._host is not None and self._host.end_after_speech:
+                # A tool asked to end the session (e.g. "apágate"): after its line is out.
+                self._host.end_after_speech = False
+                await self.push_frame(EndTaskFrame(), FrameDirection.UPSTREAM)
         await self.push_frame(frame, direction)
 
     def _flush(self, interrupted: bool) -> None:
@@ -208,13 +214,75 @@ class _Turns:
                                   "backend": "cascade", **extra})
 
 
+class _Host:
+    """The brain's hands, host-side (VOICE-1 Part 2): ``core/brain`` never imports ``tools``.
+
+    ``execute`` is ``tools.registry.dispatch`` — so the injection guard runs on
+    every local execution: taint, sink provenance, and mic-only confirmation
+    (a ``confirmed=True`` from the brain still needs the spoken yes the guard
+    can see in session memory). Bookkeeping mirrors the Realtime handler: the
+    question opens a pending confirmation, a success joins the anaphora tail.
+    """
+
+    TIMEOUT_S = 20.0
+
+    def __init__(self) -> None:
+        self._facts: list[str] = []
+        self.end_after_speech = False
+
+    async def load_facts(self) -> None:
+        """Non-secret facts, confidence-ordered, read once per session (no embedding call)."""
+        from memory.long_term import _recall_sync
+
+        try:
+            facts = await asyncio.to_thread(_recall_sync, None, 200)
+            self._facts = [f.content for f in facts]
+        except Exception as exc:
+            log.warning("facts_load_failed", error=str(exc))
+
+    def facts(self) -> list[str]:
+        return self._facts
+
+    def asked(self, tool: str) -> None:
+        session_memory.push_event("tool", f"requires_confirmation:{tool}")
+
+    async def execute(self, tool: str, args: dict[str, Any]) -> Outcome:
+        from tools.registry import dispatch
+
+        events_bus.publish("tool_started", name=tool)
+        t0 = time.monotonic()
+        try:
+            result = await asyncio.wait_for(dispatch(tool, dict(args)), timeout=self.TIMEOUT_S)
+        except TimeoutError:
+            log.error("tool_timed_out", name=tool)
+            return Outcome(False, "Esa acción se quedó pegada. Intenta de nuevo.")
+        except Exception as exc:
+            log.error("tool_failed", name=tool, error=str(exc))
+            return Outcome(False, "Algo falló con esa acción.")
+        elapsed = int((time.monotonic() - t0) * 1000)
+        log.info("tool_completed", name=tool, elapsed_ms=elapsed, success=result.success,
+                 by="brain")
+        events_bus.publish("tool_completed", name=tool, elapsed_ms=elapsed,
+                           success=result.success)
+        if result.requires_confirmation:
+            self.asked(tool)
+        elif result.success:
+            session_memory.record_completed_action(
+                tool, dict(args), user_text=session_memory.last_user_speech_text()
+            )
+        if getattr(result, "ends_session", False):
+            self.end_after_speech = True
+        return Outcome(result.success, redact(result.user_message or ""),
+                       asks=bool(result.requires_confirmation))
+
+
 def _decide_getter() -> Any:
     brain = brain_shadow.loaded()
     return brain.decide if brain is not None else None
 
 
 async def build_pipeline(
-    http: aiohttp.ClientSession,
+    http: aiohttp.ClientSession, host: _Host | None = None
 ) -> tuple[PipelineTask, BrainProcessor, ScribeSTT]:
     from core.conversation import EchoGateProcessor, _AudioLevelTap
     from emma.calibrate import load_calibration
@@ -267,7 +335,8 @@ async def build_pipeline(
         ),
     )
     turns = _Turns()
-    brain_proc = BrainProcessor(_decide_getter, record=turns.record)
+    host = host or _Host()
+    brain_proc = BrainProcessor(_decide_getter, record=turns.record, host=host)
     pipeline = Pipeline(
         [
             transport.input(),
@@ -276,7 +345,7 @@ async def build_pipeline(
             _UserTurnTap(),
             brain_proc,
             tts,
-            _SpokenTap(),
+            _SpokenTap(host),
             EchoGateProcessor(echo_gate, speech_phase, reference_rate=MIC_RATE_HZ),
             _AudioLevelTap(),
             transport.output(),
@@ -317,8 +386,10 @@ async def run_session(immediate_command: bool = False) -> None:
     brain_shadow.ensure_loading()
     injection.install()
     global _active_task
+    host = _Host()
+    await host.load_facts()
     async with aiohttp.ClientSession() as http:
-        task, _brain_proc, stt = await build_pipeline(http)
+        task, _brain_proc, stt = await build_pipeline(http, host)
         _active_task = task
         runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
         log.info("conversation_start", backend="cascade", voice=settings.VOICE_ID,
