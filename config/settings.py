@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _CREDENTIAL_FIELDS = (
     "OPENAI_API_KEY",
     "ELEVENLABS_API_KEY",
+    "OPENROUTER_API_KEY",  # VOICE-1: unused until BRAIN-2's thinker; the path exists now
     "YOUTUBE_API_KEY",
     "SPOTIFY_CLIENT_ID",
     "SPOTIFY_CLIENT_SECRET",
@@ -91,6 +92,11 @@ class Settings(BaseSettings):
     # can still set it. (Was required — broke every clean install: no ElevenLabs
     # key exists in the managed model.)
     ELEVENLABS_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""  # optional until BRAIN-2 (VOICE-1 Part 0)
+    # VOICE-1: which voice path a wake session opens. `cascade` = Scribe STT ->
+    # core/brain -> ElevenLabs TTS, no LLM. `realtime` = the OpenAI Realtime
+    # pipeline, kept for the LAUNCH-3/9 tests; not tested live.
+    VOICE_BACKEND: Literal["cascade", "realtime"] = "cascade"
     YOUTUBE_API_KEY: str | None = None
     SPOTIFY_CLIENT_ID: str | None = None
     SPOTIFY_CLIENT_SECRET: str | None = None

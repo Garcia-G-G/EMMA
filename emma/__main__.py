@@ -243,6 +243,11 @@ def _credential_preflight(log: structlog.BoundLogger) -> int | None:
     credential it is never supposed to have — one absent environment variable
     should not be able to kill the daemon (LAUNCH-4 Part 1).
     """
+    if settings.VOICE_BACKEND == "cascade":
+        # VOICE-1: the cascade has no OpenAI credential at all. Its readiness
+        # (mic + wake + ElevenLabs + embedder) is a park, not an exit:
+        # orchestrator._ensure_ready waits for onboarding to supply it.
+        return None
     if _looks_managed():
         return None
     from core.conversation import _looks_like_openai_key

@@ -48,7 +48,10 @@ def _balance(left: float, status: int = 200):
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(monkeypatch):
+    # The minutes meter belongs to the managed Realtime proxy; the cascade
+    # (VOICE-1 default) never asks it.
+    monkeypatch.setattr(orchestrator.settings, "VOICE_BACKEND", "realtime")
     orchestrator._out_of_minutes = False
     yield
     orchestrator._out_of_minutes = False

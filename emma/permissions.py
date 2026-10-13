@@ -58,8 +58,19 @@ def _check() -> int:
     # Which TIER is this daemon? With BYO-key and managed both supported, "it
     # doesn't work" has two different answers and this is the one command that
     # tells them apart (LAUNCH-11 Part 1).
-    mode = live_settings.mode()
-    print(f"\nMode: {mode} ({_MODE_HELP.get(mode, 'unknown')})")
+    if live_settings.VOICE_BACKEND == "cascade":
+        # VOICE-1: readiness is mic + wake + ElevenLabs + embedder. No OpenAI tier.
+        from core import readiness
+
+        state = readiness.check()
+        print("\nVoice: cascade (Scribe -> brain -> ElevenLabs, no LLM)")
+        if state.ready:
+            print("Ready: yes")
+        for m in state.missing:
+            print(f"Ready: NO — missing {m}: {readiness.FIXES[m]}")
+    else:
+        mode = live_settings.mode()
+        print(f"\nMode: {mode} ({_MODE_HELP.get(mode, 'unknown')})")
 
     v = asyncio.run(version.staleness())
     print(f"\nSource: {v['source']}")

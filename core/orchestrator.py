@@ -196,8 +196,8 @@ async def _check_out_of_minutes() -> bool:
     fatal. Returns True when it published the out-of-minutes state.
     """
     global _out_of_minutes
-    if not settings._is_managed():
-        return False
+    if settings.VOICE_BACKEND != "realtime" or not settings._is_managed():
+        return False  # minutes meter the managed Realtime proxy; the cascade never uses it
     try:
         from core import pairing
 
@@ -386,6 +386,43 @@ async def _ensure_paired() -> None:
         _onboarding_needed = False
 
 
+async def _ensure_ready() -> None:
+    """VOICE-1 Part 0 — the cascade's parking: wait for mic + wake + ElevenLabs + embedder.
+
+    No OpenAI key and no pairing are involved: the cascade runs locally with the
+    user's own ElevenLabs key. Parks alive (state ``needs_onboarding``) and polls
+    the same ramp as pairing, re-reading the key from Keychain each tick because
+    onboarding writes it while we wait. Logs what is missing only when it changes.
+    """
+    global _onboarding_needed
+    from core import readiness
+
+    await readiness.refresh_elevenlabs_key()
+    state = readiness.check()
+    if state.ready:
+        return
+    _onboarding_needed = True
+    log.info("awaiting_onboarding", missing=list(state.missing),
+             fix=[readiness.FIXES[m] for m in state.missing])
+    delay = _PAIR_POLL_MIN_S
+    try:
+        while not _shutdown.is_set():
+            events_bus.publish("state", state="needs_onboarding")
+            await asyncio.sleep(delay)
+            delay = min(delay * 1.5, _PAIR_POLL_MAX_S)
+            await readiness.refresh_elevenlabs_key()
+            now = readiness.check()
+            if now.ready:
+                log.info("onboarding_complete")
+                events_bus.publish("state", state="waiting_for_wake")
+                return
+            if now.missing != state.missing:
+                log.info("awaiting_onboarding", missing=list(now.missing))
+                state = now
+    finally:
+        _onboarding_needed = False
+
+
 async def main_loop() -> None:
     """Entry point called by ``emma.__main__``.
 
@@ -403,7 +440,10 @@ async def main_loop() -> None:
         # Managed mode: park alive until the app pairs this Mac (no-op for a paired
         # or dev/BYOK daemon). Runs after the dashboard + menubar UI are up (started
         # as sibling tasks in emma.__main__) so there's somewhere to onboard.
-        await _ensure_paired()
+        if settings.VOICE_BACKEND == "cascade":
+            await _ensure_ready()  # VOICE-1: no OpenAI, no pairing — four local checks
+        else:
+            await _ensure_paired()
         if _shutdown.is_set():
             return
         log.info("waiting_for_wake")

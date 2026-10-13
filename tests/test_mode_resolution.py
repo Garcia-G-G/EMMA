@@ -36,6 +36,11 @@ _BACKEND_HOST = "theemmafamily.com"
 
 @pytest.fixture(autouse=True)
 def _clean(monkeypatch):
+    # These tests cover the Realtime credential/pairing path, which VOICE-1 keeps
+    # behind VOICE_BACKEND=realtime (the default is now the LLM-free cascade).
+    monkeypatch.setenv("VOICE_BACKEND", "realtime")
+    from config.settings import settings as _live
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")
     monkeypatch.delenv("EMMA_REQUIRE_PAIRING", raising=False)
     settings_mod.invalidate_mode_cache()
     orchestrator._shutdown.clear()
