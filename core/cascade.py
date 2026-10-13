@@ -38,6 +38,7 @@ import contextlib
 import time
 import uuid
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -168,6 +169,73 @@ class CachedTTS(ElevenLabsHttpTTSService):
             self._capture = None
 
 
+LATENCY_LOG = Path.home() / ".emma" / "voice_latency.jsonl"
+
+
+class Latency:
+    """Per-turn and per-session timing for VOICE-1 Part 6 (``emma.voice_report``).
+
+    ``stop_to_audio``: the user stopped speaking (VAD) -> Emma's first audio byte
+    reached the output. ``wake_to_audio``: the wake word -> her first audio of the
+    session. One JSON line each in ~/.emma/voice_latency.jsonl; no transcript text.
+    """
+
+    def __init__(self, wake_at: float | None = None, path: Path | None = None) -> None:
+        self.session = uuid.uuid4().hex[:12]
+        self.wake_at = wake_at
+        self.started = time.monotonic()
+        self._stop: float | None = None
+        self._first_audio = True
+        self.path = path or LATENCY_LOG
+
+    def user_stopped(self) -> None:
+        self._stop = time.monotonic()
+
+    def audio_out(self) -> None:
+        now = time.monotonic()
+        rec: dict[str, Any] = {}
+        if self._stop is not None:
+            rec["stop_to_audio_ms"] = round((now - self._stop) * 1000, 1)
+            self._stop = None
+        if self._first_audio and self.wake_at is not None:
+            rec["wake_to_audio_ms"] = round((now - self.wake_at) * 1000, 1)
+        self._first_audio = False
+        if rec:
+            self._write({"kind": "turn", **rec})
+
+    def close(self) -> None:
+        self._write({"kind": "session", "seconds": round(time.monotonic() - self.started, 1)})
+
+    def _write(self, rec: dict[str, Any]) -> None:
+        import json
+
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"ts": round(time.time(), 3), "session": self.session,
+                                    **rec}) + "\n")
+        except OSError as exc:
+            log.warning("latency_log_failed", error=str(exc))
+
+
+class _FirstAudioTap(FrameProcessor):
+    """Just before the speaker: the moment each answer's first audio goes out."""
+
+    def __init__(self, latency: Latency) -> None:
+        super().__init__()
+        self._latency = latency
+        self._speaking = False
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TTSAudioRawFrame) and frame.audio and not self._speaking:
+            self._speaking = True
+            self._latency.audio_out()
+        elif isinstance(frame, BotStoppedSpeakingFrame | InterruptionFrame):
+            self._speaking = False
+        await self.push_frame(frame, direction)
+
+
 class _UserTurnTap(FrameProcessor):
     """After STT: the user's turn reaches session memory, the injection guard, the UI.
 
@@ -177,10 +245,11 @@ class _UserTurnTap(FrameProcessor):
     let it through only above the barge-in energy — so it interrupts her.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, latency: Latency | None = None) -> None:
         super().__init__()
         self.bot_speaking = False
         self.last_user_stop = 0.0
+        self._latency = latency
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -198,6 +267,8 @@ class _UserTurnTap(FrameProcessor):
                 return
         elif isinstance(frame, VADUserStoppedSpeakingFrame):
             self.last_user_stop = time.monotonic()
+            if self._latency is not None:
+                self._latency.user_stopped()
         elif isinstance(frame, TranscriptionFrame) and frame.text:
             cleaned = vocabulary.corrections(frame.text)
             if cleaned != frame.text:
@@ -355,7 +426,7 @@ def _decide_getter() -> Any:
 
 
 async def build_pipeline(
-    http: aiohttp.ClientSession, host: _Host | None = None
+    http: aiohttp.ClientSession, host: _Host | None = None, latency: Latency | None = None
 ) -> tuple[PipelineTask, BrainProcessor, ScribeSTT]:
     from core.conversation import EchoGateProcessor, _AudioLevelTap
     from emma.calibrate import load_calibration
@@ -416,12 +487,13 @@ async def build_pipeline(
             transport.input(),
             vad,
             stt,
-            _UserTurnTap(),
+            _UserTurnTap(latency),
             brain_proc,
             tts,
             _SpokenTap(host),
             EchoGateProcessor(echo_gate, speech_phase, reference_rate=MIC_RATE_HZ),
             _AudioLevelTap(),
+            *([_FirstAudioTap(latency)] if latency is not None else []),
             transport.output(),
         ]
     )
@@ -451,8 +523,11 @@ async def stop_active_speech() -> bool:
     return False
 
 
-async def run_session(immediate_command: bool = False) -> None:
-    """One wake session on the cascade, until idle or cancellation."""
+async def run_session(immediate_command: bool = False, wake_at: float | None = None) -> None:
+    """One wake session on the cascade, until idle or cancellation.
+
+    ``wake_at``: monotonic time of the wake word, for wake -> first-audio latency.
+    """
     del immediate_command  # no greeting to skip: the cascade speaks only when spoken to
     if not settings.VOICE_ID:
         log.error("voice_id_missing", fix="set VOICE_ID (an ElevenLabs voice id)")
@@ -462,8 +537,9 @@ async def run_session(immediate_command: bool = False) -> None:
     global _active_task
     host = _Host()
     await host.load_facts()
+    latency = Latency(wake_at)
     async with aiohttp.ClientSession() as http:
-        task, _brain_proc, stt = await build_pipeline(http, host)
+        task, _brain_proc, stt = await build_pipeline(http, host, latency)
         _active_task = task
         runner = PipelineRunner(handle_sigint=False, handle_sigterm=False)
         log.info("conversation_start", backend="cascade", voice=settings.VOICE_ID,
@@ -475,4 +551,5 @@ async def run_session(immediate_command: bool = False) -> None:
                 await asyncio.wait_for(stt._disconnect(), timeout=3.0)  # type: ignore[no-untyped-call]
             _active_task = None
             injection.uninstall()
+            latency.close()
             log.info("conversation_end", backend="cascade")

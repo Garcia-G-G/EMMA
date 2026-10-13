@@ -279,7 +279,7 @@ async def _one_session() -> None:
             raise RuntimeError("test crash (--simulate-crash)")
         try:
             await asyncio.wait_for(
-                _run_session(immediate_command=immediate),
+                _run_session(immediate_command=immediate, wake_at=t_wake),
                 timeout=float(settings.SESSION_MAX_S) + 30.0,
             )
         except TimeoutError:
@@ -311,12 +311,12 @@ async def _one_session() -> None:
         structlog.contextvars.unbind_contextvars("turn_id")
 
 
-def _run_session(immediate_command: bool = False) -> Any:
+def _run_session(immediate_command: bool = False, wake_at: float | None = None) -> Any:
     """The wake session on the configured voice path (VOICE-1: cascade by default)."""
     if settings.VOICE_BACKEND == "cascade":
         from core import cascade
 
-        return cascade.run_session(immediate_command=immediate_command)
+        return cascade.run_session(immediate_command=immediate_command, wake_at=wake_at)
     return conversation.run_session(immediate_command=immediate_command)
 
 
