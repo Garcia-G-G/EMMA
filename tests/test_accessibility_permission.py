@@ -18,7 +18,7 @@ from __future__ import annotations
 import sys
 import types
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -303,6 +303,8 @@ async def test_diagnose_self_explains_a_missing_accessibility_grant() -> None:
         patch("core.permissions.check_accessibility_ax", return_value=False),
         patch("core.permissions.ax_smoke", return_value=(False, "ax_denied")),
         patch("core.permissions.check_screen_recording", return_value=True),
+        # diagnose_self also pings OpenAI for an RTT; not what these test.
+        patch("core.diagnostics.openai_rtt_ms", new=AsyncMock(return_value=None)),
     ):
         r = await diagnose_self()
     assert r.data["screen_vision_ok"] is False
@@ -320,6 +322,8 @@ async def test_diagnose_self_distinguishes_screen_recording() -> None:
         patch("core.permissions.check_accessibility_ax", return_value=True),
         patch("core.permissions.ax_smoke", return_value=(True, "ok")),
         patch("core.permissions.check_screen_recording", return_value=False),
+        # diagnose_self also pings OpenAI for an RTT; not what these test.
+        patch("core.diagnostics.openai_rtt_ms", new=AsyncMock(return_value=None)),
     ):
         r = await diagnose_self()
     msg = r.user_message.lower()
@@ -335,6 +339,8 @@ async def test_diagnose_self_stays_quiet_when_permissions_are_fine() -> None:
         patch("core.permissions.check_accessibility_ax", return_value=True),
         patch("core.permissions.ax_smoke", return_value=(True, "ok")),
         patch("core.permissions.check_screen_recording", return_value=True),
+        # diagnose_self also pings OpenAI for an RTT; not what these test.
+        patch("core.diagnostics.openai_rtt_ms", new=AsyncMock(return_value=None)),
     ):
         r = await diagnose_self()
     assert r.data["screen_vision_ok"] is True

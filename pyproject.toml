@@ -105,7 +105,11 @@ asyncio_mode = "strict"
 # failures, which is the opposite of why these exist. Run them deliberately:
 #     .venv/bin/python -m pytest -m macos_live
 # A CLI -m overrides this one, so that command selects exactly them.
-addopts = "-m 'not macos_live'"
+#
+# openai_live: same treatment for tests that call the real OpenAI API. Their key
+# was revoked for good (zero-spend), and a 401 from a dead credential must not
+# read as a red suite. Run them with a working key: pytest -m openai_live
+addopts = "-m 'not macos_live and not openai_live'"
 markers = [
     # Exercises the REAL macOS AX / Screen Recording APIs on the running
     # machine — no mocks. Skips loudly (never silently) when the TCC grant is
@@ -113,6 +117,9 @@ markers = [
     # ~50 unit tests passed against an autouse-mocked `_attr` while the live
     # path returned None for every call. Run with `-m macos_live`.
     "macos_live: needs a real macOS session with the TCC grants",
+    # Calls the REAL OpenAI API (embeddings, Realtime, reflection) and needs a
+    # working OPENAI_API_KEY. Run with `-m openai_live`.
+    "openai_live: calls the real OpenAI API; needs a working OPENAI_API_KEY",
 ]
 
 [tool.uv]

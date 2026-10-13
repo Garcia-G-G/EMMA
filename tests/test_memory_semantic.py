@@ -1,6 +1,7 @@
 """Tests for the semantic memory upgrade (embeddings + vec0 recall/dedup).
 
-These hit the real OpenAI embeddings API (text-embedding-3-small), so they
+These hit the real OpenAI embeddings API (text-embedding-3-small), so they are
+marked ``openai_live`` (deselected by default; run with ``-m openai_live``) and
 skip when no OPENAI_API_KEY is configured. Each test runs its async body in
 a single asyncio.run() and resets the embeddings client so the AsyncOpenAI
 singleton is never reused across event loops.
@@ -17,10 +18,13 @@ import pytest
 
 from config.settings import settings as _real_settings
 
-pytestmark = pytest.mark.skipif(
-    not _real_settings.OPENAI_API_KEY,
-    reason="needs OPENAI_API_KEY for text-embedding-3-small",
-)
+pytestmark = [
+    pytest.mark.openai_live,
+    pytest.mark.skipif(
+        not _real_settings.OPENAI_API_KEY,
+        reason="needs OPENAI_API_KEY for text-embedding-3-small",
+    ),
+]
 
 
 @pytest.fixture(autouse=True)
