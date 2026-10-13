@@ -145,7 +145,7 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 
 ## Conventions
 
-- **Language**: The user speaks Mexican Spanish and English. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn.
+- **Language**: Emma is bilingual Spanish/English, including mid-sentence switching. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn. **Never assume a regional variant, accent, or locale in code or prompts** — dialect-specific behavior (regional time expressions, vocabulary, pronunciation hints) lives in the user's profile (`config/dictionary.toml` `[user]`) and is applied only when set. Default is neutral Spanish and neutral English.
 - **System prompt**: Lives in `core/conversation.py:_build_instructions()`. Structured sections: Role, Personality, Language, Response Length, Variety, Preambles, Tool Results, Forbidden. Memory facts appended at the end.
 - **Confirmation flow**: Destructive tools (`destructive=True`) use `requires_confirmation=True` in their first `ToolResult`. The orchestrator re-calls with `confirmed=True` after user assent. `cancelled=True` is opt-in for cleanup on decline.
 - **Self-awareness**: `tools/self_tool.py` regenerates `self/capabilities.md` from the live tool registry at startup. The `describe_capabilities` tool reads this file.
