@@ -17,6 +17,7 @@ import contextlib
 import time
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -279,7 +280,7 @@ async def _one_session() -> None:
             raise RuntimeError("test crash (--simulate-crash)")
         try:
             await asyncio.wait_for(
-                conversation.run_session(immediate_command=immediate),
+                _run_session(immediate_command=immediate),
                 timeout=float(settings.SESSION_MAX_S) + 30.0,
             )
         except TimeoutError:
@@ -309,6 +310,15 @@ async def _one_session() -> None:
     finally:
         _last_session_end_mono = time.monotonic()
         structlog.contextvars.unbind_contextvars("turn_id")
+
+
+def _run_session(immediate_command: bool = False) -> Any:
+    """The wake session on the configured voice path (VOICE-1: cascade by default)."""
+    if settings.VOICE_BACKEND == "cascade":
+        from core import cascade
+
+        return cascade.run_session(immediate_command=immediate_command)
+    return conversation.run_session(immediate_command=immediate_command)
 
 
 _onboarding_needed = False

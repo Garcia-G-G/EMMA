@@ -201,6 +201,11 @@ def _load_brain() -> None:
             log.warning("brain_embedder_missing", model_dir=str(embedder.model_dir),
                         fix="re-run the installer, or: python -m emma.brain fetch-model")
         brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, embedder)
+        # The first decide pays ONNX's lazy session warm-up (~3 s, measured in the
+        # VOICE-1 probe). Pay it here, off the turn, so the first spoken request
+        # is as fast as the rest.
+        if index is not None:
+            brain.decide("abre safari")
         with _brain_lock:
             _brain = brain
         log.info("brain_shadow_ready", tools=len(docs), knn=brain.retriever.has_knn,
@@ -211,13 +216,25 @@ def _load_brain() -> None:
         _loading = False
 
 
-def start_session() -> Shadow:
-    """A fresh shadow for a wake session; starts loading the brain if needed."""
-    global _shadow, _loading
+def ensure_loading() -> None:
+    """Start loading the brain in the background if it isn't loaded or loading."""
+    global _loading
     with _brain_lock:
         if _brain is None and not _loading:
             _loading = True
             threading.Thread(target=_load_brain, name="brain-shadow-load", daemon=True).start()
+
+
+def loaded() -> Brain | None:
+    """The live brain, or None while it loads. The cascade (VOICE-1) reads it per turn."""
+    return _brain
+
+
+def start_session() -> Shadow:
+    """A fresh shadow for a wake session; starts loading the brain if needed."""
+    global _shadow
+    ensure_loading()
+    with _brain_lock:
         _shadow = Shadow(_brain)
     return _shadow
 

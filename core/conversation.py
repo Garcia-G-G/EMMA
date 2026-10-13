@@ -144,13 +144,30 @@ def _is_terminal_auth_error(message: str) -> bool:
     return any(marker in message for marker in _TERMINAL_AUTH_MARKERS)
 
 
+def _resample(audio: bytes, rate_in: int, rate_out: int) -> bytes:
+    import numpy as np
+    import soxr
+
+    pcm = np.frombuffer(audio, dtype=np.int16)
+    return bytes(soxr.resample(pcm, rate_in, rate_out).astype(np.int16).tobytes())
+
+
 class EchoGateProcessor(FrameProcessor):
     """Watches BotStarted/StoppedSpeakingFrames; toggles gate + speech phase."""
 
-    def __init__(self, gate: EchoGateFilter, phase: SpeechPhase | None = None):
+    def __init__(
+        self,
+        gate: EchoGateFilter,
+        phase: SpeechPhase | None = None,
+        reference_rate: int | None = None,
+    ):
         super().__init__()
         self._gate = gate
         self._phase = phase
+        # The cascade plays at 24 kHz into a 16 kHz mic gate (VOICE-1): the
+        # reference must be at the mic's rate or the correlation compares
+        # mismatched clocks. None = same rate (the Realtime path).
+        self._reference_rate = reference_rate
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
         await super().process_frame(frame, direction)
@@ -158,7 +175,10 @@ class EchoGateProcessor(FrameProcessor):
         # processor sits just upstream of transport.output(), so the bot's
         # OutputAudioRawFrames pass through here on their way to the speaker.
         if isinstance(frame, OutputAudioRawFrame) and frame.audio:
-            self._gate.push_reference(frame.audio)
+            audio = frame.audio
+            if self._reference_rate and frame.sample_rate != self._reference_rate:
+                audio = _resample(audio, frame.sample_rate, self._reference_rate)
+            self._gate.push_reference(audio)
         if isinstance(frame, BotStartedSpeakingFrame):
             self._gate.set_bot_speaking(True)
             runtime_state.mark_started()  # gate the wake listener (Layer B)

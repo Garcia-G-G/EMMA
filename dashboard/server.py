@@ -502,9 +502,14 @@ async def dispatch_control(msg: dict) -> dict:
         elif cmd == "snooze":
             orchestrator.snooze_listening(int(msg.get("minutes", 15)))
         elif cmd == "stop":
-            from core import conversation
+            if settings.VOICE_BACKEND == "cascade":
+                from core import cascade
 
-            await conversation.stop_active_speech()
+                await cascade.stop_active_speech()
+            else:
+                from core import conversation
+
+                await conversation.stop_active_speech()
         elif cmd == "shutdown":
             from core import dev_state
 

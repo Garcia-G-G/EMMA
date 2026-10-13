@@ -1,6 +1,6 @@
 """What Emma says when the brain answers without an LLM (BRAIN-1 Part 6).
 
-Text only — TTS is VOICE-1. Three jobs, per LLM-DIET C1/C2/C3:
+Text only — ``core/brain/processor.py`` hands it to TTS (VOICE-1). Three jobs, per LLM-DIET C1/C2/C3:
 
 * **Templates with variation.** 4-6 phrasings per language for every verdict and
   every L1/L2 tool, chosen by weighted random with no immediate repeat, so the
@@ -297,6 +297,18 @@ _REFUSE: dict[str, Phrasings] = {
                    "en": ("I can't make calls.", "Calling isn't something I can do.",
                           "I don't make calls yet.", "Phone calls I can't do.")},
 }
+# A deferred turn with no thinker yet (VOICE-1). Not an error and not "I didn't
+# understand": she heard it, can't do it alone yet, and kept it to learn from.
+_NOT_YET: Phrasings = {
+    "es": ("Eso todavía no lo hago sola; lo apunté.", "Esa aún no la hago por mi cuenta. Ya quedó anotada.",
+           "Todavía no puedo con esa sola; la guardé para aprenderla.",
+           "Esa me falta aprenderla. La dejé apuntada.",
+           "Por ahora esa no la hago sola, pero ya la tengo anotada."),
+    "en": ("I can't do that one on my own yet; I noted it.", "That one I don't do alone yet. Noted.",
+           "I don't handle that by myself yet, but I saved it.",
+           "Still learning that one. I wrote it down.",
+           "Not on my own yet. I've noted it for later."),
+}
 _SMALLTALK: Phrasings = {
     "es": ("Bien, ¿en qué te ayudo?", "Aquí ando, ¿qué necesitas?", "Todo bien. ¿Qué hacemos?",
            "Con gusto.", "Aquí estoy."),
@@ -356,6 +368,9 @@ class Responder:
 
     def cancelled(self, lang: SpokenLang) -> str:
         return self.pick(f"cancelled:{lang}", _CANCELLED[lang])
+
+    def not_yet(self, lang: SpokenLang) -> str:
+        return self.pick(f"not_yet:{lang}", _NOT_YET[lang])
 
     def unclear(self, lang: SpokenLang) -> str:
         return self.pick(f"unclear:{lang}", _UNCLEAR_ANSWER[lang])

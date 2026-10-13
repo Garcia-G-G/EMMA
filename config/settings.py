@@ -97,6 +97,19 @@ class Settings(BaseSettings):
     # core/brain -> ElevenLabs TTS, no LLM. `realtime` = the OpenAI Realtime
     # pipeline, kept for the LAUNCH-3/9 tests; not tested live.
     VOICE_BACKEND: Literal["cascade", "realtime"] = "cascade"
+    # Cascade services, verified against Pipecat 1.2.1 and the live API (VOICE-1):
+    # Scribe v2 Realtime over ElevenLabsRealtimeSTTService (language left unset —
+    # it auto-detects per utterance, the code-switching case). v4 Turbo is
+    # rejected on the TTS WebSocket ("use text-to-dialogue"), so TTS runs on
+    # ElevenLabsHttpTTSService (stream/with-timestamps: word timestamps kept).
+    ELEVENLABS_STT_MODEL: str = "scribe_v2_realtime"
+    ELEVENLABS_TTS_MODEL: str = "eleven_v4_turbo"
+    # Seconds of silence before Silero VAD ends the user's turn and Scribe commits.
+    # Realtime used 0.8 s server-side; pipecat's default 0.2 s splits "abre... Safari".
+    CASCADE_VAD_STOP_S: float = 0.5
+    # The ElevenLabs voice. Required for the cascade; no shipped default (no
+    # assumed gender or accent). Chosen per install (VOICE-1 Part 4).
+    VOICE_ID: str = ""
     YOUTUBE_API_KEY: str | None = None
     SPOTIFY_CLIENT_ID: str | None = None
     SPOTIFY_CLIENT_SECRET: str | None = None
