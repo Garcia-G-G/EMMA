@@ -46,6 +46,7 @@ log = structlog.get_logger("emma.voice")
 CACHE_DIR = Path.home() / ".emma" / "voice_cache"
 RATE_HZ = 24000
 PREGENERATE_N = 50
+NOT_CONFIGURED = 3  # `pregenerate` exit code: no key/voice yet (the installer tells them apart)
 _TIMEOUT_S = 20.0
 
 # Spoken outside a session by the crash handler. Fixed text, so it pregenerates:
@@ -250,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "pregenerate":
         if not ready():
             print("No ElevenLabs key or VOICE_ID yet; skipping (onboarding renders them).")
-            return 0
+            return NOT_CONFIGURED
         have, made = pregenerate()
         print(f"voice clips: {have} cached, {made} rendered ({have + made}/{PREGENERATE_N})")
         return 0

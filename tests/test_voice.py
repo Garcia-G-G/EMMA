@@ -194,3 +194,11 @@ def test_the_cascade_caches_exactly_the_fixed_lines() -> None:
     lines = cascade.cacheable_lines()
     assert "Listo." in lines and voice.CRASH_LINE in lines
     assert not any("{" in t for t in lines)
+
+
+def test_pregenerate_without_a_voice_says_so_with_its_own_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The installer prints "Voz lista" only on 0; 3 means onboarding will render them."""
+    monkeypatch.setattr(settings, "VOICE_ID", "")
+    assert voice.main(["pregenerate"]) == voice.NOT_CONFIGURED == 3
