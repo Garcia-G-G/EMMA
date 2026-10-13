@@ -100,6 +100,23 @@ async def test_unknown_command_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stop_on_the_cascade_cuts_the_cascade(monkeypatch) -> None:
+    from config.settings import settings as live
+    from core import cascade
+
+    monkeypatch.setattr(live, "VOICE_BACKEND", "cascade")
+    called = {}
+
+    async def fake_stop() -> bool:
+        called["stop"] = True
+        return True
+
+    monkeypatch.setattr(cascade, "stop_active_speech", fake_stop)
+    res = await server.dispatch_control({"cmd": "stop"})
+    assert res["ok"] is True and called.get("stop") is True
+
+
+@pytest.mark.asyncio
 async def test_stop_dispatches_to_stop_active_speech(monkeypatch) -> None:
     called = {}
 
@@ -217,3 +234,13 @@ def test_an_injected_token_wins(tmp_path, monkeypatch) -> None:
 
     importlib.reload(control_auth)
     assert control_auth.token() == "handed-down-token"
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests describe the Realtime path (its payload, its session, its stop
+    route). VOICE-1 made the LLM-free cascade the default, where LLM-backed tools
+    are unavailable; pin the backend these tests are about."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")

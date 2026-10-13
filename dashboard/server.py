@@ -502,7 +502,11 @@ async def dispatch_control(msg: dict) -> dict:
         elif cmd == "snooze":
             orchestrator.snooze_listening(int(msg.get("minutes", 15)))
         elif cmd == "stop":
-            if settings.VOICE_BACKEND == "cascade":
+            # A local name: this function imports `settings` in other branches,
+            # which makes the bare name local to the whole function.
+            from config.settings import settings as live
+
+            if live.VOICE_BACKEND == "cascade":
                 from core import cascade
 
                 await cascade.stop_active_speech()
