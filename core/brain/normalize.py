@@ -69,3 +69,16 @@ def _detok(pieces: list[str]) -> str:
         else:
             s += " " + p
     return _SPACE.sub(" ", s).strip(" ,.;:")
+
+
+_ES = frozenset({"el", "la", "los", "las", "de", "que", "en", "un", "una", "mi", "mis", "por",
+                 "con", "para", "es", "abre", "pon", "dime", "como", "esta", "este"})
+_EN = frozenset({"the", "a", "an", "of", "to", "in", "on", "my", "for", "with", "is", "open",
+                 "play", "what", "how", "this", "that", "please", "and"})
+
+
+def lang_hint(tokens: tuple[str, ...]) -> str:
+    """'es' | 'en' by which stopword set matches more; ties go to 'es' (Emma's default)."""
+    es = sum(t in _ES for t in tokens)
+    en = sum(t in _EN for t in tokens)
+    return "en" if en > es else "es"

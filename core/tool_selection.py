@@ -106,6 +106,7 @@ def _query_toks(s: str) -> list[str]:
     return [t for t in _toks(s) if t not in _QUERY_STOP]
 
 
+
 class _BM25:
     def __init__(self, docs: list[list[str]], k1: float = 1.5, b: float = 0.75) -> None:
         self.k1, self.b = k1, b
@@ -131,6 +132,14 @@ class _BM25:
                     )
             out.append(s)
         return out
+
+
+# Public names for the one BM25 implementation. core/brain ranks every tool
+# (core included) with exactly this scorer and tokenizer — imported, never
+# copied, so the session's tool retrieval and the brain cannot drift apart.
+BM25 = _BM25
+doc_tokens = _toks
+query_tokens = _query_toks
 
 
 class ToolSelector:

@@ -145,3 +145,69 @@ every sink name is registered).
 fail** (all 20 attacks + the mic rules). The tests measure the guard.
 
 Gates: full suite 1277 passed; acceptance `--mock-external` 99/99; ruff, mypy clean.
+
+## Part 3 — dual retriever
+
+- **BM25**: `core.tool_selection`'s scorer and tokenizers, now exported as
+  `BM25` / `doc_tokens` / `query_tokens` (imported by the brain, not copied),
+  ranked over **all 185 registered tools** with their guided descriptions. The
+  session retriever keeps the core out of its pool; the brain can't.
+- **kNN**: `multilingual-e5-small` int8 ONNX (`intfloat`, pinned revision
+  `614241f6…`, SHA-256 pinned in `core/brain/embed.py`), run on `onnxruntime` +
+  `tokenizers` — both already locked deps. No LLM, no Ollama. Index:
+  `~/.emma/brain.db`, raw sqlite3 + `sqlite-vec` (cosine `vec0`), rows
+  `(id, text, normalized, brain_path, accept_tools, lang_hint)`.
+- `core/brain_host.py` (outside the brain, so it may import `tools`) turns the
+  registry into plain `ToolDoc`s and the labelled set into index rows.
+
+### Embedder choice (measured, this Mac)
+
+| Embedder | warm p50 / p95 | kNN r@1 (LOO) | kNN r@5 | Shippable |
+|---|---:|---:|---:|---|
+| **multilingual-e5-small int8 ONNX** | **2.5 / 5.2 ms** (load 0.7 s) | 39.1 % | 59.1 % | yes |
+| Qwen3-Embedding-0.6B (Ollama) | 38.4 / 60.7 ms | 41.7 % | 56.5 % | no — needs Ollama |
+
+Within noise on accuracy; e5 is 15× faster and installable. **The embedder is
+not the bottleneck — the data is**: most tools have one or two labelled examples.
+
+### Pinned (115 items whose label includes a real tool; kNN leave-one-out)
+
+| Metric | Count | Rate |
+|---|---:|---:|
+| BM25 recall@1 | 60 | 52.2 % |
+| BM25 recall@5 | 78 | 67.8 % |
+| kNN recall@1 | 45 | 39.1 % |
+| kNN recall@5 | 68 | 59.1 % |
+| **Agreement** (BM25 top-1 == kNN top-1) | **20** | **17.4 %** |
+| …of which correct | 18 | 90 % precision |
+| Retrieval latency (BM25 + embed + kNN) | p50 6.6 ms, p95 12.8 ms | |
+
+(LAUNCH-12's "90.4 % recall@10" was BM25 over the non-core pool, with core
+tools always present; this is top-1/top-5 over every tool, a harder question.)
+
+**What this means for Part 5:** the gate requires agreement first, so with this
+index the local verdicts are capped near 20 items. Two measured levers, neither
+built into the pinned retriever:
+
+1. **Seeding kNN with the canonical phrases Emma already ships** (CORE-LOCAL §1
+   defines L1 as "aliases + canonical phrases"): 283 whole phrases quoted in the
+   tools' own descriptions (≥3 content tokens) → kNN r@1 53.9 %, r@5 72.2 %,
+   agreement **47 (40.9 %)**, but agreement precision drops to **83 %** (39/47).
+   And **13 labelled items have a near-identical shipped phrase** (cosine
+   ≥ 0.97 — mostly `syn_*`, which look written from the docstrings), so part of
+   that gain is leakage, not generalization.
+2. **Retrievability of the descriptions themselves.** 14 of the 77 tools the
+   140 accept have **no Spanish trigger phrase** in their description, against
+   CLAUDE.md's tool-budget rule 2: `set_volume` ("Set the system output
+   volume…") can't be found by "sube el volumen". Also `current_time`, `mute`,
+   `play_track`, `play_playlist`, `resume`, `remember_fact`, `recall_facts`,
+   `run_command`, `describe_capabilities`, `latest_video_from_creator`,
+   `set_preferred_app`, `set_brightness`, `browser_do`. Not changed here:
+   editing descriptions while looking at the test set would inflate the pin.
+
+Tests (`tests/test_brain_retrieve.py`, 6): the pinned floors (any drop fails;
+agreement may only grow if it stays correct); LOO never returns the item
+itself; both sources populated on every candidate (absent = 0); retrieval
+p95 < 100 ms; embedder p95 < 100 ms; without the model, kNN is absent and BM25
+still ranks (no crash). The kNN tests **skip** with an explicit reason when the
+model isn't fetched, rather than passing on BM25 alone.
