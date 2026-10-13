@@ -407,3 +407,13 @@ class TestHarnessLifecycle:
 
         monkeypatch.setattr(sp, "run", explode)
         runner._run_lifecycle_script("shell: whatever", label="setup", scenario_id="T3")
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests describe the Realtime path (its payload, its session, its stop
+    route). VOICE-1 made the LLM-free cascade the default, where LLM-backed tools
+    are unavailable; pin the backend these tests are about."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")

@@ -177,7 +177,11 @@ async def resolve_recent_note() -> ToolResult:
     )
 
 
-@tool(returns_untrusted_content=True)
+@tool(
+    returns_untrusted_content=True,
+    reversible=True,
+    reversible_because="read-only: it reports, changes nothing",
+)
 async def list_notes(query: str = "", limit: int = 10) -> ToolResult:
     """Lista tus notas de Apple Notes (título, fecha de modificación y un fragmento).
 
@@ -389,7 +393,11 @@ async def _read_body(note_id: str) -> str:
     return await macos.osascript(script, timeout_s=_NOTES_TIMEOUT_S)
 
 
-@tool(returns_untrusted_content=True)
+@tool(
+    returns_untrusted_content=True,
+    reversible=True,
+    reversible_because="read-only: it reports, changes nothing",
+)
 async def read_note(title: str, index: int | None = None, recent: bool = False) -> ToolResult:
     """Lee el contenido de la nota cuyo título es `title`.
 

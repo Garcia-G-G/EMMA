@@ -255,3 +255,13 @@ def test_wake_phrase_is_not_a_query() -> None:
     sel = ts.ToolSelector(registry.available_specs())
     assert sel.retrieve("Hey Emma") == []
     assert sel.retrieve("Oye Emma, abre la conexión staging") == sel.retrieve("abre la conexión staging")
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests describe the Realtime path (its payload, its session, its stop
+    route). VOICE-1 made the LLM-free cascade the default, where LLM-backed tools
+    are unavailable; pin the backend these tests are about."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")

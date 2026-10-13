@@ -69,7 +69,7 @@ async def web_search_in_browser(query: str) -> ToolResult:
 _CHROME_SYNTAX = ("Google Chrome", "Chrome", "Brave Browser", "Microsoft Edge")
 
 
-@tool()
+@tool(reversible=True, reversible_because="a closed tab reopens with Cmd+Shift+T")
 async def close_current_tab(browser: str = "") -> ToolResult:
     """Cierra la pestaña activa del navegador. Directo y rápido (Bug 19.2-B5).
 
@@ -205,7 +205,11 @@ def _close_script(app: str, tabs: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
-@tool(returns_untrusted_content=True)
+@tool(
+    returns_untrusted_content=True,
+    reversible=True,
+    reversible_because="read-only: it reports, changes nothing",
+)
 async def list_browser_tabs(browser: str = "") -> ToolResult:
     """Lista todas las pestañas abiertas del navegador (todas las ventanas).
 

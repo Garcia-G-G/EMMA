@@ -40,7 +40,7 @@ async def _run_timer(tid: str, duration_min: int, label: str) -> None:
         log.warning("timer_say_failed", error=str(exc))
 
 
-@tool()
+@tool(reversible=True, reversible_because="a timer only rings, and it can be cancelled")
 async def start_timer(duration_min: int, label: str = "") -> ToolResult:
     """Inicia un temporizador en segundo plano ("timer de 25 minutos", "ponme 10 minutos").
 
@@ -64,7 +64,7 @@ async def start_timer(duration_min: int, label: str = "") -> ToolResult:
     )
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 async def list_timers() -> ToolResult:
     """Dice qué temporizadores siguen activos ("¿qué timers tengo?")."""
     now = time.time()

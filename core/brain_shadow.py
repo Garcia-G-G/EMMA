@@ -200,7 +200,10 @@ def _load_brain() -> None:
             index = None
             log.warning("brain_embedder_missing", model_dir=str(embedder.model_dir),
                         fix="re-run the installer, or: python -m emma.brain fetch-model")
-        brain = Brain(docs, vocab(apps=installed_apps()), thresholds_from_settings(), index, embedder)
+        th = thresholds_from_settings()
+        if not th.require_slots:  # rule 9: the live brain never runs without it
+            raise RuntimeError("argument completeness is mandatory on the live brain")
+        brain = Brain(docs, vocab(apps=installed_apps()), th, index, embedder)
         # The first decide pays ONNX's lazy session warm-up (~3 s, measured in the
         # VOICE-1 probe). Pay it here, off the turn, so the first spoken request
         # is as fast as the rest.

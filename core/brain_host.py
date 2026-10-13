@@ -53,6 +53,7 @@ def tool_docs(available_only: bool = False) -> list[ToolDoc]:
                 required=tuple(params.get("required") or ()),
                 params=props,
                 destructive=entry.destructive,
+                reversible=entry.reversible,
             )
         )
     return docs
@@ -181,6 +182,9 @@ def thresholds_from_settings() -> Thresholds:
         bm25_single_min=settings.BRAIN_BM25_SINGLE_MIN,
         bm25_single_gap=settings.BRAIN_BM25_SINGLE_GAP,
         knn_single_min=settings.BRAIN_KNN_SINGLE_MIN,
+        # Master plan rule 9: argument completeness is the whole safety layer.
+        # Never read from settings — no .env line, env var or flag can turn it off.
+        require_slots=True,
     )
 
 

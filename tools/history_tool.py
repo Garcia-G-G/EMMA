@@ -82,7 +82,7 @@ def _summarize_actions(actions: list[episodic.ActionRecord], when: str) -> str:
     return f"{label.capitalize()}: hice {len(actions)} acción(es) — " + ", ".join(parts) + "."
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 async def what_did_you_do(when: str = "") -> ToolResult:
     """Cuenta qué acciones hizo Emma en un día ("¿qué hiciste ayer / el martes / hoy?").
 

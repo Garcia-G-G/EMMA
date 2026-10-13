@@ -34,6 +34,17 @@ FORGET: frozenset[str] = frozenset(
      "forget that", "forget about that", "forget what you read"}
 )
 
+# VOICE-1 Part 3: right after Emma ACTED, these mean she got it wrong — the
+# production wrong-rate signal. Opening phrase of a short utterance only
+# ("abre Safari otra vez" is a request, "otra vez" alone is a retry).
+CORRECTION: frozenset[str] = frozenset(
+    {"eso no", "no eso no", "así no", "no era eso", "eso no era", "eso no es", "está mal",
+     "esta mal", "mal", "te equivocaste", "deshaz eso", "deshazlo", "otra vez", "de nuevo",
+     "inténtalo de nuevo", "intentalo de nuevo",
+     "not that", "no not that", "that's wrong", "thats wrong", "wrong", "undo", "undo that",
+     "again", "try again", "that's not it", "thats not it"}
+)
+
 _MAX_ANSWER_TOKENS = 6  # a yes/no answer is short; a long sentence is a new request
 
 
@@ -78,3 +89,15 @@ def is_no(text: str) -> bool:
 
 def is_forget(text: str) -> bool:
     return _contains(normalize(text).tokens, FORGET)
+
+
+def is_correction(text: str) -> bool:
+    """A short utterance that OPENS with a correction, a no, or a cancel.
+
+    Only meaningful right after an executed turn (the processor checks that):
+    there, "no" or "cancela" is the user saying the action was wrong.
+    """
+    toks = normalize(text).tokens
+    if not toks or len(toks) > _MAX_ANSWER_TOKENS:
+        return False
+    return _starts_with(toks, CORRECTION) or _starts_with(toks, NO) or _starts_with(toks, CANCEL)

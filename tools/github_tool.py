@@ -212,7 +212,11 @@ async def search_github(query: str, limit: int = 5) -> ToolResult:
     return ToolResult(True, {"matches": []}, f"No encontré repos para '{q}'.", False)
 
 
-@tool(returns_untrusted_content=True)
+@tool(
+    returns_untrusted_content=True,
+    reversible=True,
+    reversible_because="read-only: it reports, changes nothing",
+)
 async def my_repos(sort: str = "updated", limit: int = 5, visibility: str = "all") -> ToolResult:
     """Lista los repos de the user (los suyos, no search). Para 'mis repos',
     'los repos que tengo', 'el repo que hice de X'.

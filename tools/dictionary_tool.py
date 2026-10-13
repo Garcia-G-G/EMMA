@@ -192,7 +192,7 @@ async def remember_stt_correction(wrong: str, right: str, section: str = "auto")
     )
 
 
-@tool()
+@tool(reversible=True, reversible_because="opens one of your own saved pages; close it to undo")
 async def open_my_page(name: str, picked: str = "", confirmed: bool = False) -> ToolResult:
     """Abre una de las páginas guardadas de the user por nombre.
 

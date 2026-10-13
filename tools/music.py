@@ -241,7 +241,7 @@ def _spotify_playlist_uri(name: str) -> str | None:
         return None
 
 
-@tool()
+@tool(reversible=True, reversible_because="playback can be paused or changed")
 async def play_track(query: str, app: str = "") -> ToolResult:
     """Search for a track or artist and start playing the top result.
 
@@ -277,7 +277,7 @@ async def play_track(query: str, app: str = "") -> ToolResult:
     )
 
 
-@tool()
+@tool(reversible=True, reversible_because="playback can be paused or changed")
 async def play_playlist(name: str, app: str = "") -> ToolResult:
     """Play a playlist by name. Routes to the OPEN music app; with none open
     it asks which to launch (re-call with app=<pick>)."""
@@ -358,20 +358,20 @@ async def _transport(verb: str, ok_msg: str, *, ends_session: bool = False) -> T
     )
 
 
-@tool()
+@tool(reversible=True, reversible_because="resume undoes it")
 async def pause() -> ToolResult:
     """Pause whatever is playing."""
     # pause stops the audio, so the mic no longer fights it — keep listening.
     return await _transport("pause", "Pausado.")
 
 
-@tool()
+@tool(reversible=True, reversible_because="pause undoes it")
 async def resume() -> ToolResult:
     """Resume playback."""
     return await _transport("play", "Listo.", ends_session=True)
 
 
-@tool()
+@tool(reversible=True, reversible_because="playback can be changed back")
 async def next_track() -> ToolResult:
     """Skip to the next track."""
     return await _transport("next track", "Siguiente.", ends_session=True)
@@ -383,7 +383,7 @@ async def previous_track() -> ToolResult:
     return await _transport("previous track", "Anterior.", ends_session=True)
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 def now_playing() -> ToolResult:
     """Tell the user what is currently playing."""
     sp = _spotify()

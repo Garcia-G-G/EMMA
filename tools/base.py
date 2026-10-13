@@ -71,6 +71,12 @@ class RegisteredTool:
     # A module can gate all of its tools at once with a module-level
     # ``def available() -> bool`` instead.
     available: Callable[[], bool] | None = None
+    # VOICE-1 Part 3 (master plan rule 3): the brain executes WITHOUT a spoken yes
+    # only tools marked reversible — undoable with margin, or read-only. Default
+    # False: everything else asks first. Set deliberately, with
+    # ``reversible_because`` saying why; tests/test_local_safety.py pins the set.
+    reversible: bool = False
+    reversible_because: str = ""
 
 
 _REGISTRY: dict[str, RegisteredTool] = {}
@@ -181,13 +187,22 @@ def tool(
     aliases: tuple[str, ...] = (),
     returns_untrusted_content: bool = False,
     available: Callable[[], bool] | None = None,
+    reversible: bool = False,
+    reversible_because: str = "",
 ) -> Callable[[F], F]:
     """Register ``fn`` in the tool registry.
 
     ``available`` gates only whether the tool is *advertised* to the model this
     session; the tool stays dispatchable either way. Use it when a tool needs a
     credential or a binary its module-mates don't (see tools/availability.py).
+
+    ``reversible=True`` lets the brain run it without asking (VOICE-1); it needs
+    a one-line ``reversible_because``, so the choice is reviewed, not a default.
     """
+    if reversible and not reversible_because.strip():
+        raise ValueError("reversible=True needs a reversible_because reason")
+    if reversible and destructive:
+        raise ValueError("a destructive tool cannot be reversible")
 
     def decorator(fn: F) -> F:
         key = name or fn.__name__
@@ -200,6 +215,8 @@ def tool(
             aliases=aliases,
             returns_untrusted_content=returns_untrusted_content,
             available=available,
+            reversible=reversible,
+            reversible_because=reversible_because.strip(),
         )
         _claim(key, entry)
         for alias in aliases:

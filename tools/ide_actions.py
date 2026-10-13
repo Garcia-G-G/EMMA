@@ -60,7 +60,7 @@ def _open_args(cli: str | None, app: str, path: str, line: int) -> list[str]:
     return ["open", "-a", app, path]
 
 
-@tool()
+@tool(reversible=True, reversible_because="opens a file or folder; closing it undoes it")
 async def open_in_ide(
     path: str, line: int = 0, ide: str = "", project_mode: bool = False
 ) -> ToolResult:
@@ -123,7 +123,7 @@ async def new_file_in_ide(path: str, content: str = "", ide: str = "") -> ToolRe
     return await open_in_ide(str(p), ide=ide)
 
 
-@tool()
+@tool(reversible=True, reversible_because="toggling again restores it")
 async def toggle_ide_terminal(ide: str = "") -> ToolResult:
     """Abre/cierra la terminal integrada del IDE (Bug 19.2-B6).
 

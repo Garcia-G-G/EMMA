@@ -32,6 +32,44 @@ def _q(xs: list[float], p: float) -> float:
 
 
 def report(rows: list[dict[str, Any]]) -> str:
+    live = [r for r in rows if r.get("backend") == "cascade" and not r.get("probe")]
+    shadow = report_shadow(rows)
+    if not live:
+        return shadow
+    return report_cascade(live) + ("\n\n" + shadow if any("brain_verdict" in r for r in rows) else "")
+
+
+def report_cascade(turns: list[dict[str, Any]]) -> str:
+    """VOICE-1: the brain acting for real. Corrections are the production wrong-rate."""
+    n = len(turns)
+    out = [f"cascade turns: {n}"]
+    verdicts = Counter(str(r.get("verdict")) for r in turns)
+    served = n - verdicts.get("defer", 0)
+    out.append(f"served without an LLM: {_pct(served, n)}   "
+               + "  ".join(f"{k} {v}" for k, v in sorted(verdicts.items())))
+    executed = [r for r in turns if r.get("executed")]
+    corrections = [r for r in turns if r.get("correction_of")]
+    out.append(f"local rate: {_pct(sum(1 for r in turns if r.get('verdict') == 'local'), n)}   "
+               f"executed {len(executed)}   corrections {len(corrections)} "
+               f"({_pct(len(corrections), len(executed))} of executed)")
+    for r in corrections:
+        c = r["correction_of"]
+        out.append(f"  correction: {str(c.get('utterance', ''))[:60]!r} -> {c.get('tool')}  "
+                   f"then {str(r.get('utterance', ''))[:40]!r}")
+    paths = Counter(str(r.get("path")) for r in turns)
+    out.append("paths: " + "  ".join(f"{k} {v}" for k, v in paths.most_common()))
+    reasons = Counter(str(r.get("reason")) for r in turns if r.get("verdict") == "defer")
+    out.append("defer reasons:")
+    for reason, c in reasons.most_common():
+        out.append(f"  {reason:28s} {c:5d}  {100 * c / n:5.1f}%")
+    ms = [float(r["latency"]["to_speak_ms"]) for r in turns
+          if isinstance(r.get("latency"), dict) and "to_speak_ms" in r["latency"]]
+    out.append(f"transcript -> speech queued: p50 {_q(ms, 0.5):.1f} ms   p95 {_q(ms, 0.95):.1f} ms"
+               f"   (n={len(ms)})")
+    return "\n".join(out)
+
+
+def report_shadow(rows: list[dict[str, Any]]) -> str:
     turns = [r for r in rows if "brain_verdict" in r]
     out: list[str] = []
     n = len(turns)

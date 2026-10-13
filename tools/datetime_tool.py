@@ -21,7 +21,7 @@ def _part_of_day(hour: int) -> str:
     return "de la noche"
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 async def current_datetime_speak() -> ToolResult:
     """Dice la fecha y la hora en español natural.
 

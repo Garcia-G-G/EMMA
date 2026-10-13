@@ -15,7 +15,7 @@ from tools.base import ToolResult, tool
 log = structlog.get_logger("emma.tools.system")
 
 
-@tool()
+@tool(reversible=True, reversible_because="an opened app can be closed again; nothing is lost")
 def open_application(name: str) -> ToolResult:
     """Open a macOS application by display name (e.g. "Spotify", "Safari", "Notes")."""
     try:
@@ -25,7 +25,7 @@ def open_application(name: str) -> ToolResult:
     return ToolResult(True, {"name": name}, f"Abriendo {name}.", False)
 
 
-@tool()
+@tool(reversible=True, reversible_because="the volume can be set back")
 def set_volume(percent: int) -> ToolResult:
     """Set the system output volume. `percent` is 0-100."""
     try:
@@ -36,7 +36,7 @@ def set_volume(percent: int) -> ToolResult:
     return ToolResult(True, {"volume": p}, f"Volumen al {p} por ciento.", False)
 
 
-@tool()
+@tool(reversible=True, reversible_because="unmute restores the sound")
 def mute() -> ToolResult:
     """Mute the system output."""
     try:
@@ -46,7 +46,7 @@ def mute() -> ToolResult:
     return ToolResult(True, None, "Silenciado.", False)
 
 
-@tool()
+@tool(reversible=True, reversible_because="mute restores the silence")
 def unmute() -> ToolResult:
     """Unmute the system output."""
     try:
@@ -56,7 +56,11 @@ def unmute() -> ToolResult:
     return ToolResult(True, None, "Sonido restaurado.", False)
 
 
-@tool(available=lambda: availability.has_binary("brightness"))
+@tool(
+    available=lambda: availability.has_binary("brightness"),
+    reversible=True,
+    reversible_because="the brightness can be set back",
+)
 def set_brightness(percent: int) -> ToolResult:
     """Set the display brightness. `percent` is 0-100.
 
@@ -90,7 +94,7 @@ def lock_screen() -> ToolResult:
     return ToolResult(True, None, "Bloqueando la pantalla.", False)
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 def current_time(timezone: str | None = None) -> ToolResult:
     """Return the current time. Pass `timezone` as an IANA name
     ("Asia/Tokyo", "America/Mexico_City") to ask about a specific city.

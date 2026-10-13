@@ -171,6 +171,10 @@ def _is_available(entry: RegisteredTool) -> bool:
     """
     if entry.available is not None and not _probe(entry.available, entry.name):
         return False
+    from tools import availability
+
+    if _module_of(entry) in availability.LLM_BACKED_MODULES and not availability.llm_allowed():
+        return False  # VOICE-1: no LLM anywhere on the cascade
     module = sys.modules.get(getattr(entry.fn, "__module__", ""))
     probe = getattr(module, "available", None) if module is not None else None
     return not (callable(probe) and not _probe(probe, _module_of(entry)))

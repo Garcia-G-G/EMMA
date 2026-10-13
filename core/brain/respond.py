@@ -297,6 +297,24 @@ _REFUSE: dict[str, Phrasings] = {
                    "en": ("I can't make calls.", "Calling isn't something I can do.",
                           "I don't make calls yet.", "Phone calls I can't do.")},
 }
+# VOICE-1: tools whose result IS the answer ("Son las 16:47", "Hoy tienes: ...").
+# Their _TOOL lines are preambles written for the Realtime model, which then read
+# the result; on the cascade nothing reads it, so the result is what's spoken.
+SPEAKS_RESULT: frozenset[str] = frozenset({
+    "current_time", "current_datetime_speak", "describe_capabilities", "find_file",
+    "list_browser_tabs", "list_notes", "list_timers", "list_today", "my_repos", "next_event",
+    "now_playing", "read_note", "recall_facts", "recall_last_action", "repeat_last",
+    "today_events", "what_did_you_do",
+})
+
+# Right after Emma acted, the user said it was wrong (VOICE-1 Part 3).
+_CORRECTED: Phrasings = {
+    "es": ("Perdón, lo anoto.", "Entendido, lo anoté.", "Perdón. Ya quedó anotado.",
+           "Va, lo apunto para hacerlo mejor."),
+    "en": ("Sorry, noted.", "Got it, I noted that.", "Sorry. Noted.",
+           "Okay, I'll do better with that one."),
+}
+
 # A deferred turn with no thinker yet (VOICE-1). Not an error and not "I didn't
 # understand": she heard it, can't do it alone yet, and kept it to learn from.
 _NOT_YET: Phrasings = {
@@ -368,6 +386,9 @@ class Responder:
 
     def cancelled(self, lang: SpokenLang) -> str:
         return self.pick(f"cancelled:{lang}", _CANCELLED[lang])
+
+    def corrected(self, lang: SpokenLang) -> str:
+        return self.pick(f"corrected:{lang}", _CORRECTED[lang])
 
     def not_yet(self, lang: SpokenLang) -> str:
         return self.pick(f"not_yet:{lang}", _NOT_YET[lang])

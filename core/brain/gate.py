@@ -269,8 +269,9 @@ def decide(
     if th.require_slots and (res.missing or res.leftover or chosen not in TOOLS):
         return _decision(norm, "defer", "slots", f, retrieval, chosen=chosen, slots=res.slots)
 
-    # 8. risk class: local, but the confirmation flow runs first
-    risky = bool(doc and doc.destructive) or is_sink(chosen)
+    # 8. risk class: local, but the confirmation flow runs first. Master plan
+    # rule 3 (VOICE-1): only a tool marked reversible runs without a spoken yes.
+    risky = bool(doc and doc.destructive) or is_sink(chosen) or not (doc and doc.reversible)
     f.append(Feature("needs_confirmation", risky))
     return _decision(
         norm, "local", "ok", f, retrieval, chosen=chosen, slots=res.slots,

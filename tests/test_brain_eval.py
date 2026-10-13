@@ -100,7 +100,9 @@ def test_risky_local_decisions_need_confirmation(results: list[tuple[Example, De
     for e, d in results:
         if d.verdict == "local":
             assert d.chosen is not None
-            risky = DOCS[d.chosen].destructive or is_sink(d.chosen)
+            doc = DOCS[d.chosen]
+            # VOICE-1 rule 3: only a reversible tool runs without a spoken yes.
+            risky = doc.destructive or is_sink(d.chosen) or not doc.reversible
             assert d.needs_confirmation == risky, (e.id, d.chosen)
 
 

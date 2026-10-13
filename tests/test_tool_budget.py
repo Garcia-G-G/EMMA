@@ -267,3 +267,13 @@ def test_every_registered_name_is_unique_per_function() -> None:
     for entry in get_registry().values():
         prev = by_name.setdefault(entry.name, entry.fn)
         assert prev is entry.fn, f"{entry.name} maps to two different functions"
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests describe the Realtime path (its payload, its session, its stop
+    route). VOICE-1 made the LLM-free cascade the default, where LLM-backed tools
+    are unavailable; pin the backend these tests are about."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")

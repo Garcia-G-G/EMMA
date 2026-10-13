@@ -35,7 +35,14 @@ from pipecat.frames.frames import Frame, TranscriptionFrame, TTSSpeakFrame
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from core.brain.decision import Decision, SlotScalar
-from core.brain.respond import Responder, action_phrase, answer_confirmation, language
+from core.brain.phrases import is_correction
+from core.brain.respond import (
+    SPEAKS_RESULT,
+    Responder,
+    action_phrase,
+    answer_confirmation,
+    language,
+)
 from core.brain.thinker import (
     CONTEXT_TURNS,
     ContextTurn,
@@ -115,6 +122,7 @@ class BrainProcessor(FrameProcessor):
         self._thinker = thinker or NoThinker(self.responder)
         self._lock = asyncio.Lock()
         self._pending: Decision | None = None  # waiting for a spoken yes/no
+        self._last_executed: tuple[str, str] | None = None  # (tool, utterance), one turn back
         self._context: deque[ContextTurn] = deque(maxlen=CONTEXT_TURNS)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -141,8 +149,16 @@ class BrainProcessor(FrameProcessor):
                     d = Decision(utterance=text, normalized="", verdict="defer",
                                  reason=f"brain_error:{type(exc).__name__}")
             timing.decided = time.monotonic()
+            # The wrong-rate signal: the utterance right after an executed turn
+            # is a closed-list correction ("no, eso no", "cancela", "otra vez").
+            corrects = self._last_executed if is_correction(text) else None
+            self._last_executed = None
+            extra: dict[str, Any]
             try:
-                said, extra = await self.respond(d)
+                if corrects is not None and d.verdict != "local":
+                    said, extra = self.responder.corrected(language(text)), {"path": "corrected"}
+                else:
+                    said, extra = await self.respond(d)
             except Exception as exc:  # never leave the user in silence
                 log.warning("brain_respond_failed", error=str(exc))
                 said, extra = self.responder.not_yet(language(text)), {
@@ -151,9 +167,13 @@ class BrainProcessor(FrameProcessor):
                 await self.say(said)
                 timing.spoken = time.monotonic()
             tool = extra.get("tool") if extra.get("executed") else None
+            if tool:
+                self._last_executed = (str(tool), text)
             self._context.append(ContextTurn(str(tool) if tool else None,
                                              one_line(str(extra.get("result") or said))))
             extra = {**extra, "spoken": said, "latency": timing.as_ms()}
+            if corrects is not None:
+                extra["correction_of"] = {"tool": corrects[0], "utterance": corrects[1]}
             if self._record is not None:
                 try:
                     self._record(d, said, extra)
@@ -203,6 +223,8 @@ class BrainProcessor(FrameProcessor):
             return out.message, {**extra, "path": f"{path}:asked"}
         if not out.success:
             return out.message, extra  # never "Listo" over a failure
+        if d.chosen in SPEAKS_RESULT and out.message:
+            return out.message, extra  # the result is the answer; a preamble would be all she said
         slots = {k: v for k, v in args.items() if k not in ("confirmed", "cancelled")}
         return self.responder.ack(d.chosen, slots, "en" if lang == "en" else "es"), extra
 

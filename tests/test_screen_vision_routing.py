@@ -259,3 +259,13 @@ def test_web_content_routing_rule_reaches_the_model() -> None:
         assert "web_content_visible" in specs[name]
         assert "ax_chars" in specs[name]
     assert "look_at_screen" in specs["describe_screen"]
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests describe the Realtime path (its payload, its session, its stop
+    route). VOICE-1 made the LLM-free cascade the default, where LLM-backed tools
+    are unavailable; pin the backend these tests are about."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")

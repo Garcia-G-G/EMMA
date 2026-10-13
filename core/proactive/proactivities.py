@@ -43,8 +43,12 @@ def _today_es() -> str:
 
 
 async def _synthesize_es(prompt: str, max_tokens: int = 200) -> str:
-    """One cheap gpt-4o-mini completion → a Spanish line. '' on failure."""
-    if not settings.openai_api_key():
+    """One cheap gpt-4o-mini completion → a Spanish line. '' on failure.
+
+    Never on the LLM-free cascade (VOICE-1): '' there, and every caller already
+    falls back to stitching its tool messages together.
+    """
+    if settings.VOICE_BACKEND == "cascade" or not settings.openai_api_key():
         return ""
     try:
         from openai import AsyncOpenAI

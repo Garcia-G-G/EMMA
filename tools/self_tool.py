@@ -99,7 +99,7 @@ def regenerate_capabilities_md() -> None:
         log.warning("self_capabilities_write_failed", error=str(exc))
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 def describe_capabilities() -> ToolResult:
     """Tell the user what Emma can do, in one or two short spoken sentences.
 

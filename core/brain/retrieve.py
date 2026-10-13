@@ -45,6 +45,7 @@ class ToolDoc:
     required: tuple[str, ...] = ()
     params: tuple[str, ...] = ()
     destructive: bool = False
+    reversible: bool = False  # VOICE-1: only these run without a spoken yes
 
 
 @dataclass(frozen=True)

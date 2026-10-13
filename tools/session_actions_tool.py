@@ -22,7 +22,7 @@ def _describe(action: dict[str, object]) -> str:
     return name
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 async def recall_last_action() -> ToolResult:
     """Devuelve la última acción que Emma completó en esta sesión.
 
@@ -48,7 +48,7 @@ async def recall_last_action() -> ToolResult:
     )
 
 
-@tool()
+@tool(reversible=True, reversible_because="read-only: says Emma's last line again")
 async def repeat_last() -> ToolResult:
     """Repite, TAL CUAL, lo último que Emma dijo (sin volver a generarlo).
 

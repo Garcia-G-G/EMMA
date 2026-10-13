@@ -104,3 +104,27 @@ def has_chromium() -> bool:
 def has_web_search() -> bool:
     """True if a web-search backend is configured (``tools/web.py:search_results``)."""
     return bool(settings.BRAVE_API_KEY or settings.TAVILY_API_KEY)
+
+
+# VOICE-1: tool modules whose tools reach a language model when they run —
+# directly (an OpenAI client) or through memory's embeddings / contradiction
+# check / reflection, the coding agent, or another such tool module. The
+# cascade runs no LLM anywhere, so in VOICE_BACKEND=cascade these tools are
+# unavailable: the brain defers them ("unavailable") and nothing executes them.
+# tests/test_local_safety.py re-derives this set from the imports, so a new
+# LLM-backed module can't slip in unlisted. Not here: ``diagnostics`` imports the
+# OpenAI client only to ping ``models.retrieve`` (metadata, no inference).
+LLM_BACKED_MODULES = frozenset({
+    "codex_tool",
+    "deep_research",
+    "memory_tool",
+    "screen_vision_tool",
+    "url_summary_tool",
+    "visual_screen_tool",  # imports screen_vision_tool._summarize
+    "web",
+})
+
+
+def llm_allowed() -> bool:
+    """False on the LLM-free cascade; the Realtime path may call its models."""
+    return settings.VOICE_BACKEND != "cascade"
