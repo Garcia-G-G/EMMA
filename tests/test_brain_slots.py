@@ -12,7 +12,7 @@ import pytest
 from core.brain.normalize import normalize
 from core.brain.slots import TOOLS, Vocab, resolve
 from core.brain_host import labelled_examples, tool_docs, vocab
-from tests.brain_slot_fixtures import APPS, CONNECTIONS, EXPECTED, HARD, NOTES, PAGES, PLAYLISTS
+from tests.brain_slot_fixtures import APPS, CONNECTIONS, EXPECTED, NOTES, PAGES, PLAYLISTS
 
 DOCS = {d.name: d for d in tool_docs()}
 ITEMS = {e.id: e for e in labelled_examples()}
@@ -36,8 +36,7 @@ def _cases() -> list[object]:
     out: list[object] = []
     for item_id, by_tool in sorted(EXPECTED.items()):
         for tool, slots in by_tool.items():
-            marks = [pytest.mark.xfail(reason=HARD[item_id], strict=True)] if item_id in HARD else []
-            out.append(pytest.param(item_id, tool, slots, id=f"{item_id}-{tool}", marks=marks))
+            out.append(pytest.param(item_id, tool, slots, id=f"{item_id}-{tool}"))
     return out
 
 

@@ -199,34 +199,38 @@ class SessionGuard:
         return max(ts) if ts else None
 
     async def _yes_after(self, t_req: float) -> bool:
+        """Is the user's VERY NEXT utterance after the question a yes?
+
+        Only the first transcript after the question is matched — one word
+        ("sí") confirms; anything else closes the window and the next attempt
+        asks again. A later stray "sí" can't confirm an old question.
+        """
         deadline = time.monotonic() + TRANSCRIPT_WAIT_S
         while True:
-            started = transcribed = False
+            started = False
             for ev in session_memory.recent(200):
                 if ev.role != "user" or ev.ts <= t_req:
                     continue
                 if ev.kind == "speech_started":
                     started = True
                 elif ev.kind == "speech":
-                    transcribed = True
-                    if ev.ts not in self._used_yes and is_yes(ev.content):
-                        self._used_yes.add(ev.ts)
-                        return True
+                    if ev.ts in self._used_yes or not is_yes(ev.content):
+                        return False
+                    self._used_yes.add(ev.ts)
+                    return True
             # Only wait while the user is known to have spoken but no words have
-            # landed yet; a transcribed "no" (or silence) is final.
-            if transcribed or not started or time.monotonic() >= deadline:
+            # landed yet; silence is final.
+            if not started or time.monotonic() >= deadline:
                 return False
             await asyncio.sleep(_POLL_S)
 
     @staticmethod
     def _question(name: str, args: dict[str, Any]) -> str:
-        shown = [
-            f"{k}: {redact(v)[:60]}"
-            for k, v in _strings(args)
-            if k not in ("confirmed", "cancelled") and v.strip()
-        ][:3]
-        detail = f" ({'; '.join(shown)})" if shown else ""
-        return f"Antes de hacerlo: {name}{detail}. ¿Lo hago? Dime sí o no."
+        """Short, and names the action: "¿Borrar la nota Compras?" — one word answers it."""
+        from core.brain.respond import action_phrase
+
+        clean = {k: redact(v) for k, v in _strings(args) if k not in ("confirmed", "cancelled")}
+        return f"¿{action_phrase(name, clean, 'es')}?"
 
 
 # ---- the one live guard ----------------------------------------------------------

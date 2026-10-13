@@ -352,14 +352,7 @@ class Responder:
         return self.pick(f"{tool}:{lang}", usable or phr[lang]).format_map(_Default(slots))
 
     def _action(self, tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
-        """Name the concrete action and its target — what the "sí" agrees to."""
-        phrase = _ACTION.get(tool, {}).get(lang)
-        if phrase and _fills(phrase, slots):
-            text = phrase.format_map(_Default(slots))
-        else:  # never the tool's code name alone: say its target too
-            detail = ", ".join(str(v) for v in slots.values() if str(v).strip())
-            text = f"{tool.replace('_', ' ')}: {detail}" if detail else tool.replace("_", " ")
-        return text[:1].upper() + text[1:]
+        return action_phrase(tool, slots, lang)
 
     def cancelled(self, lang: SpokenLang) -> str:
         return self.pick(f"cancelled:{lang}", _CANCELLED[lang])
@@ -370,6 +363,17 @@ class Responder:
     def options(self, labels: Sequence[str], lang: SpokenLang) -> str:
         listed = ", ".join(f"{i}. {lab}" for i, lab in enumerate(labels, start=1))
         return self.pick(f"options:{lang}", _CLARIFY["options"][lang]).format(options=listed)
+
+
+def action_phrase(tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
+    """The concrete action and its target — what a "sí" agrees to. Capitalized."""
+    phrase = _ACTION.get(tool, {}).get(lang)
+    if phrase and _fills(phrase, slots):
+        text = phrase.format_map(_Default(slots))
+    else:  # never the tool's code name alone: say its target too
+        detail = ", ".join(str(v) for v in slots.values() if str(v).strip())
+        text = f"{tool.replace('_', ' ')}: {detail}" if detail else tool.replace("_", " ")
+    return text[:1].upper() + text[1:]
 
 
 class _Default(dict[str, object]):

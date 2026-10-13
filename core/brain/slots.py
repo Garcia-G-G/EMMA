@@ -116,6 +116,15 @@ FILLER: frozenset[str] = frozenset(
     ["puedes", "podrias", "porfa", "favor", "ahora", "ya", "dale", "ok", "okay", "bueno", "pues", "oye", "please", "can", "you", "could", "now", "just", "tambien", "solo", "espera", "primero", "perfecto", "ademas", "poquito", "ahi", "va", "si"]
 )
 
+# Well-known sites by spoken name -> domain, for "abre yutub" (no "punto com"
+# said). Closed and international; a name resolves through the STT alias table
+# ("yutub" -> YouTube) or by fuzzy match above the floor. Used only when no
+# literal URL was spoken.
+SITES: dict[str, str] = {
+    "YouTube": "youtube.com", "GitHub": "github.com", "Google": "google.com",
+    "Gmail": "mail.google.com", "Wikipedia": "wikipedia.org", "LinkedIn": "linkedin.com",
+    "X": "x.com", "Twitter": "x.com", "Reddit": "reddit.com", "Netflix": "netflix.com",
+}
 _URL = re.compile(
     r"(?<![\w@])((?:[a-z0-9-]+\s*(?:\.|\bpunto\b|\bdot\b)\s*)+"
     r"(?:com|org|net|io|mx|app|dev|ai|co|es|gov|edu|me|tv)\b(?:/[\w./-]*)?)"
@@ -392,6 +401,10 @@ def resolve(
             m = _regex_span(text, _URL)
             if m:
                 take(param, _canon_url(m[0]), "regex:url", 1.0, m[1], m[2])
+            else:
+                site = _site(text, vocab, floor)
+                if site:
+                    take(param, SITES[site[0]], site[1], site[2], site[3], site[4])
         elif kind == "url_scheme":
             m = _regex_span(text, _SCHEME)
             if m:
@@ -481,6 +494,29 @@ def _consume_repeats(text: _Text, names: Mapping[str, str], value: str, floor: f
     while (again := _fuzzy(text, keys, max(floor, _REPEAT_FLOOR))) is not None:
         for k in range(again[2], again[3]):
             text.used[k] = True
+
+
+def _site(
+    text: _Text, vocab: Vocab, floor: float
+) -> tuple[str, str, float, int, int] | None:
+    """(site, source, confidence, i, j) for a well-known site said by name.
+
+    "abre MI github" is the user's own page (open_my_page), not github.com: a
+    possessive right before the name means this table doesn't apply.
+    """
+
+    def mine(i: int) -> bool:
+        return i > 0 and text.tokens[i - 1] in ("mi", "mis", "my")
+
+    for i, j, gram in text.grams():
+        canon = vocab.aliases.get(gram)
+        if canon in SITES:
+            return None if mine(i) else (canon, "alias:sites", 1.0, i, j)
+    names = {_key(n): n for n in SITES if len(n) > 1}  # "X" alone is too short to fuzz
+    hit = _fuzzy(text, names, floor)
+    if hit and not mine(hit[2]):
+        return hit[0], "fuzzy:sites", hit[1], hit[2], hit[3]
+    return None
 
 
 def _app(

@@ -8,7 +8,7 @@ from them enters the phrasebook (test-enforced).
 | | Served without an LLM (local + templates) | Local tool decisions | Wrong |
 |---|---:|---:|---:|
 | **Before** (BRAIN-1, `be86cfc`) | **34.3 %** (48/140) | **15.7 %** (22/140) | 0 |
-| **After** (BRAIN-1.5, phrasebook + gate D) | **55.0 %** (77/140) | **36.4 %** (51/140) | **0** |
+| **After** (BRAIN-1.5: phrasebook + gate D + site table) | **55.7 %** (78/140) | **37.1 %** (52/140) | **0** |
 
 "Wrong" = a local tool the label doesn't accept, a wrong argument value against
 the slot fixtures, or declining (none/clarify/refuse) a request that wanted a
@@ -221,3 +221,50 @@ then **2.3 s** for the whole process. On this Mac "Emma, abre Safari" now
 resolves locally (`open_application`); in BRAIN-1 it deferred on disagreement.
 
 Gates: 1440 passed, 2 xfailed; ruff, mypy clean.
+
+## Part 5 — loose ends from BRAIN-1
+
+### The two "known-hard" L2 items — none stays expected-to-fail
+
+| Item | Why it failed | Resolution |
+|---|---|---|
+| `sc_V26` "Hey Emma, abre yutub." → `open_url` | "yutub" resolved to YouTube, but `open_url` needs a domain and nothing mapped a site's name to one | **Fixed**: a closed `SITES` table (YouTube, GitHub, Google, Gmail, Wikipedia, LinkedIn, X/Twitter, Reddit, Netflix) used only when no literal URL is spoken, through the STT alias table or fuzzy match. A possessive blocks it: "abre **mi** github" is the user's page, not github.com (otherwise `sc_V34`, which accepts only `open_my_page`, could have gone wrong). Now **local**, `url=youtube.com` |
+| `log_26` "…música relajante, música para trabajar en Spotify?" | The query a person means merges two fragments; a closed residue can only return what was said | **Reclassified L2 → LLM**, reason in `labelled.json` → `brain_path_note` (written by `brain_path_labels.py`) |
+
+`HARD` and every `xfail` are gone from the suite (0 xfailed). Label split now:
+L1 24, L2 43, L3 4, TPL 28, READ 12, LLM 29.
+
+### The confirmation costs one word
+
+BRAIN-1 Part 2's rule stays — confirmation comes from the microphone — but:
+- **The question is short and names the action**: `¿Borrar la nota compras?`
+  (was "Antes de hacerlo: delete_note (title: compras). ¿Lo hago? Dime sí o
+  no."). It reuses the brain's action phrases (`respond.action_phrase`).
+- **Only the user's very next utterance is matched** against the yes list:
+  one "sí" confirms; anything else closes the window and the next attempt
+  asks again — a stray "sí" said later can't confirm an old question.
+- Tests: the exact question text; "espera, ¿qué nota era?" then "sí" does not
+  confirm, a "sí" right after the question does.
+
+### One labelled mapping
+
+The docs no longer mention a second mapping: `BRAIN-1-VERIFY.md` and
+`brain_path_labels.py` now describe the in-repo labels as the only ones.
+
+### Pinned after Part 5
+
+Shipped gate on the 140: **served 78 (55.7 %), local 52 (37.1 %), wrong 0**.
+Gates: 1443 passed, 0 xfailed; acceptance `--mock-external` 99/99; ruff, mypy clean.
+
+---
+
+## Definition of done
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Phrasebook ≥ 15 ES + ≥ 15 EN per brain-reachable tool; tests green | **Done** — 83 tools, 1,252 ES + 1,245 EN, 0 exam leaks |
+| 2 | Retrievers re-pinned, before/after table | **Done** — agreement 17.4 → 60.9 % |
+| 3 | Gate study A–D ± argument completeness; variant by the rule; thresholds in settings with provenance | **Done** — D shipped; θ₁ off, θ₂ 0.94 |
+| 4 | Embedder in the installer; honest defer without it; latency re-pinned | **Done** — `_landing` committed + pushed, **not deployed** (needs the release with `core/brain`) |
+| 5 | Known-hard items resolved or reclassified; one mapping | **Done** — `sc_V26` fixed, `log_26` → LLM |
+| 6 | This doc, with the headline | **Done** — served 34.3 → 55.7 %, local 15.7 → 37.1 %, wrong 0 → 0 |

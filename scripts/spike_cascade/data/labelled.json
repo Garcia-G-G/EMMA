@@ -1149,7 +1149,8 @@
   "src": "log",
   "cat": "clean",
   "rt_hist": [],
-  "brain_path": "L2"
+  "brain_path": "LLM",
+  "brain_path_note": "BRAIN-1.5: L2 -> LLM. 'música relajante, música para trabajar' — the query a person means ('música relajante para trabajar') merges two fragments; a closed residue can only return what was said. Was the second of BRAIN-1's two expected-to-fail L2 items."
  },
  {
   "id": "log_27",

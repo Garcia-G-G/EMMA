@@ -10,7 +10,7 @@ is measured on invented utterances.
 |---|---|---|
 | `core/dictionary.py:24` writes inside the source tree | True: `config/dictionary.toml`, which `install.sh` re-extracts | 0a needed |
 | 0b: Qwen core10 run "unscored" | **Already scored** in `LAUNCH-12-VERIFY.md` Part 4a (2026-10-08): 67.5 % of 120, **71.7 % of the 113 whose tool exists here** vs full-184 69.9 % | Not redone; cited |
-| 0c: the 79.5 % per-item mapping "the owner has it" | **Not in the repo** anywhere | Reproduced from CORE-LOCAL §1 (below); the split differs |
+| 0c: a per-item local/LLM mapping exists | Not in the repo | Written from CORE-LOCAL §1 (below) — the one mapping |
 | Fixtures `set_volume(level=70)`, `open_my_page(page="github")` | Real schemas: `set_volume(percent)`, `open_my_page(name)` | Fixtures use the real names |
 | `labelled.json` carries argument values | It does not: `id, text, accept, src, cat, rt_hist` only | Slot fixtures are new labels, written from the utterance text |
 | `_QUERY_STOP` in `tool_selection.py` | True, `{"emma","hey","oye","hola"}` | Reused |
@@ -69,11 +69,11 @@ verified byte-identical before and after). Rule, applied to each accepted tool's
 | READ | tool is local, the spoken answer needs a model to read the result | 12 | 8.6 % |
 | LLM | anaphora, multi-step, two free-text fields, slot roles, messy dictation, code | 28 | 20.0 % |
 
-- **Ceiling (everything but LLM): 112/140 = 80.0 %**, vs the owner's 79.5 %.
+- **Ceiling (everything but LLM): 112/140 = 80.0 %.**
 - **This prompt's reach (L1 + L2 + TPL): 96/140 = 68.6 %.** L3 and READ defer by design.
-- The owner put L2 at 42 points; this strict rule gives 31.4. The difference is
-  almost certainly the "two free-text fields" and "slot roles" items, which a
-  deterministic field-pattern extractor ("que se llame X con el texto Y",
+- L2 is 31.4 points under this strict rule. The "two free-text fields" and
+  "slot roles" items would move to L2 with a deterministic field-pattern
+  extractor ("que se llame X con el texto Y",
   "X dentro de Y", "X significa Y") would move to L2: `sc_A13`, `log_00`,
   `sc_A29`, `sc_V19`, `syn_04`, `syn_00` (+6, to 35.7 %). Not built here; the
   label says what Part 4 can actually fill.
@@ -382,7 +382,7 @@ times; both are wrong 12 times. Two causes, measured:
    BRAIN-1 must not; it's not worth doing for this.
 3. Three disagreements are both right (`current_time` vs
    `current_datetime_speak`, `sc_A11`/`log_07`/`log_08`). An equivalence group
-   would serve them; not built (it's a judgement the owner should make).
+   would serve them; not built (a product judgement, not a measurement).
 
 **Not done to hit the number:** loosening agreement, tuning τ on these items,
 or writing frames until the test set passes. Coverage at 0 % wrong is the
@@ -501,3 +501,8 @@ Gates: 1425 passed, 14 deselected, 2 xfailed; acceptance `--mock-external`
 | 7 | Templates, confirmation, clarification without an LLM | **Done** |
 | 8 | Shadow mode live; report works; decision p95 < 100 ms | **Wired + tested; live data waits for a voice path** (no OpenAI key). p95 18–47 ms |
 | 9 | Full suite + ruff + mypy green; this doc records every pinned number and the per-item results | **Done** |
+
+> **BRAIN-1.5 update:** `log_26` was reclassified L2 → LLM (reason in
+> `labelled.json` → `brain_path_note`), and `sc_V26` now resolves (closed site
+> table). Split today: L1 24, L2 43, L3 4, TPL 28, READ 12, LLM 29. This file's
+> label mapping is the only one — see BRAIN-1.5-VERIFY.

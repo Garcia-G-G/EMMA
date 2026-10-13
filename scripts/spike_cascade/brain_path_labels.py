@@ -2,9 +2,8 @@
 
 python scripts/spike_cascade/brain_path_labels.py   # writes `brain_path` into labelled.json
 
-The owner's original per-item mapping (ceiling 79.5%) was never written into the
-repo, so this reproduces it from CORE-LOCAL-ARCHITECTURE.md §1. The rule for each
-label, applied to the accepted tool's REQUIRED parameters:
+The labels follow CORE-LOCAL-ARCHITECTURE.md §1. The rule for each label, applied
+to the accepted tool's REQUIRED parameters:
 
   L1   no required argument (or one fixed by the phrase itself)
   L2   every required argument resolves deterministically from a closed set —
@@ -127,7 +126,7 @@ LABELS: dict[str, tuple[str, str]] = {
     "log_23": ("LLM", "anaphora 'eso'"),
     "log_24": ("READ", "screen must be described"),
     "log_25": ("READ", "screen must be described"),
-    "log_26": ("L2", "query = residue, app = Spotify"),
+    "log_26": ("LLM", "the intended query paraphrases two fragments the user said"),
     "log_27": ("LLM", "self-corrected multi-timer request"),
     "log_28": ("LLM", "multi-step: note + timer"),
     "log_29": ("L1", "shutdown_emma"),
@@ -174,6 +173,18 @@ LABELS: dict[str, tuple[str, str]] = {
 }
 
 
+# Items whose label changed after BRAIN-1, with why — written into labelled.json
+# as `brain_path_note` so the record travels with the item.
+RECLASSIFIED: dict[str, str] = {
+    "log_26": (
+        "BRAIN-1.5: L2 -> LLM. 'música relajante, música para trabajar' — the query a "
+        "person means ('música relajante para trabajar') merges two fragments; a closed "
+        "residue can only return what was said. Was the second of BRAIN-1's two "
+        "expected-to-fail L2 items."
+    ),
+}
+
+
 def main() -> None:
     items = json.loads(DATA.read_text(encoding="utf-8"))
     ids = {i["id"] for i in items}
@@ -182,6 +193,10 @@ def main() -> None:
         raise SystemExit(f"labels out of sync: missing={sorted(missing)} extra={sorted(extra)}")
     for it in items:
         it["brain_path"] = LABELS[it["id"]][0]
+        if it["id"] in RECLASSIFIED:
+            it["brain_path_note"] = RECLASSIFIED[it["id"]]
+        else:
+            it.pop("brain_path_note", None)
     DATA.write_text(json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 

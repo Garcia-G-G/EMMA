@@ -8,10 +8,9 @@ person meant, not what the code happens to produce. Conventions:
 * free text (residue) -> lowercase display form, accents kept ("comprar café")
 * numbers -> int; URLs -> bare lowercase domain[/path]
 
-An item with several acceptable tools lists each tool it may resolve to.
-``HARD`` names items whose intended value a closed-vocabulary resolver cannot
-produce, with the reason; the test marks them xfail(strict) — reported, and an
-unexpected pass fails the run so the list can't go stale.
+An item with several acceptable tools lists each tool it may resolve to. Every
+L2 item must resolve exactly — none is "expected to fail" (BRAIN-1.5 fixed
+sc_V26 with a closed site table and reclassified log_26 to LLM).
 """
 
 from __future__ import annotations
@@ -73,7 +72,6 @@ EXPECTED: dict[str, dict[str, Slots]] = {
     "log_11": {"search_github": {"query": "examplehandle"}},
     "log_17": {"open_application": {"name": "Terminal"}},
     "log_18": {"open_application": {"name": "Cursor"}},
-    "log_26": {"play_track": {"query": "música relajante para trabajar", "app": "Spotify"}},
     "syn_01": {"remember_page": {"name": "portafolio", "url": "example.com/portfolio"}},
     "syn_02": {"remember_user_profile": {"field": "github_username", "value": "examplehandle"}},
     "syn_05": {"set_preferred_app": {"category": "ide", "app_name": "Zed"}},
@@ -81,11 +79,4 @@ EXPECTED: dict[str, dict[str, Slots]] = {
     "syn_08": {"remember_fact": {"content": "trabajo desde casa los viernes"}},
     "syn_15": {"find_button": {"name": "aceptar"}},
     "syn_16": {"click_button": {"name": "cancelar"}},
-}
-
-HARD: dict[str, str] = {
-    "sc_V26": "'yutub' resolves to the YouTube app/vocabulary entry, but open_url "
-    "needs a domain; no site gazetteer maps YouTube -> youtube.com",
-    "log_26": "the intended query ('música relajante para trabajar') is a paraphrase "
-    "of two fragments the user said; a residue can't merge them",
 }

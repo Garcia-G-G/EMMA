@@ -307,3 +307,27 @@ def test_every_destructive_tool_is_a_sink() -> None:
 def test_every_sink_is_a_registered_tool() -> None:
     names = set(registry.list_tools())
     assert names >= SINKS, f"unknown sink names: {sorted(SINKS - names)}"
+
+
+# ---- BRAIN-1.5 Part 5: the confirmation costs one word ------------------------------
+
+
+def test_the_question_is_short_and_names_the_action(spies: Spies) -> None:
+    _sink(spies, "delete_note")
+    session_memory.push_event("user", "speech", "borra la nota compras, sí, seguro")
+    q = _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True}))
+    assert q.requires_confirmation
+    assert q.user_message == "¿Borrar la nota compras?"
+    assert "delete_note" not in q.user_message
+
+
+def test_only_the_very_next_utterance_confirms(spies: Spies) -> None:
+    _sink(spies, "delete_note")
+    session_memory.push_event("tool", "requires_confirmation:delete_note")
+    session_memory.push_event("user", "speech", "espera, ¿qué nota era?")  # the next utterance
+    session_memory.push_event("user", "speech", "sí")  # a later, stray yes
+    r = _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True}))
+    assert not spies.ran("delete_note") and r.requires_confirmation  # asked again
+    session_memory.push_event("tool", "requires_confirmation:delete_note")
+    session_memory.push_event("user", "speech", "sí")  # one word, right after
+    assert _run(registry.dispatch("delete_note", {"title": "compras", "confirmed": True})).success

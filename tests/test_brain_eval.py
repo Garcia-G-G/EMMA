@@ -47,8 +47,8 @@ needs_model = pytest.mark.skipif(
 )
 
 # Of 140. BRAIN-1 (be86cfc): coverage 48, local 22. BRAIN-1.5 (phrasebook +
-# gate variant D, 2026-10-13): coverage 77, local 51. Wrong stays 0.
-PIN = {"coverage": 77, "local": 51, "wrong": 0}
+# gate variant D + site table, 2026-10-13): coverage 78, local 52. Wrong stays 0.
+PIN = {"coverage": 78, "local": 52, "wrong": 0}
 DOCS = {d.name: d for d in tool_docs()}
 
 
