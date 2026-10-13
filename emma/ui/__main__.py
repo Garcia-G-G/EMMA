@@ -37,6 +37,7 @@ from AppKit import (
     NSMenu,
     NSMenuItem,
     NSObject,
+    NSPopUpButton,
     NSSecureTextField,
     NSStatusBar,
     NSTextField,
@@ -228,6 +229,12 @@ class _ScriptBridge(NSObject):  # type: ignore[misc]
             self._bar.clearKey_(None)
         elif action == "enter_license":
             self._bar.promptForLicense_(None)
+        elif action == "enter_voice_key":
+            self._bar.promptForVoiceKey_(None)
+        elif action == "choose_voice":
+            self._bar.chooseVoice_(None)
+        elif action == "enter_openrouter_key":
+            self._bar.promptForOpenRouterKey_(None)
         else:
             log.warning("ui_unknown_script_message", action=action[:40])
 
@@ -289,6 +296,10 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         menu.addItem_(NSMenuItem.separatorItem())
         # A second, always-available entry point for the key — the onboarding
         # fork is the first, but someone who skipped it must not have to reinstall.
+        self._add_item(menu, "Mi key de ElevenLabs…", "promptForVoiceKey:", "")
+        self._add_item(menu, "La voz de Emma…", "chooseVoice:", "")
+        self._add_item(menu, "Mi key de OpenRouter (todavía no se usa)…",
+                       "promptForOpenRouterKey:", "")
         self._add_item(menu, "Mi API key de OpenAI…", "promptForKey:", "")
         self._add_item(menu, "Activar mi licencia…", "promptForLicense:", "")
         self._add_item(menu, "Dar acceso a la pantalla…", "grantAccessibility:", "")
@@ -434,6 +445,153 @@ class EmmaBar(NSObject):  # type: ignore[misc]
             return
         send_control({"cmd": "mode_changed"})  # let the daemon re-resolve its tier
         self._eval_js("window.__emmaKeySaved && window.__emmaKeySaved();")
+
+    # ---- the cascade's keys and voice (VOICE-1 Part 5) ----------------------
+    # Same path as the OpenAI key above: native secure field -> validated
+    # directly with the provider -> Keychain, inside this process. The page and
+    # the daemon only ever learn a masked hint.
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _secret_prompt(self, title: str, info: str, placeholder: str) -> str:
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(title)
+        alert.setInformativeText_(info)
+        field = NSSecureTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 340, 24))
+        field.setPlaceholderString_(placeholder)
+        alert.setAccessoryView_(field)
+        alert.addButtonWithTitle_("Guardar")
+        alert.addButtonWithTitle_("Cancelar")
+        alert.window().setInitialFirstResponder_(field)
+        if alert.runModal() != NSAlertFirstButtonReturn:
+            return ""
+        key = str(field.stringValue()).strip()
+        field.setStringValue_("")  # do not leave it in the view's buffer
+        return key
+
+    def promptForVoiceKey_(self, _sender: Any) -> None:  # noqa: N802
+        key = self._secret_prompt(
+            "Tu key de ElevenLabs",
+            "Con ella Emma te oye y te habla. Se guarda en el Keychain de tu Mac y "
+            "va directo de tu Mac a ElevenLabs: nunca pasa por servidores de Emma.\n\n"
+            "Tú le pagas a ElevenLabs lo que uses; lo ves en tu panel de ElevenLabs.",
+            "sk_…",
+        )
+        if not key:
+            return
+        self._set_voice_status("Verificando con ElevenLabs…")
+        threading.Thread(target=lambda: self._store_voice_key(key), daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _store_voice_key(self, key: str) -> None:
+        from core import voice_keys
+
+        async def _run() -> tuple[bool, str]:
+            ok, msg = await voice_keys.validate_elevenlabs(key)
+            if ok:
+                await voice_keys.store(voice_keys.ELEVENLABS, key)
+            return ok, msg
+
+        try:
+            ok, msg = asyncio.run(_run())
+        except Exception as exc:  # never the exception text: it can carry the key
+            log.warning("voice_key_store_failed", error_type=type(exc).__name__)
+            ok, msg = False, "No pude guardar la key. Intenta de nuevo."
+
+        def _done() -> None:
+            self._set_voice_status(msg)
+            if ok:
+                send_control({"cmd": "voice_changed"})
+                self.chooseVoice_(None)  # the next thing she needs is a voice
+
+        AppHelper.callAfter(_done)
+
+    def chooseVoice_(self, _sender: Any) -> None:  # noqa: N802
+        """Pick Emma's voice from the account's voices. No default is preselected
+        by Emma: the list is the account's, alphabetical."""
+        self._set_voice_status("Buscando tus voces…")
+        threading.Thread(target=self._load_voices, daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _load_voices(self) -> None:
+        from core import secrets, voice_keys
+
+        async def _run() -> list[Any]:
+            key = await secrets.retrieve(voice_keys.ELEVENLABS)
+            return await voice_keys.list_voices(key) if key else []
+
+        try:
+            voices = asyncio.run(_run())
+        except Exception as exc:
+            log.warning("voice_list_failed", error_type=type(exc).__name__)
+            voices = []
+        AppHelper.callAfter(lambda: self._pick_voice(voices))
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _pick_voice(self, voices: list[Any]) -> None:
+        if not voices:
+            self._set_voice_status("Primero guarda tu key de ElevenLabs.")
+            return
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("La voz de Emma")
+        alert.setInformativeText_(
+            "Elige la voz con la que te va a hablar, en español y en inglés. "
+            "Puedes cambiarla cuando quieras desde este menú."
+        )
+        popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(NSMakeRect(0, 0, 380, 26), False)
+        for v in voices:
+            popup.addItemWithTitle_(v.label)
+        alert.setAccessoryView_(popup)
+        alert.addButtonWithTitle_("Usar esta voz")
+        alert.addButtonWithTitle_("Cancelar")
+        if alert.runModal() != NSAlertFirstButtonReturn:
+            return
+        chosen = voices[int(popup.indexOfSelectedItem())]
+        from core import voice_keys
+
+        try:
+            voice_keys.save_voice(chosen.voice_id)
+        except Exception as exc:
+            log.warning("voice_save_failed", error_type=type(exc).__name__)
+            self._set_voice_status("No pude guardar la voz. Intenta de nuevo.")
+            return
+        self._set_voice_status(f"Voz elegida: {chosen.name}. Preparando sus frases…")
+        send_control({"cmd": "voice_changed"})  # the daemon takes it and renders the clips
+        self._eval_js("window.__emmaVoiceSaved && window.__emmaVoiceSaved();")
+
+    def promptForOpenRouterKey_(self, _sender: Any) -> None:  # noqa: N802
+        key = self._secret_prompt(
+            "Tu key de OpenRouter (opcional)",
+            "Todavía no se usa: Emma aún no llama a ningún modelo. La guardamos "
+            "en tu Keychain para cuando lo haga.",
+            "sk-or-…",
+        )
+        if not key:
+            return
+        self._set_voice_status("Verificando con OpenRouter…")
+
+        def _work() -> None:
+            from core import voice_keys
+
+            async def _run() -> tuple[bool, str]:
+                ok, msg = await voice_keys.validate_openrouter(key)
+                if ok:
+                    await voice_keys.store(voice_keys.OPENROUTER, key)
+                return ok, msg
+
+            try:
+                _ok, msg = asyncio.run(_run())
+            except Exception as exc:
+                log.warning("openrouter_store_failed", error_type=type(exc).__name__)
+                msg = "No pude guardar la key. Intenta de nuevo."
+            AppHelper.callAfter(lambda: self._set_voice_status(msg))
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    @objc.python_method  # type: ignore[untyped-decorator]
+    def _set_voice_status(self, text: str) -> None:
+        self._eval_js(
+            f"window.__emmaVoiceStatus && window.__emmaVoiceStatus({json.dumps(text)});"
+        )
 
     def promptForLicense_(self, _sender: Any) -> None:  # noqa: N802
         """Licence key entry. A plain field — this is a purchase token, not a

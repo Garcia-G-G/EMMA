@@ -495,6 +495,33 @@ async def dispatch_control(msg: dict) -> dict:
                 # Masked, never the value — see the module note above.
                 "key_hint": await byok.installed_hint(),
             }
+        if cmd == "voice_status":
+            # VOICE-1: what onboarding needs to draw itself. Masked hints only —
+            # no command ever returns a key (same rule as "mode").
+            from config.settings import settings as live
+            from core import readiness, voice_keys
+
+            await readiness.refresh()
+            return {
+                "type": "control_result", "cmd": cmd, "ok": True,
+                "backend": live.VOICE_BACKEND,
+                "elevenlabs_hint": await voice_keys.installed_hint(voice_keys.ELEVENLABS),
+                "openrouter_hint": await voice_keys.installed_hint(voice_keys.OPENROUTER),
+                "voice_id": live.VOICE_ID or None,
+                "missing": list(readiness.check().missing),
+            }
+        if cmd == "voice_changed":
+            # The app just stored a key or chose a voice: take it now (the park
+            # loop would within 30 s) and render the 50 clips off the loop.
+            import threading
+
+            from core import readiness, voice
+
+            await readiness.refresh()
+            threading.Thread(target=voice.pregenerate, name="voice-pregenerate",
+                             daemon=True).start()
+            return {"type": "control_result", "cmd": cmd, "ok": True,
+                    "missing": list(readiness.check().missing)}
         if cmd == "unmute":
             orchestrator.unmute_mic()
         elif cmd == "mute":

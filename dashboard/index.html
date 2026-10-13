@@ -285,6 +285,31 @@
       <div class="fail" id="ob-key-fail" hidden></div>
     </div>
 
+    <!-- VOICE-1 Part 5: the cascade's onboarding. Keys go through NATIVE fields
+         (emma/ui), exactly like the OpenAI key above; this pane explains and
+         triggers, and learns only masked hints via `voice_status`. -->
+    <div id="ob-voice" hidden>
+      <h2>ElevenLabs: cómo te oye y te habla</h2>
+      <p>Emma te oye y te habla con ElevenLabs. Pega tu key y elige su voz. La
+         key se guarda en el Keychain de tu Mac y va directo a ElevenLabs: nunca
+         pasa por servidores de Emma.</p>
+      <div class="actions">
+        <button class="btn" id="ob-voice-key">Pegar mi key de ElevenLabs</button>
+        <button class="btn ghost" id="ob-voice-pick">Elegir la voz</button>
+        <span class="small muted" id="ob-voice-status"></span>
+      </div>
+      <p class="small muted">
+        ¿No tienes una? Créala en <span class="url">elevenlabs.io → Developers → API Keys</span>
+        y vuelve aquí. Tú le pagas a ElevenLabs lo que uses.
+      </p>
+      <p class="small muted">
+        Opcional: key de OpenRouter. Todavía no se usa; la guardamos para cuando
+        Emma llame a un modelo.
+        <button class="btn ghost" id="ob-voice-or">Pegar key de OpenRouter</button>
+      </p>
+      <div class="fail" id="ob-voice-fail" hidden></div>
+    </div>
+
     <div id="ob-account" hidden>
       <h2>Conecta tu cuenta</h2>
       <p>Abrimos tu navegador para que inicies sesión. Emma nunca te pide la
@@ -720,10 +745,38 @@ let PAIR = null, pollTimer = null;
 function step(n) { document.querySelectorAll("#ob-steps i").forEach((el, i) => el.classList.toggle("on", i <= n)); }
 function showOnboarding() { $("#onb").hidden = false; $("#shell").style.filter = "blur(0)"; }
 function hideOnboarding() { $("#onb").hidden = true; if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-license", "ob-account", "ob-ready"];
+const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-voice", "ob-license", "ob-account", "ob-ready"];
 function obPane(id) { OB_PANES.forEach((x) => { $("#" + x).hidden = x !== id; }); }
 
-$("#ob-start").addEventListener("click", () => { obPane("ob-choose"); step(1); });
+$("#ob-start").addEventListener("click", async () => {
+  // VOICE-1: on the cascade there is no OpenAI fork to choose from.
+  const v = await control({ cmd: "voice_status" }, 5000);
+  if (v.ok && v.backend === "cascade") { obPane("ob-voice"); step(1); paintVoice(v); return; }
+  obPane("ob-choose"); step(1);
+});
+
+/* --- the cascade (VOICE-1 Part 5): ElevenLabs key + voice, OpenRouter optional --- */
+function nativeAsk(action) {
+  try { window.webkit.messageHandlers.emma.postMessage(action); }
+  catch (_) {
+    const el = $("#ob-voice-fail");
+    el.hidden = false;
+    el.textContent = "Abre Emma desde el icono de la barra de menú para continuar.";
+  }
+}
+function paintVoice(v) {
+  const parts = [];
+  if (v.elevenlabs_hint) parts.push("Key " + v.elevenlabs_hint);
+  if (v.voice_id) parts.push("voz elegida");
+  if (v.openrouter_hint) parts.push("OpenRouter " + v.openrouter_hint);
+  $("#ob-voice-status").textContent = parts.join(" · ");
+  $("#ob-voice-pick").disabled = !v.elevenlabs_hint;
+}
+$("#ob-voice-key").addEventListener("click", () => nativeAsk("enter_voice_key"));
+$("#ob-voice-pick").addEventListener("click", () => nativeAsk("choose_voice"));
+$("#ob-voice-or").addEventListener("click", () => nativeAsk("enter_openrouter_key"));
+window.__emmaVoiceStatus = (text) => { $("#ob-voice-status").textContent = text || ""; };
+window.__emmaVoiceSaved = () => { obPane("ob-license"); step(2); };
 
 /* --- the fork (LAUNCH-11 Part 3) --- */
 $("#ob-pick-byok").addEventListener("click", () => {

@@ -406,7 +406,7 @@ async def _ensure_ready() -> None:
     global _onboarding_needed
     from core import readiness
 
-    await readiness.refresh_elevenlabs_key()
+    await readiness.refresh()
     state = readiness.check()
     if state.ready:
         return
@@ -419,7 +419,7 @@ async def _ensure_ready() -> None:
             events_bus.publish("state", state="needs_onboarding")
             await asyncio.sleep(delay)
             delay = min(delay * 1.5, _PAIR_POLL_MAX_S)
-            await readiness.refresh_elevenlabs_key()
+            await readiness.refresh()
             now = readiness.check()
             if now.ready:
                 log.info("onboarding_complete")

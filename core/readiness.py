@@ -88,6 +88,17 @@ def check() -> Readiness:
     return Readiness(tuple(name for name in REQUIREMENTS if not _PROBES[name]()))
 
 
+async def refresh() -> None:
+    """Pick up what onboarding wrote while we were parked: the key, the voice."""
+    await refresh_elevenlabs_key()
+    if not has_voice():
+        from core.voice_keys import saved_voice
+
+        chosen = saved_voice()
+        if chosen:
+            object.__setattr__(settings, "VOICE_ID", chosen)
+
+
 async def refresh_elevenlabs_key() -> None:
     """Re-read the key from Keychain: onboarding writes it while the daemon is parked."""
     if has_elevenlabs_key():

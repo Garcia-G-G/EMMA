@@ -74,7 +74,10 @@ def _has_device_token() -> bool:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Then ~/.emma/settings.env: per-user, Public-tier choices written by the
+        # app (VOICE-1: the voice id). It survives reinstalls; ~/.emma/src does
+        # not. Later files win; real environment variables beat both.
+        env_file=(".env", str(Path.home() / ".emma" / "settings.env")),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
