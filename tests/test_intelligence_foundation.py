@@ -101,8 +101,13 @@ class TestConfirmationInvariant:
         payload = _call(handler, "delete_note", {"title": "Compras", "confirmed": True})
         assert payload["success"] is True
 
-    def test_preemptive_confirm_without_question_allowed(self, monkeypatch):
-        """'borra X, sí, seguro' in one breath — no prior question to spoof."""
+    def test_preemptive_confirm_passes_the_handler_layer(self, monkeypatch):
+        """'borra X, sí, seguro' in one breath passes the HANDLER (dispatch is mocked).
+
+        End to end it now gets a question first: the BRAIN-1 Part 2 dispatch guard
+        only honours a yes spoken after the question
+        (tests/test_injection.py::test_preemptive_yes_now_gets_a_question_first).
+        """
         import core.conversation as conv
         from tools.base import ToolResult
 

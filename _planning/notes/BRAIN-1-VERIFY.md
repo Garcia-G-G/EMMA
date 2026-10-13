@@ -105,3 +105,43 @@ verified byte-identical before and after). Rule, applied to each accepted tool's
 - `mypy --strict` clean on `core/brain` (already covered by `[mypy-core.*]`).
 
 Pinned: 16 tests (`test_brain_imports.py` 3, `test_brain_skeleton.py` 13).
+
+## Part 2 — injection defense in dispatch
+
+Enforced in `tools/registry.py:dispatch` through a per-session guard
+(`core/injection.py`), installed by `core/conversation.py` when a wake session
+starts and removed at teardown. Dispatch with no guard installed (background
+tasks, tests, the acceptance runner) behaves exactly as before. The tools array
+is untouched (byte-stable).
+
+| Rule | Implementation |
+|---|---|
+| 1. Taint | Any result from a `returns_untrusted_content` tool (41 of them) taints the session. Cleared by a new wake session (`injection.install()`) or a transcript matching the closed FORGET list ("olvida eso", "forget that", …) |
+| 2a. Sinks confirm while tainted | `core/brain/sinks.py`: 49 DESTRUCTIVE + 24 EGRESS (URLs, web queries, drafts, shell/terminal/SQL/request runners) + 15 PERSIST (memory/vocabulary/notes/reminder writes — poisoning targets) = **88 sinks**, by name. Two-phase confirmation regardless of the tool's flag; a tool with no `confirmed` parameter is never passed one |
+| 2b. Provenance while tainted | Every string argument of a sink must appear (folded, spoken-URL words joined, scheme/`www.` ignored) in this session's user transcripts or a trusted tool result. Closed-choice args (`browser`, `ide`, `kind`, …) exempt. Plus: no secret-shaped value in a sink while tainted (`core/redaction.contains_secret`) |
+| 3. Mic-only confirmation | `confirmed=True` runs only if a closed-list yes was transcribed AFTER the newest question for that tool — tainted or not. The yes must OPEN the answer ("borra la nota, sí" is a request, not an answer) and is spent once. If the user started speaking after the question but the words haven't landed, the guard waits up to 2.5 s instead of rejecting a real yes |
+
+**Behaviour change (intended by the spec):** the old handler allowed a "cold"
+`confirmed=True` with no prior question ("borra X, sí, seguro" in one breath)
+and relied on the system prompt. That now gets one question first. Two
+handler-level tests that mock `dispatch` still pass and were re-worded to say
+they cover the handler layer only; the end-to-end contract is
+`test_preemptive_yes_now_gets_a_question_first`.
+
+**Tests (`tests/test_injection.py`, 33):** 20 attacks on the real registry
+(email → send_to / iMessage / WhatsApp / draft; web → delete_note /
+overwrite ~/.zshrc / post / plant URL scheme / forget secret; OCR & screen →
+shell / background shell / IDE terminal / type password / Discord; page → URL
+exfil with a key in the query; note → memory poisoning; calendar → create
+event; tabs → close bank tabs; RSS → terminal; and the model self-confirming).
+Each asserts the sink did not run. Plus: a spoken yes can't launder an
+attacker's address; legit paths (untainted sink, user-dictated tainted sink
+asks then runs, "olvida eso", new session); mic rules (self-confirm refused,
+preemptive yes asks first, a yes is spent once, a late transcript is waited
+for, no guard = no change); the sink list (every destructive tool is a sink;
+every sink name is registered).
+
+**Mutation check:** with `check()` forced to approve everything, **25 of 33
+fail** (all 20 attacks + the mic rules). The tests measure the guard.
+
+Gates: full suite 1277 passed; acceptance `--mock-external` 99/99; ruff, mypy clean.

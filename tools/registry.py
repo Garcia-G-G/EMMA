@@ -291,11 +291,42 @@ def unavailable_tools() -> list[str]:
     return sorted(out)
 
 
+def _accepts(fn: Any, param: str) -> bool:
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return True
+    return param in params or any(p.kind is p.VAR_KEYWORD for p in params.values())
+
+
 async def dispatch(name: str, args: dict[str, Any]) -> ToolResult:
-    """Look up `name` and call it with `args`. Catches exceptions."""
+    """Look up `name` and call it with `args`. Catches exceptions.
+
+    With a live session's injection guard installed (``core.injection``), the
+    call is checked first — taint, sink provenance, mic-only confirmation — and
+    every result is reported back so the guard can taint or trust it.
+    """
     entry = get_tool(name)
     if entry is None:
         return ToolResult(False, None, f"Tool {name} no está registrada.", False)
+    from core import injection
+
+    guard = injection.current()
+    if guard is not None:
+        verdict = await guard.check(name, args)
+        if isinstance(verdict, injection.Refusal):
+            return ToolResult(
+                False, {"blocked": verdict.reason}, verdict.message, verdict.ask
+            )
+        if verdict.by_mic and _accepts(entry.fn, "confirmed"):
+            args = {**args, "confirmed": True}  # the mic said yes; don't ask twice
+    # The guard may ask a two-phase question of a tool that has no `confirmed`
+    # parameter; never pass it one it can't take.
+    args = {
+        k: v
+        for k, v in args.items()
+        if k not in ("confirmed", "cancelled") or _accepts(entry.fn, k)
+    }
     try:
         result = entry.fn(**args)
         if inspect.isawaitable(result):
@@ -311,6 +342,8 @@ async def dispatch(name: str, args: dict[str, Any]) -> ToolResult:
         return ToolResult(False, None, f"Falló {name}: {exc}", False)
     if not isinstance(result, ToolResult):
         return ToolResult(False, None, f"{name} no retornó ToolResult.", False)
+    if guard is not None:
+        guard.note_result(name, entry.returns_untrusted_content, result.user_message, result.data)
     return result
 
 

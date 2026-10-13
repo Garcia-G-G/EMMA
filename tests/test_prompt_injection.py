@@ -79,9 +79,12 @@ def test_injection_after_read_tool_is_refused() -> None:
     assert p.captured["requires_confirmation"] is True
 
 
-def test_preemptive_confirm_with_voice_is_allowed() -> None:
-    # "borra la nota compras, sí, seguro" in one breath — the user DID speak it, and
-    # NO tool ran between his words and the call → legit preemptive flow proceeds.
+def test_preemptive_confirm_with_voice_passes_the_handler_layer() -> None:
+    # The HANDLER's gate lets "borra la nota compras, sí, seguro" (one breath, no
+    # tool in between) through to dispatch. It no longer runs end-to-end: since
+    # BRAIN-1 Part 2 the dispatch guard asks first, because a "sí" spoken before
+    # any question isn't a mic confirmation. That contract is pinned in
+    # tests/test_injection.py::test_preemptive_yes_now_gets_a_question_first.
     session_memory.push_event("user", "speech", "borra la nota compras, sí, seguro")
     p = _params("delete_note", title="Compras", confirmed=True)
     assert _run(p) == "delete_note"

@@ -83,6 +83,7 @@ from core import (
     capability_gaps,
     dictionary,
     events_bus,
+    injection,
     personality,
     redaction,
     runtime,
@@ -227,6 +228,9 @@ class _UserSpeechTap(FrameProcessor):
             if cleaned != frame.text:
                 log.debug("transcript_corrected", before=frame.text, after=cleaned)
             session_memory.push_event("user", "speech", cleaned)
+            guard = injection.current()
+            if guard is not None:
+                guard.note_user_transcript(cleaned)  # "olvida eso" clears the taint
             if settings.TOOL_RETRIEVAL:
                 # LAUNCH-12 sticky set: pre-load what this utterance is about so
                 # the follow-up turns have it without a find_tools round-trip.
@@ -1349,6 +1353,9 @@ async def build_pipeline(
         )
 
     tool_selection.set_applier(_apply_tools if settings.TOOL_RETRIEVAL else None)
+    # BRAIN-1 Part 2: a fresh injection guard per wake session — taint from the
+    # last conversation never carries into this one.
+    injection.install()
     return pipeline, task, transport, context, auth_watcher, llm
 
 
@@ -1448,6 +1455,7 @@ async def run_session(immediate_command: bool = False) -> None:
             await asyncio.wait_for(llm._disconnect(), timeout=3.0)  # type: ignore[no-untyped-call]
         _active_task = None  # session over; nothing to interrupt
         tool_selection.set_applier(None)  # the task it pushed into is gone
+        injection.uninstall()
         log.info("conversation_end")
 
     if auth_watcher.terminal_error is not None:
