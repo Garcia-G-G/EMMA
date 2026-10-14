@@ -25,3 +25,15 @@ def _sandbox_user_dictionary(tmp_path_factory: pytest.TempPathFactory) -> Iterat
     dictionary._DICT_PATH = real
     dictionary.reload()
 
+
+
+@pytest.fixture(autouse=True)
+def _no_live_voice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VOICE-1: the cascade is the default backend, and a dev .env can carry a real
+    VOICE_ID and ElevenLabs key. A test that reaches cascade.run_session must never
+    open a live session (mic + network): it returns at once with no voice. Tests
+    that need a voice or key set their own (monkeypatch after this runs)."""
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "VOICE_ID", "")
+    monkeypatch.setattr(settings, "ELEVENLABS_API_KEY", "")

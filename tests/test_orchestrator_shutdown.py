@@ -13,7 +13,11 @@ import core.orchestrator as orch
 
 
 @pytest.fixture(autouse=True)
-def _clear_shutdown():
+def _clear_shutdown(monkeypatch):
+    # These tests are about the loop's shutdown semantics, not the readiness park
+    # (VOICE-1) that precedes it: a test machine has no voice, so it would park.
+    monkeypatch.setattr(orch, "_ensure_ready", AsyncMock())
+    monkeypatch.setattr(orch, "_ensure_paired", AsyncMock())
     orch._shutdown.clear()
     yield
     orch._shutdown.clear()

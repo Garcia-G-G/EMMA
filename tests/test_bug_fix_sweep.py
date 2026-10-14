@@ -271,3 +271,13 @@ class TestB7VagueSearchGuard:
         assert "# Vague search guard (mandatory)" in text
         assert "search_github" in text and "search_web" in text
         assert "fewer than 2 distinct content words" in text
+
+
+@pytest.fixture(autouse=True)
+def _realtime_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The session-wrapping tests here patch conversation.run_session (the Realtime
+    path). With the cascade as default (VOICE-1) and a VOICE_ID configured, an
+    unpinned test opened a REAL cascade session (mic + network) and hung."""
+    from config.settings import settings as _live
+
+    monkeypatch.setattr(_live, "VOICE_BACKEND", "realtime")
