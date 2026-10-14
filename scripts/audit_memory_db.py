@@ -4,7 +4,7 @@
 Opens the memory store READ-ONLY, scans every `facts` row, and classifies its
 content against the redaction patterns. The invariant from SECURITY.md:
 
-    No Secret-tier value (API key, token, card, CURP/RFC/SSN, IBAN) ever lives in
+    No Secret-tier value (API key, token, card, government ID, IBAN) ever lives in
     `memory.db` as cleartext — it must be a `vault_ref` placeholder.
 
 So any row whose CONTENT matches a high-confidence secret pattern but has

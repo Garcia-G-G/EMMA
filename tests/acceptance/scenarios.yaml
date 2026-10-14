@@ -85,17 +85,17 @@
     "name": "search_web",
     "language": "en",
     "given": "BRAVE_API_KEY or TAVILY_API_KEY set.",
-    "utterance": "Hey Emma, search the web for the weather in San José tomorrow.",
+    "utterance": "Hey Emma, search the web for tomorrow's weather forecast.",
     "expected_actions": [
       {
         "tool": "search_web",
         "args_contain": {
-          "query": "weather in San José tomorrow"
+          "query": "tomorrow's weather forecast"
         }
       }
     ],
-    "expected_spoken_pattern": "san josé",
-    "mock_spoken_text": "Tomorrow in San José: sunny with a high near 32 degrees.",
+    "expected_spoken_pattern": "(tomorrow|sunny|forecast)",
+    "mock_spoken_text": "Tomorrow: sunny with a high near 32 degrees.",
     "max_latency_ms": 5000,
     "destructive": false
   },
@@ -104,17 +104,17 @@
     "name": "current_time_tokyo",
     "language": "es",
     "given": "Local zoneinfo database available.",
-    "utterance": "Hey Emma, ¿qué hora es en Tokio?",
+    "utterance": "Hey Emma, ¿qué hora es en UTC?",
     "expected_actions": [
       {
         "tool": "current_time",
         "args_contain": {
-          "timezone": "Asia/Tokyo"
+          "timezone": "UTC"
         }
       }
     ],
-    "expected_spoken_pattern": "(asia/tokyo|tokio|tokyo)",
-    "mock_spoken_text": "Son las 09:42 en Asia/Tokyo.",
+    "expected_spoken_pattern": "utc",
+    "mock_spoken_text": "Son las 09:42 en UTC.",
     "max_latency_ms": 2500,
     "destructive": false
   },
@@ -1123,8 +1123,8 @@
         "tool": "recall_facts"
       }
     ],
-    "expected_spoken_pattern": "(alex|san josé|desarrollador|sé que)",
-    "mock_spoken_text": "Sé que eres the user, desarrollador en San José.",
+    "expected_spoken_pattern": "(alex|desarrollador|sé que)",
+    "mock_spoken_text": "Sé que eres the user, desarrollador de software.",
     "max_latency_ms": 6000,
     "destructive": false
   },
@@ -1484,7 +1484,7 @@
     "id": "V58",
     "name": "anaphora_otra_vez",
     "language": "es",
-    "given": "Turn 1 (A05) just told the time in Tokyo; anaphora replay (21-B29).",
+    "given": "Turn 1 (A05) just told the time in UTC; anaphora replay (21-B29).",
     "follows": "A05",
     "utterance": "Otra vez.",
     "expected_actions": [
@@ -1492,8 +1492,8 @@
         "tool": "recall_last_action"
       }
     ],
-    "expected_spoken_pattern": "(te refieres|hora|tokio|tokyo|de nuevo|lo último)",
-    "mock_spoken_text": "Lo último que hice fue decirte la hora en Tokio. ¿La repito?",
+    "expected_spoken_pattern": "(te refieres|hora|utc|de nuevo|lo último)",
+    "mock_spoken_text": "Lo último que hice fue decirte la hora en UTC. ¿La repito?",
     "max_latency_ms": 8000,
     "destructive": false
   },

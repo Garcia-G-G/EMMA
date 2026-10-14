@@ -95,7 +95,7 @@ Preserve only the exact legacy LaunchAgent and Keychain identifiers required for
 upgrade/uninstall compatibility, with generic comments explaining that they are
 legacy identifiers rather than naming a person.
 Update tests and acceptance fixtures to fictional names and locations such as
-`Alex`, `Sam Doe`, `San José`, or `UTC`, depending on the behavior under test.
+`Alex`, `Sam Doe`, `<city>`, or `UTC`, depending on the behavior under test.
 
 - [ ] **Step 4: Regenerate capabilities through the supported generator**
 

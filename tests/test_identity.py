@@ -13,6 +13,7 @@ import pytest
 
 import core.conversation as conv
 from core import dictionary
+from scripts import check_public_copy
 
 
 def _build(profile: dict) -> str:
@@ -29,13 +30,12 @@ def test_prompt_names_the_paired_user() -> None:
     instr = _build({"display_name": "Alex Rivera", "preferred_lang": "es"})
     assert "the user" not in instr  # no maker name reaches the model
     assert "Alex Rivera" in instr  # the real paired user is named
-    assert "San José" not in instr  # no geographic origin
-    assert "Mexican" not in instr
+    assert not check_public_copy.hits(instr)  # no geographic origin
 
 
 def test_prompt_generic_default_when_unpaired() -> None:
     instr = _build({"preferred_lang": "es"})
-    assert "San José" not in instr and "Mexican" not in instr
+    assert not check_public_copy.hits(instr)
     assert "the user" in instr  # generic stand-in, no identity
 
 

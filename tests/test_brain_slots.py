@@ -109,9 +109,9 @@ def test_fuzzy_records_ratio_and_span(v: Vocab) -> None:
 
 
 def test_leftover_reports_what_nothing_explained(v: Vocab) -> None:
-    # sc_A05: current_time has no tz slot here (that's L3), so "tokio" is unexplained.
-    r = resolve("current_time", normalize("Hey Emma, ¿qué hora es en Tokio?"), v)
-    assert r.leftover == ("tokio",)
+    # sc_A05: current_time has no tz slot here (that's L3), so "utc" is unexplained.
+    r = resolve("current_time", normalize("Hey Emma, ¿qué hora es en UTC?"), v)
+    assert r.leftover == ("utc",)
 
 
 def test_residue_only_with_a_free_text_field(v: Vocab) -> None:

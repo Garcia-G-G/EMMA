@@ -30,7 +30,7 @@ of what Emma protects, how, and what it explicitly does **not** protect.
 |------|----------|---------|
 | **Public** | tool registry, `self/capabilities.md`, version | plaintext on disk |
 | **Personal** | preferences, profile facts ("prefers Zed", "lives in <city>"), schedule patterns | `~/.emma/memory.db` — cold-disk protection relies on **FileVault** |
-| **Secret** | passwords, API keys, account numbers, government IDs (CURP/RFC/SSN), credit cards, IBAN | **macOS Keychain only** (`com.garcia.emma` service). `memory.db` may hold a `vault_ref` label, **never** the value |
+| **Secret** | passwords, API keys, account numbers, government IDs (any national format), credit cards, IBAN | **macOS Keychain only** (`com.garcia.emma` service). `memory.db` may hold a `vault_ref` label, **never** the value |
 
 **The architectural rule:** *no Secret-tier value ever lands in `memory.db`, in
 logs, or in anything sent to a provider (a prompt, a transcript, a TTS request).*
@@ -44,7 +44,8 @@ Enforcement:
   embedding API).
 - `memory/long_term.py:priming_block` filters `WHERE vault_ref IS NULL`.
 - `core/redaction.py:redaction_processor` redacts every string in every log
-  event (credit cards via Luhn, CURP, RFC, SSN, IBAN, phone, API-key shapes).
+  event (credit cards via Luhn, government-ID shapes plus any format the user adds
+  under `[redaction] id_patterns` in their profile, IBAN, phone, API-key shapes).
 
 ## Where each tier lives on disk
 

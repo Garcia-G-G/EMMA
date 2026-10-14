@@ -52,7 +52,7 @@ def test_embed_failure_falls_back_to_flat(tmp_mem, monkeypatch):
 
 
 def test_no_context_uses_flat_path(tmp_mem, monkeypatch):
-    _seed("the user vive en San José", 0.9)
+    _seed("the user vive cerca del mar", 0.9)
     called = {"semantic": False}
 
     def _spy(qv, k):
@@ -61,5 +61,5 @@ def test_no_context_uses_flat_path(tmp_mem, monkeypatch):
 
     monkeypatch.setattr(lt, "_recall_vec_ranked_sync", _spy)
     block = asyncio.run(lt.priming_block(top_n=5, context=None))
-    assert "the user vive en San José" in block
+    assert "the user vive cerca del mar" in block
     assert called["semantic"] is False

@@ -21,7 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 REPLIES = [
     "Listo, abrí Spotify y puse Bad Bunny.",
-    "Son las tres y cuarto en Tokio.",
+    "Son las tres y cuarto en UTC.",
     "Ya quedó la nota Compras con leche y pan.",
     "Tienes dos eventos hoy; el siguiente es a las cinco.",
     "Done, I opened the repo in Cursor.",

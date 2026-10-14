@@ -24,6 +24,11 @@ linkedin = ""
 website = ""
 preferred_lang = "es"
 
+# [redaction] — government-ID formats to redact from logs, as regexes. Emma
+# hard-codes no country's format, only a generic ID shape; add yours here.
+# [redaction]
+# id_patterns = ['\b<your ID format>\b']
+
 # -----------------------------------------------------------------------
 # [pages] — URL shortcuts. "Emma, abre mi <key>" → opens the url.
 # Optional fields: open_in (browser bundle id), title.

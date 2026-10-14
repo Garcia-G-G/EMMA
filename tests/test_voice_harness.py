@@ -119,10 +119,10 @@ class TestRunnerVoiceMode:
     def test_transcript_assertion_fails_on_mismatch(self):
         from tests.acceptance.voice_driver import VoiceExtras, check_voice_extras
 
-        scenario = {"expected_transcript_pattern": "tokio"}
-        extras = VoiceExtras(transcript="qué hora es en Londres")
+        scenario = {"expected_transcript_pattern": "utc"}
+        extras = VoiceExtras(transcript="qué hora es en GMT")
         issues = check_voice_extras(scenario, extras)
-        assert issues and "tokio" in issues[0]
+        assert issues and "utc" in issues[0]
 
     def test_capability_gap_assertion(self):
         from tests.acceptance.voice_driver import VoiceExtras, check_voice_extras

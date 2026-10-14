@@ -25,8 +25,10 @@ from pathlib import Path
 
 # Phrases covering several Spanish accents as well as English.
 DEFAULT_PHRASES = ["hey emma", "oye emma", "hola emma"]
-# Piper voices (downloaded on first use). Mix en + es for accent robustness.
-DEFAULT_VOICES = ["en_US-amy-medium", "es_MX-claude-high", "es_ES-davefx-medium"]
+# Piper voices (downloaded on first use): by default one medium voice per
+# accent Piper offers in these language families, read from its own catalog,
+# so no region is hard-coded here.
+VOICE_FAMILIES = ("es", "en")
 _SR = 16000
 
 
@@ -38,6 +40,19 @@ def _ensure_voice(name: str, voices_dir: Path):
     info = get_voices(str(voices_dir))
     ensure_voice_exists(name, [str(voices_dir)], str(voices_dir), info)
     return voices_dir / f"{name}.onnx"
+
+
+def _default_voices(voices_dir: Path) -> list[str]:
+    """One medium-quality Piper voice per (family, region) in VOICE_FAMILIES."""
+    from piper.download import get_voices
+
+    voices_dir.mkdir(parents=True, exist_ok=True)
+    picked: dict[tuple[str, str], str] = {}
+    for name, info in sorted(get_voices(str(voices_dir), update_voices=True).items()):
+        lang = info.get("language", {})
+        if lang.get("family") in VOICE_FAMILIES and info.get("quality") == "medium":
+            picked.setdefault((lang["family"], lang.get("region", "")), name)
+    return list(picked.values())
 
 
 def _synthesize(phrase: str, voice_path: Path, length_scale: float, noise_scale: float,
@@ -70,7 +85,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Generate wake-word training data (16.2).")
     ap.add_argument("--out", type=Path, default=Path("scripts/wake_data"))
     ap.add_argument("--phrases", nargs="+", default=DEFAULT_PHRASES)
-    ap.add_argument("--voices", nargs="+", default=DEFAULT_VOICES)
+    ap.add_argument("--voices", nargs="+", default=None, help="Piper voice names (default: catalog)")
     ap.add_argument("--n-per-voice", type=int, default=150, help="positives per voice per phrase")
     ap.add_argument("--noise-dir", type=Path, default=None, help="folder of negative/background audio")
     args = ap.parse_args()
@@ -82,6 +97,8 @@ def main() -> int:
     pos_dir.mkdir(parents=True, exist_ok=True)
     neg_dir.mkdir(parents=True, exist_ok=True)
     voices_dir = args.out / "_voices"
+    if not args.voices:
+        args.voices = _default_voices(voices_dir)
 
     # ---- positives: synthesize the phrase with per-utterance prosody variation.
     n = 0

@@ -22,14 +22,26 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from typing import Any
 
 import structlog
 
 log = structlog.get_logger("emma.visual_screen")
 
 _SCREENCAPTURE = "/usr/sbin/screencapture"
-_OCR_LANGUAGES = ["es-ES", "en-US"]
+_OCR_LANGUAGES = ("es", "en")  # families; the regional code comes from Vision itself
 _LINE_CAP = 200  # never hand the LLM an unbounded wall of OCR lines
+
+
+def _ocr_languages(req: Any) -> list[str]:
+    """Vision's own codes for our language families, so no region is hard-coded."""
+    try:
+        supported, _err = req.supportedRecognitionLanguagesAndReturnError_(None)
+        picked = [str(c) for c in supported or () if str(c).split("-")[0] in _OCR_LANGUAGES]
+    except Exception:  # fall back to the bare families
+        picked = []
+    return picked or list(_OCR_LANGUAGES)
+
 
 try:
     import Quartz
@@ -124,7 +136,7 @@ def _ocr(png: bytes) -> list[str]:
             return []
         req = Vision.VNRecognizeTextRequest.alloc().init()
         req.setRecognitionLevel_(1)  # 1 = accurate
-        req.setRecognitionLanguages_(_OCR_LANGUAGES)
+        req.setRecognitionLanguages_(_ocr_languages(req))
         req.setUsesLanguageCorrection_(True)
         handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None)
         handler.performRequests_error_([req], None)

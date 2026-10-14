@@ -212,7 +212,7 @@ class TestSystemPromptDirectives:
 
 class TestLowConfidence:
     def test_echo_of_bot_speech_flags(self):
-        bot = "Listo, son las siete de la mañana en Tokio."
+        bot = "Listo, son las siete de la mañana en UTC."
         assert is_low_confidence("son las siete de la mañana", bot) is True
 
     def test_normal_command_passes(self):

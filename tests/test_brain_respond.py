@@ -60,7 +60,7 @@ def test_no_immediate_repeat() -> None:
 
 def test_language_follows_the_utterance() -> None:
     assert language("Hey Emma, abre la app de música") == "es"
-    assert language("Hey Emma, search the web for the weather in San José tomorrow.") == "en"
+    assert language("Hey Emma, search the web for tomorrow's weather forecast.") == "en"
     r = Responder(random.Random(1))
     assert "Spotify" in r.say(_local("open_application", "Emma, open spotify", name="Spotify"))
 

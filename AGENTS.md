@@ -9,8 +9,16 @@ pages, OG images, README, social posts):
 
 1. **Never reference the maker by name or handle.** No "made by <name>",
    no first-person maker paragraph. `tests/test_public_copy.py` enforces it.
-2. **Never assert a geographic origin.** No city, region, country or flag,
-   no "made in <place>". The maker has not consented to that being public.
+2. **No country, city, region, nationality or flag — anywhere, ever.** Not
+   for the maker (do not assume where they live; past assumptions were
+   wrong), not for users, not as an example. This covers copy, code,
+   comments, docstrings, test fixtures and data, commit messages, docs,
+   prompts, and examples in tool descriptions. Use neutral placeholders
+   (`<city>`, `Region/City`, `es`, `en`). Country-specific identifiers
+   (national ID formats, locale codes like `es-XX`/`en-XX`, timezone names
+   tied to a place) are not hardcoded; if a feature needs them, they come
+   from the user's own profile at runtime. Enforced by
+   `tests/test_public_copy.py` and the pre-commit hook.
 3. **Footer is generic.** `© 2026 emma` (or equivalent in EN). No personal
    attribution line.
 4. **No invented personal narrative.** Copy is product-focused: what Emma

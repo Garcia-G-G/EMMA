@@ -139,7 +139,7 @@ Output a single word: personal or secret."""
 async def _classify_sensitivity(fact: str) -> Literal["personal", "secret"]:
     """Route a candidate fact to the Personal or Secret tier.
 
-    Deterministic first: if a redaction pattern fires (card/CURP/RFC/SSN/
+    Deterministic first: if a redaction pattern fires (card/government ID/
     IBAN/phone/API-key), it's secret. Otherwise ask gpt-4o-mini for the
     unstructured cases ("my password is ..."). Defaults to personal on LLM
     failure — the redaction net already catches pattern-based secrets.

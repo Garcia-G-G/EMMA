@@ -26,7 +26,7 @@ from core.brain.normalize import fold, normalize
         ("Ay, Emma, cierra esta pestaña.", "cierra esta pestaña"),  # log_06
         ("ey emma borra mi nota compras", "borra mi nota compras"),  # log_02
         ("¿Cómo estás? Te pregunté, Emma.", "cómo estás? te pregunté"),  # log_35
-        ("Hey Emma, ¿qué hora es en Tokio?", "qué hora es en tokio?"),  # sc_A05
+        ("Hey Emma, ¿qué hora es en UTC?", "qué hora es en utc?"),  # sc_A05
     ],
 )
 def test_wake_and_vocative_are_removed(utterance: str, text: str) -> None:

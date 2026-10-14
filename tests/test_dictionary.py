@@ -28,7 +28,7 @@ context = "Estándar de Anthropic."
 default = "Cursor"
 
 [facts.001]
-text = "the user vive en San José."
+text = "the user vive cerca del mar."
 kind = "profile"
 confidence = 0.99
 

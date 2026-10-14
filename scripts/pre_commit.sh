@@ -1,5 +1,5 @@
 #!/bin/sh
-# pre-commit hook: commits carry the project identity, and no secrets.
+# pre-commit hook: commits carry the project identity, name no place, and no secrets.
 # Install:  ln -sf ../../scripts/pre_commit.sh .git/hooks/pre-commit
 want="Emma <hello@theemmafamily.com>"
 for who in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
@@ -10,4 +10,6 @@ for who in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
     exit 1
   fi
 done
-exec "$(git rev-parse --show-toplevel)/scripts/check_secrets.sh"
+top=$(git rev-parse --show-toplevel)
+python3 "$top/scripts/check_public_copy.py" --staged || exit 1
+exec "$top/scripts/check_secrets.sh"

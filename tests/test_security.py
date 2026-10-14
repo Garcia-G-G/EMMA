@@ -31,13 +31,30 @@ def _restore_loop():
 
 def test_redaction_positive_cases() -> None:
     assert "[REDACTED:CREDIT_CARD]" in redact("card 4111 1111 1111 1111")
-    assert "[REDACTED:CURP]" in redact("CURP HEGG560427MVZRRL04")
-    assert "[REDACTED:US_SSN]" in redact("ssn 123-45-6789")
+    assert "[REDACTED:GOV_ID]" in redact("id ABCD123456EFGHIJ78")
     # LAUNCH-11 gave OpenAI keys their own, more specific label — and, more to
     # the point, a rule that fires at any length rather than only past 32 chars.
     assert "[REDACTED:OPENAI_KEY]" in redact("key sk-proj-" + "a" * 40)
     assert "[REDACTED:API_KEY_LIKE]" in redact("token ghp_" + "a" * 40)
-    assert "[REDACTED:PHONE_INTL]" in redact("tel +52 81 1234 5678")
+    assert "[REDACTED:PHONE_INTL]" in redact("tel +999 99 1234 5678")
+
+
+def test_no_country_id_format_is_built_in(monkeypatch) -> None:
+    from core import dictionary, redaction
+
+    # A dashed digits-only ID is not a built-in shape...
+    monkeypatch.setattr(redaction, "_user_rules_cache", None)
+    monkeypatch.setattr(dictionary, "tables", lambda: {})
+    assert redact("id 123-45-6789") == "id 123-45-6789"
+    # ...until the user's profile names that format; a broken pattern is skipped.
+    monkeypatch.setattr(redaction, "_user_rules_cache", None)
+    monkeypatch.setattr(
+        dictionary,
+        "tables",
+        lambda: {"redaction": {"id_patterns": [r"\b\d{3}-\d{2}-\d{4}\b", "(unclosed"]}},
+    )
+    assert redact("id 123-45-6789") == "id [REDACTED:GOV_ID]"
+    assert redaction.contains_secret("id 123-45-6789")
 
 
 def test_redaction_negative_cases() -> None:
@@ -60,8 +77,8 @@ def test_redaction_bare_digit_ids_not_treated_as_phone() -> None:
     assert redact("X token expires 1750000000") == "X token expires 1750000000"
     assert "[REDACTED:PHONE_INTL]" not in redact("tweet 1760123456789012345 posted")
     # A genuinely phone-shaped number is still redacted.
-    assert "[REDACTED:PHONE_INTL]" in redact("call +52 81 1234 5678")
-    assert "[REDACTED:PHONE_INTL]" in redact("call 81-1234-5678")
+    assert "[REDACTED:PHONE_INTL]" in redact("call +999 99 1234 5678")
+    assert "[REDACTED:PHONE_INTL]" in redact("call 99-1234-5678")
 
 
 def test_redaction_processor_redacts_strings_only() -> None:
@@ -76,10 +93,10 @@ def test_redaction_processor_recurses_into_nested_args() -> None:
     ev = redaction_processor(
         None,
         "error",
-        {"event": "bad", "args": {"key": "sk-proj-" + "a" * 40}, "items": ["123-45-6789"]},
+        {"event": "bad", "args": {"key": "sk-proj-" + "a" * 40}, "items": ["ABCD123456EFGHIJ78"]},
     )
     assert "[REDACTED:OPENAI_KEY]" in ev["args"]["key"]
-    assert "[REDACTED:US_SSN]" in ev["items"][0]
+    assert "[REDACTED:GOV_ID]" in ev["items"][0]
 
 
 def test_log_redaction_end_to_end(capsys) -> None:
@@ -190,9 +207,10 @@ def test_reflection_routes_secret_to_keychain_not_db(tmp_path) -> None:
 def test_redaction_spares_hashes_uuids_and_ids() -> None:
     # audit fix: the tool-egress seam must not corrupt legit output the LLM needs.
     from core.redaction import redact
-    sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"   # 40-char git SHA
+
+    sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"  # 40-char git SHA
     uuid = "550e8400-e29b-41d4-a716-446655440000"
-    tweet = "1718900000123456789"                       # 19-digit ID
+    tweet = "1718900000123456789"  # 19-digit ID
     for s in (sha, uuid, tweet):
         assert redact(f"value {s} here") == f"value {s} here", s
     # but real secrets / cards still go:

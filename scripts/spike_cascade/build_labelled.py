@@ -43,11 +43,11 @@ S = [
     ("A03", "Hey Emma, sube el volumen a 70.", ["set_volume"], "clean"),
     (
         "A04",
-        "Hey Emma, search the web for the weather in San José tomorrow.",
+        "Hey Emma, search the web for tomorrow's weather forecast.",
         ["search_web", "web_search_in_browser"],
         "clean",
     ),
-    ("A05", "Hey Emma, ¿qué hora es en Tokio?", ["current_time"], "clean"),
+    ("A05", "Hey Emma, ¿qué hora es en UTC?", ["current_time"], "clean"),
     (
         "A06",
         "Hey Emma, recuérdame que soy alérgico a los mariscos.",

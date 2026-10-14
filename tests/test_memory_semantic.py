@@ -57,7 +57,7 @@ def test_embed_and_cosine() -> None:
     async def body() -> None:
         v1 = await embed("the user loves tacos al pastor")
         v2 = await embed("the user loves tacos al pastor")
-        v3 = await embed("the weather in Tokyo is rainy")
+        v3 = await embed("the weather at the coast is rainy")
         assert len(v1) == 1536
         assert cosine(v1, v2) > 0.99  # identical text
         assert cosine(v1, v3) < cosine(v1, v2)  # unrelated text less similar

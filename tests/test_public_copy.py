@@ -2,31 +2,28 @@
 
 The repo is public. The maker's name or handle may appear only inside the
 frozen identifiers that predate the rule: the Keychain service and the legacy
-launchd label (``com.<name>.emma``). No country flags; no hard-coded regional
-locale outside the places that genuinely need a language code.
+launchd label (``com.<name>.emma``). Rule 2 (no country, city, region,
+nationality, flag, regional locale or place timezone) is checked by
+``scripts/check_public_copy.py`` over the tree and every commit message; the
+pre-commit and commit-msg hooks run the same check.
 """
 
 from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+from scripts import check_public_copy
 
 ROOT = Path(__file__).resolve().parents[1]
 
 # Built from pieces so this file doesn't itself match.
 _NAME = re.compile("gar" + "cia|gil" + "ber", re.IGNORECASE)
 _IDENTIFIER = re.compile(r"com\.gar" + r"cia\.emma", re.IGNORECASE)
-_FLAG = re.compile("[\U0001f1e6-\U0001f1ff]{2}")
-_LOCALE = re.compile(r"\b(?:es|en)[-_](?:MX|ES|US|GB|AR|CO|CL|PE|419)\b")
-
-# Language codes an OS API needs, not a user-facing locale assumption.
-_LOCALE_ALLOWED = {
-    "core/visual_screen.py",  # Vision OCR recognition languages
-    "scripts/wake_word_data.py",  # Piper voice model names (several accents on purpose)
-}
 
 
 def _tracked() -> list[Path]:
@@ -61,20 +58,54 @@ def test_no_maker_name_outside_identifiers() -> None:
     assert not hits, hits
 
 
-def test_no_country_flags() -> None:
-    hits = [rel for rel, text in _texts() if _FLAG.search(text)]
-    assert not hits, hits
+def _run(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "check_public_copy.py"), *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
-def test_no_regional_locale_literals() -> None:
-    hits = [
-        f"{rel}:{n}"
-        for rel, text in _texts()
-        if rel not in _LOCALE_ALLOWED and rel != "tests/test_public_copy.py"
-        for n, line in enumerate(text.splitlines(), 1)
-        if _LOCALE.search(line)
-    ]
-    assert not hits, hits
+def test_tree_names_no_place() -> None:
+    r = _run("--tree")
+    assert r.returncode == 0, r.stdout
+
+
+def test_commit_messages_name_no_place() -> None:
+    r = _run("--history")
+    assert r.returncode == 0, r.stdout
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "vivo en " + "Monte" + "rrey",
+        "una voz " + "mexi" + "cana",
+        "a " + "Bri" + "tish accent",
+        "locale " + "es" + "-" + "MX",
+        "tz " + "Asia" + "/" + "Tok" + "yo",
+        "\U0001f1f2\U0001f1fd",
+        "the " + "U" + "SA",
+    ],
+)
+def test_checker_catches(text: str) -> None:
+    assert check_public_copy.hits(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Emma usa tu voz",  # Spanish verb, not the country
+        "habla Spanish y English",  # languages are allowed
+        "locale es, en; placeholder es-XX",
+        "UTC and Etc/GMT+5",
+        "Library/Logs/Emma",
+    ],
+)
+def test_checker_spares(text: str) -> None:
+    assert not check_public_copy.hits(text)
 
 
 def test_planning_is_not_tracked() -> None:

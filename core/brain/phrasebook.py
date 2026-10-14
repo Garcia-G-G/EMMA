@@ -35,7 +35,7 @@ _FILLS: dict[str, tuple[str, ...]] = {
     "content": ("hola mundo", "versión final"), "task": ("arreglar el login", "agregar pruebas"),
     "intent": ("comprar boletos", "llenar el formulario"), "keys": ("Cmd+T", "Cmd+Shift+P"),
     "target": ("prod-db", "soporte"), "minutes": ("10", "30"), "duration_min": ("5", "25"),
-    "label": ("té", "pasta"), "timezone": ("Madrid", "Londres"), "when": ("el lunes", "la semana pasada"),
+    "label": ("té", "pasta"), "timezone": ("GMT", "UTC+2"), "when": ("el lunes", "la semana pasada"),
     "value": ("sam-dev", "Sam Rivera"), "relation": ("hermana", "jefa"), "email": ("sam@example.org",
     "rivera@example.net"), "url_scheme": ("notion://", "slack://"), "key": ("SLA", "KPI"),
     "expansion": ("acuerdo de nivel de servicio", "indicador clave"), "wrong": ("clod", "nil"),

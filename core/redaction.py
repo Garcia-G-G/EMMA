@@ -109,9 +109,14 @@ _RULES: list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]] 
     ("OPENAI_KEY", re.compile(r"\bsk-[A-Za-z0-9_]*-?[A-Za-z0-9_\-]{6,}"),
      "[REDACTED:OPENAI_KEY]"),
     ("CREDIT_CARD", re.compile(r"\d(?:[ -]?\d){12,18}"), _card_sub),
-    ("CURP", re.compile(r"\b[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d\b"), "[REDACTED:CURP]"),
-    ("RFC", re.compile(r"\b[A-Z&Ñ]{3,4}\d{6}[A-Z\d]{3}\b"), "[REDACTED:RFC]"),
-    ("US_SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[REDACTED:US_SSN]"),
+    # Government IDs, shape only: one upper-case alphanumeric token of 9-20 chars
+    # with 2+ letters and 6+ digits. No country's format is hard-coded (AGENTS.md
+    # rule 2); a user who needs theirs adds it to the profile (see _user_rules).
+    (
+        "GOV_ID",
+        re.compile(r"\b(?=[A-Z\d]{9,20}\b)(?=(?:[A-Z\d]*[A-Z]){2})(?=(?:[A-Z\d]*\d){6})[A-Z\d]+\b"),
+        "[REDACTED:GOV_ID]",
+    ),
     ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), _iban_sub),
     ("API_KEY_LIKE", _API_KEY_RE, _api_key_sub),
     # (?<![0-9a-fA-F]) so a digit run that continues a hex sequence (a UUID tail
@@ -120,12 +125,43 @@ _RULES: list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]] 
 ]
 
 
+_user_rules_cache: list[tuple[str, re.Pattern[str], str]] | None = None
+
+
+def _user_rules() -> list[tuple[str, re.Pattern[str], str]]:
+    """ID formats from the user's profile: ``[redaction] id_patterns = ["<regex>"]``
+    in ``config/dictionary.toml``. Loaded once; a pattern that does not compile is
+    skipped (this runs inside the log processor, so it must never raise)."""
+    global _user_rules_cache
+    if _user_rules_cache is None:
+        _user_rules_cache = []  # re-entrancy guard: loading the profile may log
+        rules: list[tuple[str, re.Pattern[str], str]] = []
+        try:
+            from core import dictionary
+
+            raw = dictionary.tables().get("redaction", {}).get("id_patterns", [])
+            for pat in raw if isinstance(raw, list) else []:
+                try:
+                    rules.append(("GOV_ID", re.compile(str(pat)), "[REDACTED:GOV_ID]"))
+                except re.error:
+                    continue
+        except Exception:  # a broken profile must not break logging
+            rules = []
+        _user_rules_cache = rules
+    return _user_rules_cache
+
+
+def _all_rules() -> list[tuple[str, re.Pattern[str], str | Callable[[re.Match[str]], str]]]:
+    # Profile formats run first: they are the most specific the user knows of.
+    return [*_user_rules(), *_RULES]
+
+
 def redact(text: str) -> str:
     """Replace each sensitive match with ``[REDACTED:<type>]``."""
     if not text:
         return text
     out = text
-    for _kind, pattern, repl in _RULES:
+    for _kind, pattern, repl in _all_rules():
         out = pattern.sub(repl, out)
     return out
 
@@ -143,7 +179,7 @@ def contains_secret(text: str) -> bool:
     """
     if not text:
         return False
-    for kind, pattern, _repl in _RULES:
+    for kind, pattern, _repl in _all_rules():
         if kind == "PHONE_INTL":
             continue
         for m in pattern.finditer(text):
@@ -159,7 +195,7 @@ def contains_secret(text: str) -> bool:
                 continue
             if kind == "IBAN" and len(frag) < 15:
                 continue
-            return True  # CURP / RFC / US_SSN / valid IBAN — structural, high-confidence
+            return True  # GOV_ID / valid IBAN — structural, high-confidence
     return False
 
 

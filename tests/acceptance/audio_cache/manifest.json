@@ -295,14 +295,6 @@
   "text": "Hey Emma, llama a mi mamá.",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
- "4b88481b9f84dc1a": {
-  "chars": 44,
-  "lang": "es",
-  "model_id": "eleven_flash_v2_5",
-  "scenario_id": "A05",
-  "text": "Hey Jarvis. Hey Emma, ¿qué hora es en Tokio?",
-  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
- },
  "4c2ea4454c89337a": {
   "chars": 29,
   "lang": "es",
@@ -549,14 +541,6 @@
   "model_id": "eleven_flash_v2_5",
   "scenario_id": "A10",
   "text": "Hey Jarvis. sí, agrégalos al carrito.",
-  "voice_id": "nbcvT3C2tyOd2OsRAtUf"
- },
- "8a03f921a21fc4d9": {
-  "chars": 32,
-  "lang": "es",
-  "model_id": "eleven_flash_v2_5",
-  "scenario_id": "A05",
-  "text": "Hey Emma, ¿qué hora es en Tokio?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
  },
  "8b5ec9aa2b39efd7": {
@@ -822,22 +806,6 @@
   "scenario_id": "V49",
   "text": "Hey Emma, ¿cuál es la contraseña de mi wifi?",
   "voice_id": "nbcvT3C2tyOd2OsRAtUf"
- },
- "e235aee75c6587b0": {
-  "chars": 75,
-  "lang": "en",
-  "model_id": "eleven_flash_v2_5",
-  "scenario_id": "A04",
-  "text": "Hey Jarvis. Hey Emma, search the web for the weather in San José tomorrow.",
-  "voice_id": "iVwieylcLv7bwfinSNdw"
- },
- "e49ce86f8b2b95f3": {
-  "chars": 63,
-  "lang": "en",
-  "model_id": "eleven_flash_v2_5",
-  "scenario_id": "A04",
-  "text": "Hey Emma, search the web for the weather in San José tomorrow.",
-  "voice_id": "iVwieylcLv7bwfinSNdw"
  },
  "e9bde06475090860": {
   "chars": 42,

@@ -106,7 +106,7 @@ async def installed_hint(label: str) -> str | None:
 class Voice:
     voice_id: str
     name: str
-    description: str  # "female · american · conversational", from the provider's labels
+    description: str  # "female · <accent> · conversational", from the provider's labels
 
     @property
     def label(self) -> str:

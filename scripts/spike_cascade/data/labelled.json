@@ -34,7 +34,7 @@
  },
  {
   "id": "sc_A04",
-  "text": "Hey Emma, search the web for the weather in San José tomorrow.",
+  "text": "Hey Emma, search the web for tomorrow's weather forecast.",
   "accept": [
    "search_web",
    "web_search_in_browser"
@@ -46,7 +46,7 @@
  },
  {
   "id": "sc_A05",
-  "text": "Hey Emma, ¿qué hora es en Tokio?",
+  "text": "Hey Emma, ¿qué hora es en UTC?",
   "accept": [
    "current_time"
   ],
