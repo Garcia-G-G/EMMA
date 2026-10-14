@@ -224,9 +224,16 @@ document.addEventListener("DOMContentLoaded", function () { window.__emma_painte
       String(seconds % 60).padStart(2, "0");
   }, 250);
 
+  // Every socket on 3201 is authenticated (LAUNCH-11 Part 2). The token comes in
+  // the URL this page is opened with (?t=), never in the HTML; lift it out of the
+  // address bar right away, as index.html does.
+  var token = new URLSearchParams(window.location.search).get("t") || "";
+  try { history.replaceState(null, "", window.location.pathname); } catch (_) {}
+  var wsPort = String(Number(window.location.port || "3200") + 1);
   var backoff = 1000;
   function connect() {
-    var ws = new WebSocket("ws://" + window.location.hostname + ":3201/events");
+    var ws = new WebSocket("ws://" + window.location.hostname + ":" + wsPort + "/events" +
+      (token ? "?token=" + encodeURIComponent(token) : ""));
     ws.onopen = function () { backoff = 1000; };
     ws.onmessage = function (event) {
       var message;

@@ -318,6 +318,9 @@ async def _supervise_ui(log: structlog.BoundLogger) -> None:
                     # two tokens would disagree and every command would fail
                     # closed (LAUNCH-11 Part 2).
                     "EMMA_CONTROL_TOKEN": control_auth.token(),
+                    # Which menu items are true for this daemon (Step 40).
+                    "EMMA_VOICE_BACKEND": settings.VOICE_BACKEND,
+                    "EMMA_OPENROUTER_MENU": "1" if settings.OPENROUTER_MENU else "",
                 },
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
@@ -423,6 +426,12 @@ def main() -> int:
 
     # First-run setup wizard (Prompt 29): the installer launches Emma.app with
     # --first-run; serve the guided wizard instead of starting the daemon.
+    if (args.first_run or args.pair) and settings.VOICE_BACKEND != "realtime":
+        # Step 40: the cascade has no account, no pairing and no OpenAI wizard.
+        # The menubar app's onboarding asks for the ElevenLabs key and voice.
+        print("--first-run / --pair are not used on this version of Emma. "
+              "Open Emma from the menubar to add your ElevenLabs key and voice.")
+        return 0
     if args.first_run and args.pair:
         return _run_pairing(log)
     if args.first_run:

@@ -57,30 +57,51 @@ async def test_staleness_says_unknown_rather_than_fine(monkeypatch) -> None:
     async def _none(_t: float = 0) -> None:
         return None
 
-    monkeypatch.setattr(version, "upstream_head", _none)
+    monkeypatch.setattr(version, "latest_tag", _none)
     assert (await version.staleness())["stale"] is None
 
 
 @pytest.mark.asyncio
 async def test_staleness_detects_a_stale_install(tmp_path, monkeypatch) -> None:
-    (tmp_path / "install.json").write_text(json.dumps({"commit": "0000000aaaa"}))
+    (tmp_path / "install.json").write_text(json.dumps({"ref": "v0.4.1", "commit": "0000000aaaa"}))
 
-    async def _head(_t: float = 0) -> str:
-        return "ffffffbbbb"
+    async def _latest(_t: float = 0) -> str:
+        return "v0.5.0"
 
-    monkeypatch.setattr(version, "upstream_head", _head)
+    monkeypatch.setattr(version, "latest_tag", _latest)
     assert (await version.staleness())["stale"] is True
 
 
 @pytest.mark.asyncio
 async def test_staleness_accepts_a_matching_install(tmp_path, monkeypatch) -> None:
-    (tmp_path / "install.json").write_text(json.dumps({"commit": "abcdef123456"}))
+    (tmp_path / "install.json").write_text(json.dumps({"ref": "v0.5.0", "commit": "abcdef123456"}))
 
-    async def _head(_t: float = 0) -> str:
-        return "abcdef123456"
+    async def _latest(_t: float = 0) -> str:
+        return "v0.5.0"
 
-    monkeypatch.setattr(version, "upstream_head", _head)
+    monkeypatch.setattr(version, "latest_tag", _latest)
     assert (await version.staleness())["stale"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ref", ["main", "unknown", None])
+async def test_an_install_naming_no_release_is_unknown_not_stale(tmp_path, monkeypatch, ref) -> None:
+    """Step 40: comparing against main called every tagged install stale; an
+    unknown stamp must say unknown."""
+    (tmp_path / "install.json").write_text(json.dumps({"ref": ref, "commit": "unknown"}))
+    monkeypatch.setattr(version, "_git_describe", lambda: None)
+
+    async def _latest(_t: float = 0) -> str:
+        return "v0.5.0"
+
+    monkeypatch.setattr(version, "latest_tag", _latest)
+    assert (await version.staleness())["stale"] is None
+
+
+def test_tags_compare_as_versions_not_strings() -> None:
+    assert version._parse_tag("v0.10.0") > version._parse_tag("v0.9.9")  # type: ignore[operator]
+    assert version._parse_tag("v0.4.1-12-gabc") == (0, 4, 1)
+    assert version._parse_tag("main") is None
 
 
 def test_boot_line_is_small_and_needs_no_network() -> None:

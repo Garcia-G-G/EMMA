@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     # core/brain -> ElevenLabs TTS, no LLM. `realtime` = the OpenAI Realtime
     # pipeline, kept for the LAUNCH-3/9 tests; not tested live.
     VOICE_BACKEND: Literal["cascade", "realtime"] = "cascade"
+    # Show "Mi key de OpenRouter" in the menubar before BRAIN-2 uses it (Step 40).
+    OPENROUTER_MENU: bool = False
     # Cascade services, verified against Pipecat 1.2.1 and the live API (VOICE-1):
     # Scribe v2 Realtime over ElevenLabsRealtimeSTTService (language left unset —
     # it auto-detects per utterance, the code-switching case). v4 Turbo is
@@ -329,58 +331,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _fill_credentials_from_keychain(self) -> Settings:
-        """Fill blank credentials from Keychain (post .env migration).
+        """Fill every blank credential from Keychain (the Secret tier's home).
 
-        Dormant by default: if OPENAI_API_KEY is present (the normal,
-        un-migrated state) this returns immediately and never shells out to
-        the `security` CLI. Only once .env has been migrated (canonical
-        credential blank) do we read the Secret tier from Keychain.
+        Step 40: this used to return early whenever OPENAI_API_KEY was set, so a
+        leftover OpenAI key (an old .env, a shell profile) hid every other
+        credential in Keychain: GitHub, Brave, Spotify... and, until v0.4.1, the
+        ElevenLabs key the cascade cannot run without. No field decides whether
+        the others are read any more.
 
-        Once it does run, OPENAI_API_KEY is read back before ``_is_managed()``
-        is consulted — see the comment below. That ordering is load-bearing.
+        OPENAI_API_KEY still resolves FIRST (LAUNCH-10 Part 2): ``mode()`` on the
+        Realtime backend depends on it, and the managed filter below asks it.
+        A managed Realtime daemon's credential is the device token, so the
+        BYOK-only fields cannot apply there and are skipped (a `security`
+        subprocess each, on every process boot).
         """
         from core.secrets import retrieve_sync
 
-        if self.OPENAI_API_KEY:
-            # VOICE-1: the cascade's required credential is ElevenLabs, not
-            # OpenAI. A leftover OPENAI_API_KEY (an old .env, a shell profile)
-            # used to short-circuit this and leave the ElevenLabs key unread, so
-            # Emma parked forever with a valid key in Keychain. One read.
-            if not self.ELEVENLABS_API_KEY:
-                val = retrieve_sync("ELEVENLABS_API_KEY")
-                if val:
-                    object.__setattr__(self, "ELEVENLABS_API_KEY", val)
-            return self
-
-        # ORDER IS THE WHOLE POINT (LAUNCH-10 Part 2). OPENAI_API_KEY resolves
-        # FIRST and unconditionally, before anything asks which mode this is.
-        #
-        # `_is_managed()` is defined as `not self.OPENAI_API_KEY`, and the early
-        # return above guarantees the field is blank by the time we get here — so
-        # deciding the mode first and reading the Keychain second made the managed
-        # branch below ALWAYS taken, for everyone. A BYOK user who ran the
-        # migration the security convention mandates (which blanks the .env line)
-        # then never got their own key back: preflight exempted them,
-        # _ensure_paired parked them forever, and the daemon booted green and
-        # silent. You cannot know the mode until the Keychain has had its say
-        # about the field that defines it.
-        val = retrieve_sync("OPENAI_API_KEY")
-        if val:
-            object.__setattr__(self, "OPENAI_API_KEY", val)
-
-        # With that settled, the fan-out guard applies to the REST. In managed
-        # mode this validator is not dormant — OPENAI_API_KEY stays blank there,
-        # so the early return never fires and every boot of every process that
-        # imports settings spawned 15 sequential `security` subprocesses, each
-        # with a 5s timeout: up to 75s of boot latency before `starting` is even
-        # logged, paid again by every `python -m emma.ui` respawn.
-        #
-        # A managed daemon's credential is the device token (core.pairing reads
-        # it directly, under its own label), so the BYOK-only ones cannot apply.
-        # Read the ones that still could — a managed user can absolutely have a
-        # Brave key or a GitHub token — but skip those, and never block boot on
-        # the whole list. Cost of the reordering: exactly one extra `security`
-        # call on a managed boot, which is what buys back a working BYOK one.
+        if not self.OPENAI_API_KEY:
+            val = retrieve_sync("OPENAI_API_KEY")
+            if val:
+                object.__setattr__(self, "OPENAI_API_KEY", val)
         names = tuple(n for n in _CREDENTIAL_FIELDS if n != "OPENAI_API_KEY")
         if self._is_managed():
             names = tuple(n for n in names if n not in _BYOK_ONLY_CREDENTIALS)

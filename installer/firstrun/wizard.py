@@ -163,7 +163,17 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def run(open_browser: bool = True) -> None:
-    """Serve the wizard and (optionally) open it in the browser. Blocks until done."""
+    """Serve the wizard and (optionally) open it in the browser. Blocks until done.
+
+    Realtime backend only (it asks for an OpenAI key). Step 40: on the cascade it
+    says so and returns; the menubar app's onboarding is the setup there.
+    """
+    from config.settings import settings
+
+    if settings.VOICE_BACKEND != "realtime":
+        print("This setup wizard is not used on this version of Emma. "
+              "Open Emma from the menubar to add your ElevenLabs key and voice.")
+        return
     server = ThreadingHTTPServer((HOST, PORT), _Handler)
     url = f"http://{HOST}:{PORT}/"
     if open_browser:

@@ -853,6 +853,14 @@ def initialize() -> None:
     if running:
         log.info("memory_backfill_deferred_loop_running")
         return
+    from config.settings import settings
+
+    if settings.VOICE_BACKEND != "realtime":
+        # Step 40: the backfill embeds through OpenAI. The cascade makes no
+        # OpenAI calls, so it must not make one at every boot either; local
+        # embeddings for memory are Step 42.
+        log.info("memory_backfill_skipped", reason="cascade_no_openai")
+        return
     try:
         asyncio.run(backfill_embeddings())
     except Exception as exc:

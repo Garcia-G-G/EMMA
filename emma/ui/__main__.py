@@ -100,9 +100,6 @@ _ICON_FOR_STATE = {
     "speaking": "waveform.circle.fill",
     "snoozing": "moon",
     "muted": "mic.slash",
-    # Out of minutes: she is alive and listening but cannot answer until the
-    # user tops up. A distinct glyph, because "en espera" would be a lie.
-    "out_of_minutes": "exclamationmark.circle",
 }
 # Daemon state words -> our icon buckets. Unknown states fall back to idle.
 _STATE_BUCKET = {
@@ -113,7 +110,6 @@ _STATE_BUCKET = {
     "responding": "speaking",
     "snoozing": "snoozing",
     "muted": "muted",
-    "out_of_minutes": "out_of_minutes",
 }
 _ESTADO_LABEL = {
     "idle": "En espera",
@@ -122,8 +118,52 @@ _ESTADO_LABEL = {
     "speaking": "Hablando",
     "snoozing": "Durmiendo",
     "muted": "Micrófono apagado",
-    "out_of_minutes": "Sin minutos",
 }
+
+
+def status_line(state: str, update: str | None = None) -> str:
+    """The disabled first menu item: Emma's state, plus a newer release if any."""
+    line = f"Emma · {_ESTADO_LABEL.get(state, 'En espera')}"
+    return f"{line} · {update} disponible" if update else line
+
+
+def ask_control(payload: dict[str, object], timeout_s: float = 20.0) -> dict[str, Any] | None:
+    """Send one control command and wait for its control_result. None on failure."""
+
+    async def _run() -> dict[str, Any] | None:
+        import websockets
+
+        async with websockets.connect(_CONTROL_URL) as ws:
+            await ws.send(json.dumps(payload))
+            while True:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout_s))
+                if isinstance(msg, dict) and msg.get("type") == "control_result":
+                    return msg
+
+    try:
+        return asyncio.run(_run())
+    except Exception as exc:
+        log.debug("ui_ask_control_failed", cmd=payload.get("cmd"), error=str(exc))
+        return None
+
+
+UPDATE_CHECK_EVERY_S = 24 * 3600
+_UPDATE_FIRST_CHECK_S = 120  # after boot settles; never part of startup
+
+
+def _watch_updates(bar: Any) -> None:
+    """Step 40: once a day, ask the daemon whether a newer release tag exists and
+    say so in the status line. The Versión panel only told people who looked."""
+    import time
+
+    time.sleep(_UPDATE_FIRST_CHECK_S)
+    while True:
+        r = ask_control({"cmd": "version"})
+        if r and r.get("stale") is True and r.get("upstream"):
+            AppHelper.callAfter(bar.setUpdate_, str(r["upstream"]))
+        elif r and r.get("stale") is False:
+            AppHelper.callAfter(bar.setUpdate_, None)
+        time.sleep(UPDATE_CHECK_EVERY_S)
 
 
 class _WebUIDelegate(NSObject):  # type: ignore[misc]
@@ -252,6 +292,7 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         self._ui_delegate = None
         self._bridge = None
         self._state = "idle"
+        self._update: str | None = None
         self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(
             NSVariableStatusItemLength
         )
@@ -268,7 +309,11 @@ class EmmaBar(NSObject):  # type: ignore[misc]
             img.setTemplate_(True)  # MANDATORY for dark-mode correctness
             self.item.button().setImage_(img)
         if self._estado_item is not None:
-            self._estado_item.setTitle_(f"Emma · {_ESTADO_LABEL.get(state, 'En espera')}")
+            self._estado_item.setTitle_(status_line(state, self._update))
+
+    def setUpdate_(self, tag: str | None) -> None:  # noqa: N802 (called via callAfter)
+        self._update = tag
+        self._apply_icon(self._state)
 
     def setState_(self, state: str) -> None:  # noqa: N802 (called via callAfter)
         self._state = state
@@ -298,9 +343,14 @@ class EmmaBar(NSObject):  # type: ignore[misc]
         # fork is the first, but someone who skipped it must not have to reinstall.
         self._add_item(menu, "Mi key de ElevenLabs…", "promptForVoiceKey:", "")
         self._add_item(menu, "La voz de Emma…", "chooseVoice:", "")
-        self._add_item(menu, "Mi key de OpenRouter (todavía no se usa)…",
-                       "promptForOpenRouterKey:", "")
-        self._add_item(menu, "Mi API key de OpenAI…", "promptForKey:", "")
+        # Step 40: OpenRouter has no use until BRAIN-2's thinker (OPENROUTER_MENU
+        # shows it early), and the OpenAI key exists only on the Realtime backend.
+        # The daemon hands both down; a UI started by hand gets the shipped answer.
+        if os.environ.get("EMMA_OPENROUTER_MENU") == "1":
+            self._add_item(menu, "Mi key de OpenRouter (todavía no se usa)…",
+                           "promptForOpenRouterKey:", "")
+        if os.environ.get("EMMA_VOICE_BACKEND") == "realtime":
+            self._add_item(menu, "Mi API key de OpenAI…", "promptForKey:", "")
         self._add_item(menu, "Activar mi licencia…", "promptForLicense:", "")
         self._add_item(menu, "Dar acceso a la pantalla…", "grantAccessibility:", "")
         self._add_item(menu, "Apagar Emma", "shutdownEmma:", "")
@@ -776,6 +826,7 @@ def main(argv: list[str] | None = None) -> int:
         bar, "openWindow:", SHOW_NOTIFICATION, None
     )
     _StateListener(bar, _WS_URL).start()
+    threading.Thread(target=_watch_updates, args=(bar,), daemon=True, name="emma-ui-updates").start()
     log.info("emma_ui_started", http=_HTTP_URL, ws=_WS_URL)
     if show:
         AppHelper.callAfter(bar.openWindow_, None)

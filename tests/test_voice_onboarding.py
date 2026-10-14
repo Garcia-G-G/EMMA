@@ -131,12 +131,15 @@ async def test_voice_changed_renders_the_clips_off_the_loop(monkeypatch: pytest.
 def test_the_onboarding_page_has_no_key_field() -> None:
     """Keys go through native secure fields (emma/ui), never this page."""
     html = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
-    pane = html[html.index('<div id="ob-voice"'):html.index('<div id="ob-account"')]
+    pane = html[html.index('<div id="ob-voice"'):html.index('<div id="ob-license"')]
     assert "<input" not in pane
-    for action in ("enter_voice_key", "choose_voice", "enter_openrouter_key"):
+    ui = (ROOT / "emma" / "ui" / "__main__.py").read_text(encoding="utf-8")
+    for action in ("enter_voice_key", "choose_voice"):
         assert f'"{action}"' in html
-        assert action in (ROOT / "emma" / "ui" / "__main__.py").read_text(encoding="utf-8")
-    assert "todavía no se usa" in pane.lower()
+        assert action in ui
+    # Step 40: OpenRouter has no use yet, so onboarding doesn't ask for it; the
+    # native path stays behind OPENROUTER_MENU for BRAIN-2.
+    assert "enter_openrouter_key" not in html and "enter_openrouter_key" in ui
 
 
 def test_the_backend_never_handles_a_cascade_key() -> None:

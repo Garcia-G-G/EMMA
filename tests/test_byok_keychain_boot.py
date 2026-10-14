@@ -151,3 +151,22 @@ async def test_migrated_byok_daemon_talks_to_openai_not_the_proxy(monkeypatch):
     assert s.openai_api_key() == _BYOK_KEY
     assert s.realtime_base_url() == "wss://api.openai.com/v1/realtime"
     assert s.openai_base_url() is None
+
+
+def test_leftover_openai_key_hides_no_other_credential(monkeypatch):
+    """Step 40: OPENAI_API_KEY set (old .env / shell profile), GITHUB_TOKEN only in
+    Keychain -> the GitHub tools are still available."""
+    monkeypatch.setattr(
+        "core.secrets.retrieve_sync",
+        lambda label: {"GITHUB_TOKEN": "ghp_" + "g" * 36}.get(label),
+        raising=True,
+    )
+    blank = dict.fromkeys(settings_mod._CREDENTIAL_FIELDS, "")
+    blank["OPENAI_API_KEY"] = _BYOK_KEY
+    s = Settings(_env_file=None, **blank)  # type: ignore[arg-type]
+    assert s.GITHUB_TOKEN == "ghp_" + "g" * 36
+
+    from tools import github_tool
+
+    monkeypatch.setattr(github_tool, "settings", s)
+    assert github_tool.available() is True

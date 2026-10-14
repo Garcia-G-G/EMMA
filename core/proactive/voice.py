@@ -1,5 +1,8 @@
-"""Open a synthetic Pipecat session so Emma can speak unprompted in her real
-voice (not the macOS ``say`` fallback).
+"""Let Emma speak unprompted in her real voice.
+
+On the cascade (the default) that is ``core.voice``: cached clip or ElevenLabs
+TTS, no session. On ``VOICE_BACKEND=realtime`` it opens a synthetic Pipecat
+session, as below.
 
 The session reuses ``core.conversation.build_pipeline`` and seeds the LLM context
 with a single user turn wrapped in ``<UNPROMPTED_SPEECH>...</UNPROMPTED_SPEECH>``.
@@ -28,7 +31,8 @@ log = structlog.get_logger("emma.proactive.voice")
 
 
 async def speak_unprompted(text: str) -> None:
-    """Emma speaks ``text`` aloud via a one-shot Realtime session.
+    """Emma speaks ``text`` aloud: core.voice on the cascade, else a one-shot
+    Realtime session.
 
     Never raises — any failure is logged and swallowed (the caller already
     delivered a notification). The session is hard-capped by
@@ -36,6 +40,19 @@ async def speak_unprompted(text: str) -> None:
     """
     text = (text or "").strip()
     if not text:
+        return
+    if settings.VOICE_BACKEND != "realtime":
+        # Step 40: the cascade speaks through Emma's own TTS (core.voice) and
+        # never opens a Realtime session, whatever OpenAI key is lying around.
+        from core import voice
+
+        try:
+            spoken = await voice.speak(text, keep=False)
+        except Exception as exc:
+            log.error("proactive_voice_failed", backend="cascade", error=str(exc))
+            return
+        if not spoken:
+            log.warning("proactive_voice_failed", backend="cascade", reason="not_spoken")
         return
     if not settings.openai_api_key():
         log.warning("proactive_voice_skipped", reason="no_openai_key")

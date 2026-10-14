@@ -173,4 +173,6 @@ def test_a_leftover_openai_key_does_not_hide_the_elevenlabs_key(
     blank["OPENAI_API_KEY"] = "sk-leftover-" + "x" * 30
     s = settings_mod.Settings(_env_file=None, **blank)  # type: ignore[arg-type]
     assert s.ELEVENLABS_API_KEY == "sk_from_keychain"
-    assert reads == ["ELEVENLABS_API_KEY"]  # still dormant otherwise: one Keychain read
+    # Step 40: every other blank credential is read too (OpenAI is already set).
+    assert "OPENAI_API_KEY" not in reads
+    assert set(reads) == set(settings_mod._CREDENTIAL_FIELDS) - {"OPENAI_API_KEY"}

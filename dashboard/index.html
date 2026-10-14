@@ -162,11 +162,7 @@
   .fact .del:hover { color:var(--bad); background:var(--raised); }
   .empty { padding:26px 0; text-align:center; color:var(--dim); font-size:13px; }
 
-  /* ---- Uso --------------------------------------------------------- */
-  .meter { height:7px; background:var(--line); border-radius:4px; overflow:hidden; margin:10px 0 6px; }
-  .meter i { display:block; height:100%; background:var(--atom); border-radius:4px; transition:width .4s; }
-  .meter.low i { background:var(--warn); }
-  .meter.out i { background:var(--bad); }
+  /* ---- figures ----------------------------------------------------- */
   .big { font-size:30px; font-weight:650; letter-spacing:-.01em; }
   .stale { color:var(--warn); font-size:12px; margin-top:8px; }
 
@@ -185,28 +181,8 @@
      sections are places, not steps — they get no numbering. */
   .steps i { width:22px; height:2px; border-radius:2px; background:var(--line); }
   .steps i.on { background:var(--atom); }
-  .code {
-    font-family:var(--mono); font-size:26px; letter-spacing:.22em;
-    padding:14px 18px; background:var(--raised); border:1px solid var(--line);
-    border-radius:10px; display:inline-block; margin-top:6px;
-  }
   .fail { color:var(--bad); font-size:13px; margin-top:14px; }
-  /* The onboarding fork: two options presented as equals, not as an upsell and
-     a footnote. Each states its own cost and its own limitation. */
-  .tiers { display:grid; gap:12px; margin-top:20px; text-align:left; }
-  @media (min-width: 760px) { .tiers { grid-template-columns:1fr 1fr; } }
-  .tier {
-    display:flex; flex-direction:column; gap:8px; padding:18px 18px 16px;
-    background:var(--raised); border:1px solid var(--line); border-radius:12px;
-    color:inherit; font:inherit; text-align:left; cursor:pointer;
-    transition:border-color .15s ease, transform .15s ease;
-  }
-  .tier:hover, .tier:focus-visible { border-color:var(--accent); transform:translateY(-1px); }
-  .tier-t { font-weight:650; font-size:15px; }
-  .tier-d { font-size:13px; color:var(--muted); line-height:1.5; }
-  .tier-warn { font-size:12px; color:var(--muted); opacity:.85; line-height:1.5; }
-  /* The manual pairing fallback: must be readable and selectable, so it is
-     text with user-select on, never a link that depends on window.open. */
+  /* URLs the user copies by hand: readable and selectable text, not links. */
   .url {
     font-family:var(--mono); color:var(--text); background:var(--raised);
     border:1px solid var(--line); border-radius:6px; padding:3px 8px;
@@ -236,57 +212,14 @@
     <div id="ob-welcome">
       <h2>Emma vive en tu Mac</h2>
       <p>Vamos a activarla. Toma menos de un minuto.</p>
-      <div class="actions"><button class="btn" id="ob-start">Empezar</button></div>
-    </div>
-
-    <!-- LAUNCH-11 Part 3: the fork. Written to be chosen from, not sold at —
-         each option says what it costs and what it gives up. -->
-    <div id="ob-choose" hidden>
-      <h2>¿Cómo quieres pagar el uso?</h2>
-      <p>Las dos opciones usan la misma Emma. Lo único que cambia es quién le paga a OpenAI.</p>
-      <div class="tiers">
-        <button class="tier" id="ob-pick-byok">
-          <span class="tier-t">Traigo mi propia key</span>
-          <span class="tier-d">
-            Le pagas a OpenAI directo por lo que uses. Tu key se guarda en el
-            Keychain de tu Mac y <b>Emma nunca la ve</b>: las llamadas van de tu
-            Mac a OpenAI, sin pasar por nosotros.
-          </span>
-          <span class="tier-warn">
-            Por eso mismo, <b>Emma no puede decirte cuánto llevas gastado</b>.
-            Eso lo ves en tu panel de OpenAI.
-          </span>
-        </button>
-        <button class="tier" id="ob-pick-managed">
-          <span class="tier-t">Que Emma se encargue</span>
-          <span class="tier-d">
-            Sin keys ni configuración. Creas tu cuenta, vinculas esta Mac y ya.
-            Empiezas con <b>90 segundos gratis</b> para probarla.
-          </span>
-          <span class="tier-warn">Aquí sí ves tus minutos y tu gasto en la app.</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- BYO key. The field itself is NATIVE (emma/ui) — a Secret-tier value
-         never goes into this page. This pane only explains and triggers. -->
-    <div id="ob-key" hidden>
-      <h2>Tu API key de OpenAI</h2>
-      <p>Se abre una ventana del sistema para que la pegues. Se guarda en tu
-         Keychain; no se escribe en esta página ni sale de tu Mac.</p>
       <div class="actions">
-        <button class="btn" id="ob-key-open">Pegar mi key</button>
-        <span class="small muted" id="ob-key-status"></span>
+        <button class="btn" id="ob-start">Empezar</button>
+        <span class="small muted" id="ob-start-status"></span>
       </div>
-      <p class="small muted">
-        ¿No tienes una? Créala en <span class="url">platform.openai.com/api-keys</span>
-        y vuelve aquí.
-      </p>
-      <div class="fail" id="ob-key-fail" hidden></div>
     </div>
 
     <!-- VOICE-1 Part 5: the cascade's onboarding. Keys go through NATIVE fields
-         (emma/ui), exactly like the OpenAI key above; this pane explains and
+         (emma/ui): a Secret-tier value never enters this page. It explains and
          triggers, and learns only masked hints via `voice_status`. -->
     <div id="ob-voice" hidden>
       <h2>ElevenLabs: cómo te oye y te habla</h2>
@@ -302,32 +235,7 @@
         ¿No tienes una? Créala en <span class="url">elevenlabs.io → Developers → API Keys</span>
         y vuelve aquí. Tú le pagas a ElevenLabs lo que uses.
       </p>
-      <p class="small muted">
-        Opcional: key de OpenRouter. Todavía no se usa; la guardamos para cuando
-        Emma llame a un modelo.
-        <button class="btn ghost" id="ob-voice-or">Pegar key de OpenRouter</button>
-      </p>
       <div class="fail" id="ob-voice-fail" hidden></div>
-    </div>
-
-    <div id="ob-account" hidden>
-      <h2>Conecta tu cuenta</h2>
-      <p>Abrimos tu navegador para que inicies sesión. Emma nunca te pide la
-         contraseña aquí.</p>
-      <div class="code" id="ob-code">····—····</div>
-      <div class="actions">
-        <button class="btn" id="ob-open">Abrir el navegador</button>
-        <span class="small muted" id="ob-poll">Esperando a que confirmes…</span>
-      </div>
-      <!-- Belt and braces (LAUNCH-10 Part 3): the manual path. If the browser
-           does not open for any reason, the code alone is useless without
-           somewhere to type it — this pane used to show one and not the other,
-           which left onboarding with no recovery at all. Selectable text. -->
-      <p class="small muted" id="ob-manual" hidden>
-        ¿No se abrió? Entra a esta dirección y escribe el código:<br>
-        <span class="url" id="ob-url"></span>
-      </p>
-      <div class="fail" id="ob-fail" hidden></div>
     </div>
 
     <div id="ob-license" hidden>
@@ -343,8 +251,7 @@
 
     <div id="ob-ready" hidden>
       <h2>Listo</h2>
-      <p>Tienes <b>90 segundos gratis</b> este mes para probarla.
-         Di <b>Emma</b> en voz alta y empieza.</p>
+      <p>Di <b>Emma</b> en voz alta y empieza.</p>
       <div class="actions"><button class="btn" id="ob-done">Entendido</button></div>
     </div>
 
@@ -373,10 +280,7 @@
     <button class="tab" data-tab="ahora"        aria-current="true">Ahora</button>
     <button class="tab" data-tab="personalidad">Personalidad</button>
     <button class="tab" data-tab="memoria">Memoria</button>
-    <button class="tab" data-tab="uso">
-      <span>Uso</span><span class="pip" id="uso-pip" hidden></span>
-    </button>
-    <button class="tab" data-tab="cuenta">Cuenta</button>
+    <button class="tab" data-tab="version">Versión</button>
 
     <div class="spacer"></div>
     <div class="foot mono small" id="conn">conectando…</div>
@@ -439,76 +343,19 @@
       </div>
     </section>
 
-    <!-- ----------------------------- USO ------------------------------- -->
-    <section id="tab-uso" hidden>
+    <!-- --------------------------- VERSIÓN ---------------------------- -->
+    <section id="tab-version" hidden>
       <div class="head">
-        <div class="eyebrow">Uso</div>
-        <h2>Tus minutos</h2>
-        <p>Emma cobra por el tiempo que la escuchas hablar, no por estar encendida.</p>
-      </div>
-      <div class="card">
-        <div class="between">
-          <div>
-            <div class="big" id="u-left">—</div>
-            <div class="small muted" id="u-sub">minutos disponibles</div>
-          </div>
-          <button class="btn" id="btn-buy" hidden>Comprar minutos</button>
-        </div>
-        <div class="meter" id="u-meter"><i style="width:0%"></i></div>
-        <div class="small muted" id="u-detail">Cargando…</div>
-        <div class="stale" id="u-stale" hidden></div>
-      </div>
-      <div class="card" id="u-outbox" hidden>
-        <div style="font-weight:600;color:var(--warn)">Se acabaron tus minutos gratis del mes</div>
-        <p class="small muted" style="margin-top:6px">
-          Emma deja de responder hasta que consigas más. Nada se cobra solo:
-          la compra ocurre en tu navegador y tú la confirmas.</p>
-        <button class="btn" id="btn-buy2" style="margin-top:12px">Comprar minutos</button>
-      </div>
-    </section>
-
-    <!-- ---------------------------- CUENTA ----------------------------- -->
-    <section id="tab-cuenta" hidden>
-      <div class="head">
-        <div class="eyebrow">Cuenta</div>
+        <div class="eyebrow">Versión</div>
         <h2>Esta Mac</h2>
-        <p>Emma está vinculada a tu cuenta. Puedes desvincularla cuando quieras.</p>
+        <p>Emma corre en tu Mac con tu key de ElevenLabs. No hay cuenta que vincular.</p>
       </div>
       <div class="card">
-        <div class="between"><span class="muted">Cuenta</span><span class="mono" id="c-email">—</span></div>
-        <div class="between" style="margin-top:9px"><span class="muted">Plan</span><span class="mono" id="c-plan">—</span></div>
-        <div class="between" style="margin-top:9px"><span class="muted">Estado</span><span class="mono" id="c-state">—</span></div>
-        <div class="between" style="margin-top:9px"><span class="muted">Versión</span><span class="mono" id="c-ver">—</span></div>
+        <div class="between"><span class="muted">Versión</span><span class="mono" id="c-ver">—</span></div>
         <div class="stale" id="c-stale" hidden></div>
-      </div>
-      <!-- LAUNCH-11 Part 3: both tiers reachable AFTER onboarding. Someone who
-           started managed and hit the cost wall must be able to switch to their
-           own key without reinstalling, and vice versa. -->
-      <div class="card" id="c-mode-card">
-        <div class="between">
-          <div><div style="font-weight:600">Cómo se paga el uso</div>
-               <div class="small muted" id="c-mode-desc">—</div></div>
-          <span class="mono" id="c-key-hint"></span>
-        </div>
         <div class="actions" style="margin-top:12px">
-          <button class="btn ghost" id="btn-use-byok">Usar mi propia key</button>
-          <button class="btn ghost" id="btn-use-managed" hidden>Que Emma se encargue</button>
-          <button class="btn ghost" id="btn-drop-key" hidden>Quitar mi key</button>
-        </div>
-        <div class="small muted" id="c-mode-note" style="margin-top:10px"></div>
-      </div>
-      <div class="card">
-        <div class="between">
-          <div><div style="font-weight:600">Panel web</div>
-               <div class="small muted">Facturación, dispositivos y descargas.</div></div>
-          <button class="btn ghost" id="btn-web">Abrir</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="between">
-          <div><div style="font-weight:600">Desvincular esta Mac</div>
-               <div class="small muted">Emma deja de responder aquí hasta que la vuelvas a vincular.</div></div>
-          <button class="btn danger" id="btn-unpair">Desvincular</button>
+          <button class="btn ghost" id="btn-update">Buscar actualizaciones</button>
+          <span class="small muted" id="c-update-status"></span>
         </div>
       </div>
     </section>
@@ -569,8 +416,7 @@ document.querySelectorAll("nav .tab").forEach((b) => {
     document.querySelectorAll("main section").forEach((s) => { s.hidden = true; });
     $("#tab-" + b.dataset.tab).hidden = false;
     if (b.dataset.tab === "memoria") loadFacts();
-    if (b.dataset.tab === "uso") loadBalance();
-    if (b.dataset.tab === "cuenta") { loadBalance(); loadVersion(); }
+    if (b.dataset.tab === "version") loadVersion();
   });
 });
 
@@ -584,7 +430,7 @@ function setState(state) {
 }
 const BUCKET = { waiting_for_wake:"idle", listening:"listening", thinking:"thinking",
                  speaking:"speaking", responding:"speaking", snoozing:"snoozing",
-                 muted:"muted", needs_onboarding:"idle", out_of_minutes:"idle" };
+                 muted:"muted", needs_onboarding:"idle" };
 
 /* ---- live state ------------------------------------------------------ */
 let evtWS = null;
@@ -596,12 +442,11 @@ function connectEvents() {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.type === "state") {
       if (m.state === "needs_onboarding") { showOnboarding(); return; }
-      if (m.state === "out_of_minutes") { outOfMinutes(); return; }
       hideOnboarding();
       setState(BUCKET[m.state] || "idle");
     }
-    if (m.type === "wake") { $("#s-wakes").textContent = (+$("#s-wakes").textContent + 1); }
-    if (m.type === "tool_call") { $("#s-tools").textContent = (+$("#s-tools").textContent + 1); }
+    if (m.type === "wake_detected") { $("#s-wakes").textContent = (+$("#s-wakes").textContent + 1); }
+    if (m.type === "tool_completed") { $("#s-tools").textContent = (+$("#s-tools").textContent + 1); }
   };
 }
 
@@ -670,92 +515,50 @@ function renderFacts() {
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
 
-/* ---- Uso / Cuenta ----------------------------------------------------
-   OUT is the daemon's verdict, and it outranks a balance read: the daemon
-   checks the authoritative balance route after a session, so if it says the
-   minutes are gone, a read that comes back empty (offline, unpaired) must not
-   quietly clear the alarm. Only a real balance with minutes left does that. */
-let OUT = false;
-async function loadBalance() {
-  const r = await control({ cmd: "balance" });
-  const b = r && r.balance;
-  $("#c-state").textContent = r && r.reason === "unpaired" ? "sin vincular" : "vinculada";
-  if (!b) {
-    // No balance at all — not even a cached one. Clear the whole panel, alarm
-    // state included: leaving "se acabaron tus minutos" up next to an em-dash
-    // would assert something we have no evidence for.
-    $("#u-detail").textContent = r && r.reason === "unpaired"
-      ? "Vincula esta Mac para ver tus minutos."
-      : "No pudimos consultar tus minutos.";
-    $("#u-left").textContent = "—";
-    $("#u-meter").className = "meter";
-    $("#u-meter").querySelector("i").style.width = "0%";
-    $("#btn-buy").hidden = !OUT;
-    $("#uso-pip").hidden = !OUT;
-    $("#u-outbox").hidden = !OUT;
-    $("#u-stale").hidden = true;
-    return;
-  }
-  const left = Number(b.total_left_min || 0), total = Number(b.baseline_total_min || 0) + Number(b.extra_min || 0);
-  $("#u-left").textContent = left.toFixed(1);
-  $("#u-sub").textContent = "minutos disponibles";
-  $("#u-detail").textContent =
-    `Has usado ${Number(b.used_this_month_min || 0).toFixed(1)} min este mes · plan ${b.plan}`;
-  const pct = total > 0 ? Math.max(0, Math.min(100, (left / total) * 100)) : 0;
-  const meter = $("#u-meter");
-  meter.querySelector("i").style.width = pct + "%";
-  meter.className = "meter" + (left <= 0 ? " out" : pct < 20 ? " low" : "");
-  if (left > 0) OUT = false;             // a real balance is the only thing that clears it
-  const scarce = left <= 0 || pct < 20 || OUT;
-  $("#btn-buy").hidden = !scarce;
-  $("#uso-pip").hidden = !scarce;
-  $("#u-outbox").hidden = left > 0 && !OUT;
-  $("#c-plan").textContent = b.plan || "—";
-  if (b.email) $("#c-email").textContent = b.email;
-  // Offline: show what we last knew, labelled with when — never an error page.
-  if (r.stale_at) {
-    $("#u-stale").hidden = false;
-    $("#u-stale").textContent = "Sin conexión. Último dato: " + new Date(r.stale_at * 1000).toLocaleString();
-  } else { $("#u-stale").hidden = true; }
-}
+/* ---- Versión ------------------------------------------------------- */
 /* Which code is running. The stale-tarball bug was invisible for months
    because nothing anywhere said "you are not running what you think". */
 async function loadVersion() {
   const v = await control({ cmd: "version" });
-  if (!v || !v.ok) { $("#c-ver").textContent = "—"; return; }
-  $("#c-ver").textContent = v.commit || v.fingerprint || "—";
+  if (!v || !v.ok) { $("#c-ver").textContent = "—"; return v; }
+  $("#c-ver").textContent = v.ref || v.commit || v.fingerprint || "—";
   const el = $("#c-stale");
   if (v.stale === true) {
     el.hidden = false;
-    el.textContent = "Hay una versión más nueva. Vuelve a correr el instalador para actualizar.";
+    el.textContent = `Hay una versión más nueva (${v.upstream || "nueva"}). Vuelve a correr el instalador para actualizar.`;
   } else { el.hidden = true; }
+  return v;
 }
-
-function outOfMinutes() {
-  OUT = true;
-  $("#uso-pip").hidden = false;
-  $("#u-outbox").hidden = false;
-  $("#btn-buy").hidden = false;
-  setState("idle");                       // she is alive, just unable to answer
-  loadBalance();
-}
-
-/* ---- onboarding ------------------------------------------------------ */
-let PAIR = null, pollTimer = null;
-function step(n) { document.querySelectorAll("#ob-steps i").forEach((el, i) => el.classList.toggle("on", i <= n)); }
-function showOnboarding() { $("#onb").hidden = false; $("#shell").style.filter = "blur(0)"; }
-function hideOnboarding() { $("#onb").hidden = true; if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-const OB_PANES = ["ob-welcome", "ob-choose", "ob-key", "ob-voice", "ob-license", "ob-account", "ob-ready"];
-function obPane(id) { OB_PANES.forEach((x) => { $("#" + x).hidden = x !== id; }); }
-
-$("#ob-start").addEventListener("click", async () => {
-  // VOICE-1: on the cascade there is no OpenAI fork to choose from.
-  const v = await control({ cmd: "voice_status" }, 5000);
-  if (v.ok && v.backend === "cascade") { obPane("ob-voice"); step(1); paintVoice(v); return; }
-  obPane("ob-choose"); step(1);
+$("#btn-update").addEventListener("click", async () => {
+  $("#c-update-status").textContent = "Buscando…";
+  const v = await loadVersion();
+  $("#c-update-status").textContent =
+    !v || !v.ok || v.stale == null ? "No pude comprobarlo ahora." :
+    v.stale ? "" : "Tienes la última versión.";
 });
 
-/* --- the cascade (VOICE-1 Part 5): ElevenLabs key + voice, OpenRouter optional --- */
+/* ---- onboarding ------------------------------------------------------ */
+function step(n) { document.querySelectorAll("#ob-steps i").forEach((el, i) => el.classList.toggle("on", i <= n)); }
+function showOnboarding() { $("#onb").hidden = false; $("#shell").style.filter = "blur(0)"; }
+function hideOnboarding() { $("#onb").hidden = true; }
+const OB_PANES = ["ob-welcome", "ob-voice", "ob-license", "ob-ready"];
+function obPane(id) { OB_PANES.forEach((x) => { $("#" + x).hidden = x !== id; }); }
+
+/* Step 40: one product, one path. A slow or failed voice_status is retried,
+   never routed to a different onboarding. */
+$("#ob-start").addEventListener("click", async () => {
+  const btn = $("#ob-start"), st = $("#ob-start-status");
+  btn.disabled = true; st.textContent = "";
+  for (let i = 0; i < 3; i++) {
+    const v = await control({ cmd: "voice_status" }, 5000);
+    if (v.ok) { btn.disabled = false; obPane("ob-voice"); step(1); paintVoice(v); return; }
+    st.textContent = "Conectando con Emma…";
+  }
+  btn.disabled = false;
+  st.textContent = "Emma no responde todavía. Pulsa Empezar de nuevo en unos segundos.";
+});
+
+/* --- the cascade (VOICE-1 Part 5): ElevenLabs key + voice --- */
 function nativeAsk(action) {
   try { window.webkit.messageHandlers.emma.postMessage(action); }
   catch (_) {
@@ -768,44 +571,14 @@ function paintVoice(v) {
   const parts = [];
   if (v.elevenlabs_hint) parts.push("Key " + v.elevenlabs_hint);
   if (v.voice_id) parts.push("voz elegida");
-  if (v.openrouter_hint) parts.push("OpenRouter " + v.openrouter_hint);
   $("#ob-voice-status").textContent = parts.join(" · ");
   $("#ob-voice-pick").disabled = !v.elevenlabs_hint;
 }
 $("#ob-voice-key").addEventListener("click", () => nativeAsk("enter_voice_key"));
 $("#ob-voice-pick").addEventListener("click", () => nativeAsk("choose_voice"));
-$("#ob-voice-or").addEventListener("click", () => nativeAsk("enter_openrouter_key"));
 window.__emmaVoiceStatus = (text) => { $("#ob-voice-status").textContent = text || ""; };
 window.__emmaVoiceSaved = () => { obPane("ob-license"); step(2); };
 
-/* --- the fork (LAUNCH-11 Part 3) --- */
-$("#ob-pick-byok").addEventListener("click", () => {
-  obPane("ob-key"); step(1);
-  $("#ob-key-fail").hidden = true;
-  $("#ob-key-status").textContent = "";
-});
-$("#ob-pick-managed").addEventListener("click", () => startManaged());
-
-/* The field is NATIVE. This only asks the host process to show it — the key
-   never enters this page, so there is nothing here to leak. */
-function askForKey() {
-  try {
-    window.webkit.messageHandlers.emma.postMessage("enter_key");
-  } catch (_) {
-    const el = $("#ob-key-fail");
-    el.hidden = false;
-    el.textContent = "Abre Emma desde el icono de la barra de menú para pegar tu key.";
-  }
-}
-$("#ob-key-open").addEventListener("click", askForKey);
-
-/* Called by emma/ui after the native panel resolves. */
-window.__emmaKeyStatus = (text) => { $("#ob-key-status").textContent = text || ""; };
-window.__emmaKeySaved = () => {
-  $("#ob-key-status").textContent = "Listo.";
-  obPane("ob-license"); step(2);
-  loadMode();
-};
 window.__emmaLicenseStatus = (text) => { $("#ob-lic-status").textContent = text || ""; };
 function askForLicense() {
   try { window.webkit.messageHandlers.emma.postMessage("enter_license"); } catch (_) {}
@@ -815,110 +588,18 @@ $("#ob-lic-open").addEventListener("click", askForLicense);
    bought yet is not locked out of the thing they just configured. */
 $("#ob-lic-skip").addEventListener("click", () => { obPane("ob-ready"); step(2); });
 
-async function startManaged() {
-  obPane("ob-account"); step(1);
-  $("#ob-fail").hidden = true;
-  const r = await control({ cmd: "pair_start" });
-  if (!r.ok) { fail("No pudimos pedir el código. Revisa tu conexión."); return; }
-  PAIR = r;
-  $("#ob-code").textContent = r.user_code || "————";
-  showManualUrl(r.verify_url);
-  openBrowser(r.verify_url);
-  startPolling();
-}
-$("#ob-open").addEventListener("click", () => { if (PAIR) openBrowser(PAIR.verify_url); });
 $("#ob-done").addEventListener("click", hideOnboarding);
-
-function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  const every = Math.max(2, (PAIR && PAIR.interval) || 5) * 1000;
-  const deadline = Date.now() + ((PAIR && PAIR.expires_in) || 600) * 1000;
-  pollTimer = setInterval(async () => {
-    if (Date.now() > deadline) { fail("El código caducó. Pide uno nuevo."); return; }
-    const r = await control({ cmd: "pair_poll", device_code: PAIR.device_code,
-                              interval: PAIR.interval, expires_in: PAIR.expires_in });
-    if (r.status === "paired") { clearInterval(pollTimer); pollTimer = null; obPane("ob-ready"); step(2); }
-    else if (r.status === "expired") fail("El código caducó. Pide uno nuevo.");
-    else if (r.status === "denied") fail("Se canceló la vinculación.");
-    else if (r.status === "network_error") $("#ob-poll").textContent = "Sin conexión. Reintentando…";
-    else $("#ob-poll").textContent = "Esperando a que confirmes…";
-  }, every);
-}
-function fail(msg) {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  const el = $("#ob-fail");
-  el.hidden = false;
-  el.innerHTML = esc(msg) + ' <button class="btn ghost" style="margin-left:8px" id="ob-retry">Reintentar</button>';
-  $("#ob-retry").addEventListener("click", () => $("#ob-start").click());
-}
-/* The system browser, never the WebView: this is the full web auth stack,
-   OAuth included, and a password must never be typed into a window Emma owns.
-   In the app window this reaches the system browser via the WKUIDelegate
-   (emma/ui/__main__.py); in a real browser tab it is an ordinary popup. */
-function openBrowser(url) { if (url) window.open(url, "_blank"); }
-
-/* The manual path, always shown — never conditional on window.open having
-   worked, because there is no reliable way to detect that it did not. */
-function showManualUrl(url) {
-  if (!url) return;
-  $("#ob-url").textContent = String(url).replace(/^https?:\/\//, "");
-  $("#ob-manual").hidden = false;
-}
 
 /* ---- actions --------------------------------------------------------- */
 $("#btn-mute").addEventListener("click", async () => {
   await control({ cmd: document.body.dataset.state === "muted" ? "unmute" : "mute" });
 });
 $("#mem-q").addEventListener("input", renderFacts);
-const DASH = "https://theemmafamily.com/dashboard";
-$("#btn-buy").addEventListener("click", () => openBrowser(DASH));
-$("#btn-buy2").addEventListener("click", () => openBrowser(DASH));
-$("#btn-web").addEventListener("click", () => openBrowser(DASH));
-/* --- tier, switchable after onboarding (LAUNCH-11 Part 3) --- */
-const MODE_DESC = {
-  byok: "Tu propia key de OpenAI. Las llamadas van directo de tu Mac a OpenAI.",
-  managed: "Emma se encarga. Ves tus minutos y tu gasto en esta app.",
-  unconfigured: "Todavía no eliges. Emma no puede responder hasta que lo hagas.",
-};
-const MODE_NOTE = {
-  byok: "Emma no puede decirte cuánto llevas gastado — eso lo ves en tu panel de OpenAI.",
-  managed: "",
-  unconfigured: "",
-};
-async function loadMode() {
-  const r = await control({ cmd: "mode" });
-  if (!r || !r.mode) return;
-  $("#c-mode-desc").textContent = MODE_DESC[r.mode] || "—";
-  $("#c-mode-note").textContent = MODE_NOTE[r.mode] || "";
-  $("#c-key-hint").textContent = r.key_hint || "";
-  const byok = r.mode === "byok";
-  $("#btn-use-byok").hidden = byok;
-  $("#btn-drop-key").hidden = !byok;
-  $("#btn-use-managed").hidden = !byok;
-}
-$("#btn-use-byok").addEventListener("click", askForKey);
-$("#btn-drop-key").addEventListener("click", () => {
-  try { window.webkit.messageHandlers.emma.postMessage("clear_key"); } catch (_) {}
-  setTimeout(loadMode, 900);
-});
-$("#btn-use-managed").addEventListener("click", () => {
-  try { window.webkit.messageHandlers.emma.postMessage("clear_key"); } catch (_) {}
-  setTimeout(() => { showOnboarding(); startManaged(); }, 900);
-});
-
-$("#btn-unpair").addEventListener("click", async () => {
-  if (!confirm("¿Desvincular esta Mac? Emma dejará de responder hasta que la vuelvas a vincular.")) return;
-  await control({ cmd: "unpair" });
-  showOnboarding(); obPane("ob-welcome"); step(0);
-});
-
 /* ---- boot ------------------------------------------------------------ */
 connectEvents();
 loadPersonality();
 loadFacts();
-loadBalance();
 loadVersion();
-loadMode();
 control({ cmd: "status" }).then((r) => { if (r && r.muted) setState("muted"); });
 window.__emma_painted = true;   // the render watchdog's sentinel
 </script>

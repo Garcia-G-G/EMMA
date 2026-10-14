@@ -21,8 +21,9 @@ Three signals, cheapest first, none of which need the network:
   have caught the original bug: two machines running the same code share a
   fingerprint, and a stale one differs from the repo's.
 
-``upstream_head()`` adds a network comparison for ``emma.permissions check``.
-It is never called at boot — a daemon must not need GitHub to start.
+``latest_tag()`` adds a network comparison for ``emma.permissions check``, the
+app's Versión panel and the menubar's daily check. It is never called at boot —
+a daemon must not need GitHub to start.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -49,8 +51,7 @@ _FINGERPRINT_FILES = (
     "core/pairing.py",
 )
 
-_REPO = "theemmafamily/emma"
-_BRANCH = "main"
+_REPO = "theemmafamily/EMMA"
 
 
 def source_dir() -> Path:
@@ -139,41 +140,56 @@ def boot_line() -> dict[str, Any]:
     return out
 
 
-async def upstream_head(timeout_s: float = 6.0) -> str | None:
-    """The commit the release channel is currently serving, or None.
+def _parse_tag(tag: str | None) -> tuple[int, ...] | None:
+    """``v0.4.1`` / ``v0.4.1-12-gabc`` (git describe) -> (0, 4, 1). None otherwise."""
+    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)(?:$|-)", (tag or "").strip())
+    return tuple(int(x) for x in m.groups()) if m else None
 
-    Best-effort and explicitly opt-in: called by ``emma.permissions check`` and
-    the app's Cuenta panel, NEVER at boot. A daemon that needs GitHub reachable
-    in order to start is a worse daemon.
+
+async def latest_tag(timeout_s: float = 6.0) -> str | None:
+    """The newest release tag on the public repo, or None.
+
+    Step 40: users install a PINNED TAG, so "is there something newer" means a
+    newer tag, not a newer commit on ``main`` (which compared against unreleased
+    work and called every install stale). Best-effort and never at boot.
     """
     try:
         import httpx
 
-        url = f"https://api.github.com/repos/{_REPO}/commits/{_BRANCH}"
+        url = f"https://api.github.com/repos/{_REPO}/tags?per_page=100"
         async with httpx.AsyncClient(timeout=timeout_s) as c:
-            r = await c.get(url, headers={"Accept": "application/vnd.github.sha"})
+            r = await c.get(url, headers={"Accept": "application/vnd.github+json"})
             if r.status_code != 200:
                 return None
-            sha = r.text.strip()
-            return sha[:12] if sha else None
+            tags = [t.get("name", "") for t in r.json() if isinstance(t, dict)]
     except Exception as exc:
-        log.debug("upstream_head_failed", error=str(exc))
+        log.debug("latest_tag_failed", error=str(exc))
         return None
+    parsed = [(v, t) for t in tags if (v := _parse_tag(t)) is not None]
+    return max(parsed)[1] if parsed else None
+
+
+def installed_tag(local: dict[str, Any] | None = None) -> str | None:
+    """The release this installation is, if it is one: the installer's recorded
+    ref, else (dev checkout) the tag ``git describe`` is based on."""
+    local = local or report()
+    for cand in (local.get("ref"), local.get("commit")):
+        if _parse_tag(cand):
+            return str(cand)
+    return None
 
 
 async def staleness(timeout_s: float = 6.0) -> dict[str, Any]:
-    """Local version + the upstream head + a verdict.
+    """Local version + the latest release tag + a verdict.
 
     ``stale`` is True / False / None, and None genuinely means "couldn't tell"
-    (offline, or a tarball with no recorded commit) rather than "fine". Saying
-    "up to date" when we don't know is exactly the failure this module exists
-    to prevent.
+    (offline, or an install whose stamp names no release: ``main``, ``unknown``)
+    rather than "fine" or "stale". Saying either when we don't know is exactly
+    the failure this module exists to prevent.
     """
     local = report()
-    head = await upstream_head(timeout_s)
-    installed = (local.get("commit") or "").lstrip("g")
-    if head is None or not installed:
-        verdict: bool | None = None
-    else:
-        verdict = not (installed.startswith(head[:7]) or head.startswith(installed[:7]))
-    return {**local, "upstream": head, "stale": verdict}
+    latest = await latest_tag(timeout_s)
+    mine = installed_tag(local)
+    have, newest = _parse_tag(mine), _parse_tag(latest)
+    verdict: bool | None = None if have is None or newest is None else newest > have
+    return {**local, "installed_tag": mine, "upstream": latest, "stale": verdict}
