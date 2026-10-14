@@ -274,6 +274,22 @@ When adding a tool or feature:
 
 The architectural rule: **no secret-tier value ever lands in `memory.db`, in logs, or in the system prompt.** See `SECURITY.md` for the full threat model.
 
+**A key in a commit is a release blocker; rotate first, then purge.**
+`scripts/check_secrets.sh` scans staged changes (pre-commit, via
+`scripts/pre_commit.sh`), every commit being pushed (pre-push) and the
+tracked tree (`tests/test_no_secrets.py`). Test fixtures are allowed only by
+exact value in `.secrets-allow`. Install the hooks in each clone (`_landing`
+carries its own copy):
+
+```sh
+ln -sf ../../scripts/pre_commit.sh .git/hooks/pre-commit
+ln -sf ../../scripts/check_secrets.sh .git/hooks/pre-push
+git config user.name Emma; git config user.email hello@theemmafamily.com
+```
+
+The pre-commit hook also rejects any author or committer other than
+`Emma <hello@theemmafamily.com>`.
+
 ## Background tasks convention (mandatory)
 
 Any tool that may take more than ~3 seconds, or that fires a subprocess the user

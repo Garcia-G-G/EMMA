@@ -46,3 +46,5 @@ backend_emma.db
 CLAUDE.md
 .claude/
 _backups/
+*.pem
+*.key
