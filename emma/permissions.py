@@ -18,6 +18,7 @@ import asyncio
 from core import permissions
 
 _MODE_HELP = {
+    "local": "the cascade: your own ElevenLabs key, no account, no pairing",
     "byok": "your own OpenAI key, direct — the backend is never contacted",
     "managed": "paired device token via the Emma proxy",
     "unconfigured": "no key and no pairing yet — open the app to choose a tier",

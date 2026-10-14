@@ -220,3 +220,15 @@ def test_byok_daemon_never_contacts_the_managed_backend(monkeypatch):
     # And nothing it would dial resolves to the backend.
     assert _BACKEND_HOST not in s.realtime_base_url()
     assert _BACKEND_HOST not in (s.openai_base_url() or "")
+
+
+def test_cascade_is_local_never_managed(monkeypatch):
+    """Step 40: the cascade has no account and no pairing, even with the flag set
+    by an old plist or a leftover OpenAI key on disk."""
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "VOICE_BACKEND", "cascade")
+    monkeypatch.setenv("EMMA_REQUIRE_PAIRING", "1")
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-" + "x" * 45)
+    assert settings.mode() == "local"
+    assert settings._is_managed() is False

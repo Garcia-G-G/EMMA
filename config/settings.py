@@ -40,7 +40,7 @@ _CREDENTIAL_FIELDS = (
 _BYOK_ONLY_CREDENTIALS = frozenset({"OPENAI_API_KEY", "POSTGRES_DSN", "PICOVOICE_ACCESS_KEY"})
 
 # LAUNCH-11 Part 1: the daemon's tier.
-Mode = Literal["byok", "managed", "unconfigured"]
+Mode = Literal["local", "byok", "managed", "unconfigured"]
 
 # Only the EXPENSIVE half of resolution is memoized: the pairing probe, which
 # can spawn a `security` subprocess. The key check is a field read — free, and
@@ -393,7 +393,7 @@ class Settings(BaseSettings):
 
     # ---- LAUNCH-11 Part 1: the tier is three-valued, resolved once -----------
     def mode(self) -> Mode:
-        """Which tier this daemon is running: byok | managed | unconfigured.
+        """Which tier this daemon is running: local | byok | managed | unconfigured.
 
         "Managed" used to be inferred from the absence of a key. With two
         SUPPORTED tiers that inference is no longer enough — a user with no key
@@ -418,6 +418,11 @@ class Settings(BaseSettings):
         """
         import os
 
+        # Step 40: the cascade (VOICE-1) has no account, no pairing and no OpenAI
+        # tier. Its only credential is the user's own ElevenLabs key, so the
+        # honest word is "local" whatever else happens to be on disk.
+        if self.VOICE_BACKEND != "realtime":
+            return "local"
         forced = os.environ.get("EMMA_REQUIRE_PAIRING", "").lower() in ("1", "true", "yes")
         if not forced and self.OPENAI_API_KEY:
             return "byok"
@@ -444,7 +449,7 @@ class Settings(BaseSettings):
         the absence of a key still resolves away from BYOK without needing the
         flag.
         """
-        return self.mode() != "byok"
+        return self.mode() in ("managed", "unconfigured")
 
     def openai_api_key(self) -> str:
         """Bearer for OpenAI calls: the paired device token (managed) or the local

@@ -290,6 +290,9 @@ def _wake_preflight(log: structlog.BoundLogger) -> int | None:
     )
 
 
+_UI_ALREADY_RUNNING = 3  # emma.ui.ALREADY_RUNNING (not imported: it pulls in AppKit)
+
+
 async def _supervise_ui(log: structlog.BoundLogger) -> None:
     """Spawn the menubar UI (`python -m emma.ui`) and respawn it if it dies.
 
@@ -333,8 +336,12 @@ async def _supervise_ui(log: structlog.BoundLogger) -> None:
                 proc.terminate()
             raise
         # A UI that ran a healthy while → reset to fast respawn; a rapid exit
-        # (crash loop) → escalate the wait up to the cap.
-        backoff = min_backoff if (time.monotonic() - started) >= healthy_s else min(backoff * 2, max_backoff)
+        # (crash loop) → escalate the wait up to the cap. Another instance
+        # already owning the menubar (exit 3) is not a crash: check back slowly.
+        if proc.returncode == _UI_ALREADY_RUNNING:
+            backoff = max_backoff
+        else:
+            backoff = min_backoff if (time.monotonic() - started) >= healthy_s else min(backoff * 2, max_backoff)
         log.info("emma_ui_exited", code=proc.returncode, respawn_in_s=round(backoff, 1))
         await asyncio.sleep(backoff)
 

@@ -6,8 +6,16 @@ against api.openai.com directly.
 """
 from __future__ import annotations
 
+import pytest
+
 from config.settings import settings
 from core import pairing
+
+
+@pytest.fixture(autouse=True)
+def _realtime(monkeypatch):
+    # Managed/BYOK tiers exist only on the Realtime backend; the cascade is "local".
+    monkeypatch.setattr(settings, "VOICE_BACKEND", "realtime")
 
 
 def test_dev_uses_local_key_and_openai_direct(monkeypatch):

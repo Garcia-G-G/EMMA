@@ -717,13 +717,68 @@ class _StateListener(threading.Thread):
         AppHelper.callAfter(self._bar.setState_, bucket)
 
 
-def main() -> int:
+# Step 40: exactly one menubar icon. The daemon spawns the UI, and Emma.app used
+# to start a second copy beside it (with the venv python's TCC identity). Now the
+# first instance holds this lock; any later one asks it to show its window and
+# exits with ALREADY_RUNNING, which the daemon's supervisor treats as "fine".
+ALREADY_RUNNING = 3
+SHOW_NOTIFICATION = "com.emma.ui.show"
+_LOCK_FD: int | None = None
+
+
+def _lock_path() -> str:
+    home = os.environ.get("EMMA_HOME") or os.path.expanduser("~/.emma")
+    return os.path.join(home, "ui.lock")
+
+
+def acquire_single_instance(path: str | None = None) -> bool:
+    """True if this process is now THE menubar instance (lock held for life)."""
+    import fcntl
+
+    global _LOCK_FD
+    path = path or _lock_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return False
+    _LOCK_FD = fd
+    return True
+
+
+def _post_show() -> None:
+    from Foundation import NSDistributedNotificationCenter
+
+    NSDistributedNotificationCenter.defaultCenter().postNotificationName_object_userInfo_deliverImmediately_(
+        SHOW_NOTIFICATION, None, None, True
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    import sys
+
+    args = sys.argv[1:] if argv is None else argv
+    show = "--show" in args
+    if not acquire_single_instance():
+        if show:
+            _post_show()
+        log.info("emma_ui_already_running", show=show)
+        return ALREADY_RUNNING
     app = NSApplication.sharedApplication()
     # Menubar-only: no Dock icon, no app-switcher entry.
     app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
     bar = EmmaBar.alloc().initWithPort_(_PORT)
+    from Foundation import NSDistributedNotificationCenter
+
+    NSDistributedNotificationCenter.defaultCenter().addObserver_selector_name_object_(
+        bar, "openWindow:", SHOW_NOTIFICATION, None
+    )
     _StateListener(bar, _WS_URL).start()
     log.info("emma_ui_started", http=_HTTP_URL, ws=_WS_URL)
+    if show:
+        AppHelper.callAfter(bar.openWindow_, None)
     AppHelper.runEventLoop()
     return 0
 
