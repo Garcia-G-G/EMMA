@@ -339,9 +339,18 @@ class Settings(BaseSettings):
         Once it does run, OPENAI_API_KEY is read back before ``_is_managed()``
         is consulted — see the comment below. That ordering is load-bearing.
         """
-        if self.OPENAI_API_KEY:
-            return self
         from core.secrets import retrieve_sync
+
+        if self.OPENAI_API_KEY:
+            # VOICE-1: the cascade's required credential is ElevenLabs, not
+            # OpenAI. A leftover OPENAI_API_KEY (an old .env, a shell profile)
+            # used to short-circuit this and leave the ElevenLabs key unread, so
+            # Emma parked forever with a valid key in Keychain. One read.
+            if not self.ELEVENLABS_API_KEY:
+                val = retrieve_sync("ELEVENLABS_API_KEY")
+                if val:
+                    object.__setattr__(self, "ELEVENLABS_API_KEY", val)
+            return self
 
         # ORDER IS THE WHOLE POINT (LAUNCH-10 Part 2). OPENAI_API_KEY resolves
         # FIRST and unconditionally, before anything asks which mode this is.

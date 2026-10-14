@@ -154,3 +154,23 @@ def test_no_voice_means_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not readiness.has_voice()
     monkeypatch.setattr(settings, "VOICE_ID", "abc")
     assert readiness.has_voice()
+
+
+def test_a_leftover_openai_key_does_not_hide_the_elevenlabs_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Found upgrading this Mac to v0.4.0: a shell profile still exported
+    OPENAI_API_KEY, the Keychain fill short-circuited on it, and the cascade's
+    own key was never read — the installer's voice step saw no key."""
+    reads: list[str] = []
+
+    def fake(label: str) -> str | None:
+        reads.append(label)
+        return {"ELEVENLABS_API_KEY": "sk_from_keychain"}.get(label)
+
+    monkeypatch.setattr("core.secrets.retrieve_sync", fake)
+    blank = dict.fromkeys(settings_mod._CREDENTIAL_FIELDS, "")
+    blank["OPENAI_API_KEY"] = "sk-leftover-" + "x" * 30
+    s = settings_mod.Settings(_env_file=None, **blank)  # type: ignore[arg-type]
+    assert s.ELEVENLABS_API_KEY == "sk_from_keychain"
+    assert reads == ["ELEVENLABS_API_KEY"]  # still dormant otherwise: one Keychain read
