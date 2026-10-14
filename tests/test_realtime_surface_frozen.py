@@ -18,9 +18,12 @@ from pathlib import Path
 from core import tool_selection
 from tools import registry
 
-SPECS_SHA = "b16c84964b3b3749f631b8c2ec761486156a4917cafb898a6d65085a8047d088"
+# Re-pinned in Step 40: current_time's example zones became neutral (AGENTS.md
+# rule 2); the only spec that changed. tool_selection.py: docstring-only note
+# that the payload is the Realtime backend's (Step 40 Part 4).
+SPECS_SHA = "60eb239aafd449eabba0460f2e1b425bc2b7633f706bcac040fd231d5710c576"
 CORE_SHA = "f3f81c3b86bb8bd4e71558e00ed03858823cdeb22fa36fbfa3e0cdd4c0193e8f"
-TOOL_SELECTION_SRC_SHA = "3f419a25fe8bd5b316631607ec87639628ea72da5135a4548613ac55b24a4537"
+TOOL_SELECTION_SRC_SHA = "c3d7404fc621bfb6e25c35edddf40458fffa6a5969d8adcb6fd1e4dea4cb283b"
 
 
 def _sha(obj: object) -> str:

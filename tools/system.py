@@ -97,7 +97,7 @@ def lock_screen() -> ToolResult:
 @tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
 def current_time(timezone: str | None = None) -> ToolResult:
     """Return the current time. Pass `timezone` as an IANA name
-    ("Asia/Tokyo", "America/Mexico_City") to ask about a specific city.
+    ("UTC", "Etc/GMT+5") to ask about another zone.
 
     Omit `timezone` for the user's local time.
     """

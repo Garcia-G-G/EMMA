@@ -426,7 +426,7 @@
   "type": "function",
   "function": {
    "name": "current_time",
-   "description": "Return the current time. Pass `timezone` as an IANA name\n    (\"Asia/Tokyo\", \"America/Mexico_City\") to ask about a specific city.\n\nOmit `timezone` for the user's local time.",
+   "description": "Return the current time. Pass `timezone` as an IANA name\n    (\"UTC\", \"Etc/GMT+5\") to ask about another zone.\n\nOmit `timezone` for the user's local time.",
    "parameters": {
     "type": "object",
     "properties": {
