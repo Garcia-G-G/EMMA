@@ -1,6 +1,6 @@
 # Emma
 
-> A bilingual (Spanish 🇲🇽 / English 🇺🇸), voice-activated AI assistant for macOS — fully local wake word, real actions on your machine, long-term memory, and a privacy-first secret store.
+> A bilingual (Spanish / English), voice-activated AI assistant for macOS — fully local wake word, real actions on your machine, long-term memory, and a privacy-first secret store.
 
 ![platform](https://img.shields.io/badge/platform-macOS%2014%2B-black)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)

@@ -264,9 +264,9 @@ class TestB15RememberCorrection:
         from tools.dictionary_tool import remember_stt_correction
 
         await remember_stt_correction("example handle", "examplehandle")
-        await remember_stt_correction("gilbert ata", "examplehandle")  # same canonical
+        await remember_stt_correction("exampel handel", "examplehandle")  # same canonical
         # both aliases now fold to the one canonical
-        assert vocabulary.corrections("gilbert ata") == "examplehandle"
+        assert vocabulary.corrections("exampel handel") == "examplehandle"
         assert vocabulary.corrections("example handle") == "examplehandle"
 
     @pytest.mark.asyncio

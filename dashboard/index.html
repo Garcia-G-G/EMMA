@@ -715,7 +715,7 @@ async function loadBalance() {
   // Offline: show what we last knew, labelled with when — never an error page.
   if (r.stale_at) {
     $("#u-stale").hidden = false;
-    $("#u-stale").textContent = "Sin conexión. Último dato: " + new Date(r.stale_at * 1000).toLocaleString("es-MX");
+    $("#u-stale").textContent = "Sin conexión. Último dato: " + new Date(r.stale_at * 1000).toLocaleString();
   } else { $("#u-stale").hidden = true; }
 }
 /* Which code is running. The stale-tarball bug was invisible for months

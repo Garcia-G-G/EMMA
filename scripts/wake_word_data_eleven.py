@@ -45,7 +45,7 @@ import httpx
 from config.settings import settings
 
 # Mirror the Piper script's phrases so a model trained on either dataset behaves
-# the same (Mexican-Spanish + English wake phrasing).
+# the same (Spanish + English wake phrasing).
 DEFAULT_PHRASES = ["hey emma", "oye emma", "hola emma"]
 
 # Negatives: things Emma must NOT wake on. A mix of general speech and a few

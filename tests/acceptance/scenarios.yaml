@@ -878,7 +878,7 @@
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|alex)",
+    "expected_transcript_pattern": "(example|handle)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
@@ -896,7 +896,7 @@
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|alex)",
+    "expected_transcript_pattern": "(example|handle)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
@@ -914,7 +914,7 @@
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|gacia|alex)",
+    "expected_transcript_pattern": "(example|handle)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,
@@ -1037,7 +1037,7 @@
       }
     ],
     "expected_spoken_pattern": "(repo|github|usuario)",
-    "expected_transcript_pattern": "(gilber|guilber|alex)",
+    "expected_transcript_pattern": "(example|handle)",
     "mock_spoken_text": "Tus repos: EMMA y dotfiles.",
     "max_latency_ms": 8000,
     "destructive": false,

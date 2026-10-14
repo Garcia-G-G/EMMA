@@ -7,10 +7,10 @@ Guidance for coding agents working in this repository.
 These apply to anything that ships to the public web (landing, backend HTML
 pages, OG images, README, social posts):
 
-1. **Never reference the maker by name.** No "Garcia", no "made by Garcia",
-   no "soy Garcia", no first-person maker paragraph.
-2. **Never assert a geographic origin.** No "Monterrey, MX", no "MTY", no
-   "made in <city>". The maker has not consented to that being public.
+1. **Never reference the maker by name or handle.** No "made by <name>",
+   no first-person maker paragraph. `tests/test_public_copy.py` enforces it.
+2. **Never assert a geographic origin.** No city, region, country or flag,
+   no "made in <place>". The maker has not consented to that being public.
 3. **Footer is generic.** `© 2026 emma` (or equivalent in EN). No personal
    attribution line.
 4. **No invented personal narrative.** Copy is product-focused: what Emma

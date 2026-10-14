@@ -48,7 +48,7 @@ log = structlog.get_logger("emma.wake_sherpa")
 _SAMPLE_RATE = 16000
 _BLOCK = 1600  # 100 ms chunks — frequent enough for snappy keyword decoding
 
-# Wake phrases the KWS decoder is restricted to. Mexican-Spanish + English
+# Wake phrases the KWS decoder is restricted to. Spanish + English
 # phrasing; the bare "emma" is the primary target. Each entry is
 # (phrase, threshold, boost): a lower threshold triggers more easily (the bare
 # one-word "emma" gets the most sensitive threshold since it is the hardest and

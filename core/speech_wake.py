@@ -38,7 +38,7 @@ log = structlog.get_logger("emma.speech_wake")
 _SAMPLE_RATE = 16000
 _BLOCK = 4000  # 250 ms chunks — frequent enough for snappy partial-result checks
 
-# Wake phrases the grammar is restricted to. Mexican-Spanish + English phrasing;
+# Wake phrases the grammar is restricted to. Spanish + English phrasing;
 # the bare "emma" makes it forgiving. "[unk]" lets the recognizer reject anything
 # that isn't a wake phrase instead of forcing a (wrong) match.
 WAKE_PHRASES = ("hey emma", "oye emma", "hola emma", "ey emma", "emma")

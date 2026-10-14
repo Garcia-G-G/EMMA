@@ -233,7 +233,7 @@ class Settings(BaseSettings):
     # name from the EMMA_KEYCHAIN_SERVICE environment variable.
     EMMA_KEYCHAIN_SERVICE: str = "com.garcia.emma"
 
-    # IANA tz name (e.g. "America/Mexico_City"). None -> system local.
+    # IANA tz name (e.g. "Region/City"). None -> system local.
     TIMEZONE: str | None = None
 
     # End-of-utterance VAD: required trailing silence and RMS threshold over

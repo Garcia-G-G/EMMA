@@ -210,11 +210,11 @@ Since LANDING-25.0/25.0.1, Emma is internet-facing at `api.theemmafamily.com`
   only — no IPs.
 
 ## Voice data hygiene (24.7-C1)
-the user's wake-word training set is **biometric PII** (his actual voice):
+the user's wake-word training set is **biometric PII** (their actual voice):
 - `scripts/wake_data/positive_real/*.wav` + `validation/*.wav` — local only,
   **gitignored** (never committed, verified absent from history), dir is `0700`.
-- `~/.emma/wake_models/*.onnx` — derived from his voice (Personal tier), `0700`.
-  These are his PERSONAL model and must NOT ship in any future installer payload;
+- `~/.emma/wake_models/*.onnx` — derived from their voice (Personal tier), `0700`.
+  These are that user's PERSONAL model and must NOT ship in any future installer payload;
   the `.pkg` builder (29.1) leaves an empty model dir for users to train their own.
 - **Wipe:** `python scripts/wipe_wake_data.py` overwrites every `*.wav` with
   random bytes, then deletes (best-effort secure erase; FileVault is the real

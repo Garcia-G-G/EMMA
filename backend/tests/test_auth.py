@@ -140,10 +140,10 @@ def test_register_persists_name_for_greeting(client):
     # "Hola, <name>" instead of falling back to the email.
     r = client.post(
         "/api/auth/register",
-        json={"name": "Gilber", "email": "g@b.com", "password": "correcthorse9"},
+        json={"name": "Alex", "email": "g@b.com", "password": "correcthorse9"},
     )
-    assert r.status_code == 200 and r.json()["name"] == "Gilber"
-    assert db.get_user_by_email("g@b.com")["name"] == "Gilber"
+    assert r.status_code == 200 and r.json()["name"] == "Alex"
+    assert db.get_user_by_email("g@b.com")["name"] == "Alex"
 
 
 def test_register_rejects_weak_password(client):

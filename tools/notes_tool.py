@@ -60,7 +60,7 @@ _PREVIEW_HANDLER = (
 
 
 # Recently-Deleted folder names to skip during enumeration (the user's locales:
-# English + Mexican Spanish). A note moved here by `delete` must NOT resurface as
+# English + Spanish). A note moved here by `delete` must NOT resurface as
 # a live match — otherwise read_note/delete_note re-offer a phantom (Bug 19.2).
 # Top-level folders only; deeply-nested subfolders are out of scope.
 _TRASH_FOLDERS = '{"Recently Deleted", "Eliminados recientemente", "Eliminados Recientemente"}'

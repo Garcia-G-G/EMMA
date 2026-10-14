@@ -46,7 +46,7 @@ def test_log_processor_scrubs_nested_x_token() -> None:
 
 def test_public_x_handle_is_not_redacted() -> None:
     """NEGATIVE: an @handle is public — redacting it would be wrong (and noisy)."""
-    text = "mi cuenta de X es @gilberga"
+    text = "mi cuenta de X es @examplehandle"
     assert redaction.redact(text) == text
 
 
