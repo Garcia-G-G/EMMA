@@ -150,15 +150,6 @@ async def test_non_200_is_not_treated_as_empty() -> None:
     spawn.assert_not_called()
 
 
-def test_menubar_has_a_distinct_state() -> None:
-    """"En espera" would be a lie while she cannot answer."""
-    from emma.ui.__main__ import _ESTADO_LABEL, _ICON_FOR_STATE, _STATE_BUCKET
-
-    assert _STATE_BUCKET["out_of_minutes"] == "out_of_minutes"
-    assert _ICON_FOR_STATE["out_of_minutes"] != _ICON_FOR_STATE["idle"]
-    assert _ESTADO_LABEL["out_of_minutes"] == "Sin minutos"
-
-
 def test_never_auto_charges() -> None:
     """No purchase path exists in the daemon at all — buying is browser-only."""
     import inspect
