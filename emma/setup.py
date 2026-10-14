@@ -6,7 +6,7 @@
     python -m emma.setup --skip-tcc      # OAuth only (installer already did TCC)
     python -m emma.setup --non-interactive   # CI: no prompts/browser, report gaps
 
-Same philosophy as the TCC permissions convention (CLAUDE.md): every credential
+Same philosophy as the TCC permissions convention (AGENTS.md): every credential
 and permission Emma needs is requested upfront at install, never as a surprise
 "corre este comando" later. The installer calls this near the end.
 

@@ -198,7 +198,7 @@ built into the pinned retriever:
    that gain is leakage, not generalization.
 2. **Retrievability of the descriptions themselves.** 14 of the 77 tools the
    140 accept have **no Spanish trigger phrase** in their description, against
-   CLAUDE.md's tool-budget rule 2: `set_volume` ("Set the system output
+   AGENTS.md's tool-budget rule 2: `set_volume` ("Set the system output
    volume…") can't be found by "sube el volumen". Also `current_time`, `mute`,
    `play_track`, `play_playlist`, `resume`, `remember_fact`, `recall_facts`,
    `run_command`, `describe_capabilities`, `latest_video_from_creator`,

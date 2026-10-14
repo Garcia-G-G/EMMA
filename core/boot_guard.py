@@ -113,7 +113,7 @@ def should_speak(kind: str, interval_s: float = _SPEAK_INTERVAL_S) -> bool:
     """True at most once per ``interval_s`` for this notice, across restarts.
 
     Same discipline as the crash-report path's rate-limited Terminal auto-open
-    (CLAUDE.md), rather than a second invented mechanism. Records the decision,
+    (AGENTS.md), rather than a second invented mechanism. Records the decision,
     so callers must only ask when they actually intend to speak.
     """
     state = _read()

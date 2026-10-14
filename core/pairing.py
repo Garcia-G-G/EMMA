@@ -154,7 +154,7 @@ async def revoke_local() -> None:
 def device_name() -> str:
     """Human-friendly name for the dashboard's device list (display only). The
     hostname can carry personal info — fine; it's the user's own account UI, never
-    public (CLAUDE.md public-copy rules govern the marketing site, not this)."""
+    public (AGENTS.md public-copy rules govern the marketing site, not this)."""
     try:
         n = socket.gethostname()
         return n.replace(".local", "").replace("-", " ")

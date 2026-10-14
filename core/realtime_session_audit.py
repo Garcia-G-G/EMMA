@@ -20,7 +20,7 @@ not Emma: ``llm.py:799-802`` sends on ``session.created``, then ``llm.py:1104``
 sends again inside ``_create_response``'s ``_llm_needs_conversation_setup``
 block — which fires when the ``LLMContextFrame`` Emma queues at
 ``core/conversation.py:1657`` reaches ``_handle_context``. That frame is
-load-bearing (it initializes the function-call pipeline, per CLAUDE.md), and
+load-bearing (it initializes the function-call pipeline, per AGENTS.md), and
 both sends live in vendored code, so the fix is here: skip a ``session.update``
 whose payload is byte-identical to the one already sent. Provably
 state-neutral, and it saves ~104 KB / ~18k tokens per session.

@@ -362,7 +362,7 @@ def preflight() -> bool:
         # restarts the daemon on any non-zero exit — so an unthrottled _say here
         # repeats the same sentence at a user who already declined, forever.
         # Same discipline as the crash-report path's rate-limited Terminal
-        # auto-open (CLAUDE.md), not a second invented mechanism.
+        # auto-open (AGENTS.md), not a second invented mechanism.
         from core import boot_guard
 
         if boot_guard.should_speak("ax_denied"):

@@ -550,7 +550,7 @@ Expected: all backend tests pass.
 - [ ] **Step 4: Run privacy and security scans**
 
 ```bash
-rg -n --hidden -g '!AGENTS.md' -g '!CLAUDE.md' -g '!.git/**' '<forbidden-name>|<forbidden-city>|made by <forbidden-name>' .
+rg -n --hidden -g '!AGENTS.md' -g '!AGENTS.md' -g '!.git/**' '<forbidden-name>|<forbidden-city>|made by <forbidden-name>' .
 backend/.venv/bin/pip-audit -r backend/requirements.txt
 .venv/bin/pip-audit
 gitleaks detect --no-banner --redact --source .

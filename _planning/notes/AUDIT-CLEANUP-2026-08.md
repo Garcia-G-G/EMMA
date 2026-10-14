@@ -32,5 +32,5 @@ All changes covered by tests; **1128→ green, ruff + mypy clean**. Backend test
 - **`/api/account` month vs `/api/balance`** month can disagree (lifetime counter vs windowed) — display-only, pre-existing.
 
 ## Housekeeping
-- `AGENTS.md` (Codex guidance mirror of CLAUDE.md) was untracked → committed as a real project file (public-copy clean).
+- `AGENTS.md` (Codex guidance mirror of AGENTS.md) was untracked → committed as a real project file (public-copy clean).
 - `self/capabilities.md` committed at the current 184-tool set; the idempotency fix stops it churning on every boot.

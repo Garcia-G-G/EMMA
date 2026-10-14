@@ -38,7 +38,7 @@ only changes the error. This is confirmed on-device and by the package index.
 | `WAKE_WORD_PATH` → `models/hey_emma.onnx` "does not exist" | ⚠️ **partly** | it exists on the maker's disk (untracked) but `.gitignore:9 = models/` excludes it, so it does **not** ship in the tarball → true for a fresh install |
 | `pvporcupine` is a "stub" in settings | ⚠️ **false** | `_listen_porcupine` is fully implemented and `pvporcupine>=4.0.2` is even a base dep (`pyproject.toml:38`) |
 | Backend uses vosk | ✅ false (as expected) | `grep -rn vosk backend/` → nothing |
-| CLAUDE.md says openWakeWord | ✅ true, **and self-contradictory** | arch note said openWakeWord; Distribution note said Vosk — the code had drifted to Vosk |
+| AGENTS.md says openWakeWord | ✅ true, **and self-contradictory** | arch note said openWakeWord; Distribution note said Vosk — the code had drifted to Vosk |
 
 ---
 

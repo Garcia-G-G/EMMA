@@ -71,7 +71,7 @@ CORE_TOOLS: tuple[str, ...] = (
     "summarize_screen",
     "summarize_pane",
     "read_pane_text",
-    # Background-task status (CLAUDE.md background-tasks convention).
+    # Background-task status (AGENTS.md background-tasks convention).
     "task_status",
     "list_my_tasks",
     # Everyday actions: most-called in production logs.

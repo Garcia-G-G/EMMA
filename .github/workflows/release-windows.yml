@@ -1,7 +1,7 @@
 # Build + sign the Windows .msi on a tag push (Prompt 30, Part D).
 # Secrets: WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD (EV code-signing cert).
 name: release-windows
-# NOT on tag push. Emma ships via install.sh (CLAUDE.md, "Distribution"): no
+# NOT on tag push. Emma ships via install.sh (AGENTS.md, "Distribution"): no
 # .pkg/.msi, no notarization, no Apple Developer Program, and this repo has no
 # signing secrets, so on tags this failed for every release v0.1.0-v0.3.0 and
 # published nothing. Run it by hand once signing secrets exist.

@@ -12,7 +12,7 @@ Text only — ``core/brain/processor.py`` hands it to TTS (VOICE-1). Three jobs,
 * **Clarification turn.** After a ``clarify`` with numbered options, the answer
   is matched by ordinal ("el primero", "2", "the last one") or by fuzzy label.
 
-Neutral Spanish and English; no regionalisms (CLAUDE.md language convention).
+Neutral Spanish and English; no regionalisms (AGENTS.md language convention).
 """
 
 from __future__ import annotations

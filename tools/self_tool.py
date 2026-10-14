@@ -1,6 +1,6 @@
 """Self-introspection: what Emma can do, told to the user.
 
-The CLAUDE.md "Self-aware" principle says Emma maintains
+The AGENTS.md "Self-aware" principle says Emma maintains
 ``self/capabilities.md`` from the live tool registry and answers
 "what can you do?" from that file, not from a hard-coded list.
 

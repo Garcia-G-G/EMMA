@@ -551,7 +551,7 @@ async def _build_instructions() -> str:
     lang_name = "English" if preferred_lang == "en" else "Spanish"
     # The user's name comes from the paired account (persisted at pairing time to
     # the profile's display_name). NEVER hardcode a maker name here — a daemon
-    # shipped to strangers is as public as the landing (CLAUDE.md public-copy
+    # shipped to strangers is as public as the landing (AGENTS.md public-copy
     # rule). The whole prompt below writes "the user" as a stand-in for the user and
     # is rewritten to the real name at the end of this function.
     user_name = _profile.get("display_name") or _profile.get("full_name") or "the user"

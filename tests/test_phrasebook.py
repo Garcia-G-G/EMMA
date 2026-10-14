@@ -60,7 +60,7 @@ def test_no_labelled_utterance_is_in_the_phrasebook() -> None:
     assert not leaks, f"labelled items copied into the phrasebook: {leaks}"
 
 
-# Regional words the language convention keeps out (CLAUDE.md): a closed list of
+# Regional words the language convention keeps out (AGENTS.md): a closed list of
 # common ones. If unsure whether a word is regional, it doesn't go in at all.
 _REGIONAL = {
     "ahorita", "orale", "órale", "guey", "güey", "wey", "chido", "padre", "chamba", "neta",

@@ -1,6 +1,6 @@
 # LAUNCH-12 — per-turn payload: verify log
 
-Spec: `_planning/prompts/LAUNCH-12-PAYLOAD.md`. Every number here comes from a
+Spec: `_planning/steps/LAUNCH-12-PAYLOAD.md`. Every number here comes from a
 tokenizer, not from character counts.
 
 ## Pre-flight: premises checked against the code (2026-09-21)
@@ -252,7 +252,7 @@ buys no score, it stops wasting sticky slots.
   `recall_last_action`, `recall_facts`, `set_conversation_tone`); **2** session
   lifecycle; **1** memory write; **5** screen vision (audit 2026-08-03 §2 calls
   it non-negotiable, and the AX→screenshot fallback needs both layers); **2**
-  background-task status (CLAUDE.md convention); **9** everyday actions, chosen
+  background-task status (AGENTS.md convention); **9** everyday actions, chosen
   by frequency in the maker's production logs; **1** the loader.
   *Caveat:* 50 of the 140 frozen items were mined from those same logs, so the
   frequency evidence and the test set overlap. The core was picked by category
@@ -290,7 +290,7 @@ Every turn is under 8,000. Tools per turn: median 32, max 36 — far under 128.
 `tool_selection.cap()` applies the same and logs every dropped name at ERROR.
 `tests/test_tool_selection.py` pins the constant in both modules, the fallback
 at budgets 175/0/10000, the session-open set, and the worst case.
-`REALTIME_TOOL_BUDGET` (175) survives as the registry-growth alarm; CLAUDE.md's
+`REALTIME_TOOL_BUDGET` (175) survives as the registry-growth alarm; AGENTS.md's
 tool-budget convention is rewritten to match, including the "no 128-tool
 ceiling" claim, which was true of Realtime and is false of Groq.
 

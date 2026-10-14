@@ -43,3 +43,6 @@ backend/*.db
 backend_emma.db
 *.db-wal
 *.db-shm
+CLAUDE.md
+.claude/
+_backups/

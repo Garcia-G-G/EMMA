@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Guidance for coding agents working in this repository.
 
 ## Public-copy rules (mandatory — do NOT violate)
 
@@ -30,7 +30,7 @@ unsure what to put in place, leave a TODO and ask — do not invent.
 
 ## What Emma is
 
-Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~120 tools, and maintains long-term memory in a local SQLite store.
+Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. She listens for a wake word, opens an audio-to-audio session via the OpenAI Realtime API through a Pipecat pipeline, dispatches tool calls against a registry of ~185 tools (filtered per machine to what can actually run — see the tool-budget convention), and maintains long-term memory in a local SQLite store.
 
 ## Commands
 
@@ -49,6 +49,13 @@ Emma is a bilingual (Spanish/English) voice-activated AI assistant for macOS. Sh
 
 # Run a single test
 .venv/bin/python -m pytest tests/test_memory.py::TestLongTerm::test_remember_and_recall -v
+
+# Live macOS tests (real Accessibility / Screen Recording — deselected by default
+# because they read the live desktop; run with an ordinary app in front)
+.venv/bin/python -m pytest tests/ -m macos_live
+
+# Backend tests (separate deps: pip install -r backend/requirements.txt pytest pytest-asyncio)
+python -m pytest backend/tests -q
 
 # Lint
 .venv/bin/ruff check .
@@ -138,29 +145,99 @@ Many settings are marked DEPRECATED (STT, TTS, barge-in) — they exist for `.en
 
 ## Conventions
 
-- **Language**: The user speaks Mexican Spanish and English. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn.
+- **Language**: Emma is bilingual Spanish/English, including mid-sentence switching. Tool error messages and spoken responses are in Spanish by default. `core/runtime.py` tracks `SpokenLang` per-turn. **Never assume a regional variant, accent, or locale in code or prompts** — dialect-specific behavior (regional time expressions, vocabulary, pronunciation hints) lives in the user's profile (`config/dictionary.toml` `[user]`) and is applied only when set. Default is neutral Spanish and neutral English.
 - **System prompt**: Lives in `core/conversation.py:_build_instructions()`. Structured sections: Role, Personality, Language, Response Length, Variety, Preambles, Tool Results, Forbidden. Memory facts appended at the end.
 - **Confirmation flow**: Destructive tools (`destructive=True`) use `requires_confirmation=True` in their first `ToolResult`. The orchestrator re-calls with `confirmed=True` after user assent. `cancelled=True` is opt-in for cleanup on decline.
 - **Self-awareness**: `tools/self_tool.py` regenerates `self/capabilities.md` from the live tool registry at startup. The `describe_capabilities` tool reads this file.
 - **Crash reports**: Written to `~/Library/Logs/Emma/crashes/`. Rate-limited Terminal auto-open (3 per 60s). The `say` command (not the Realtime API) speaks the failure.
-- **Service lifecycle**: Runs as a launchd agent (`com.garcia.emma`). Dev mode disables the agent and opens a Terminal with resume instructions. Exit 0 = stay stopped; exit 1 = launchd restarts.
+- **Service lifecycle**: Runs as a launchd agent (`com.emma.daemon`; the legacy `com.garcia.emma` label is booted out on install). Dev mode disables the agent and opens a Terminal with resume instructions.
+- **Exit codes**: `KeepAlive{SuccessfulExit=false}` restarts on **every** non-zero exit, not just some — so **non-zero means "retry me"** and **0 means "stay down"**. `ThrottleInterval` (30 s) bounds the retry rate; `emma/__main__.py:_terminal_exit` returns non-zero for the first few attempts and then 0, so a config only a human can fix stops respawning. Anything that speaks on a failing boot must go through `core/boot_guard.py:should_speak`, or launchd will repeat it at the user forever.
+
+## Tool budget convention (mandatory)
+
+**A turn does not carry the registry** (LAUNCH-12). With `TOOL_RETRIEVAL`
+(default on) a session opens with the fixed core in `core/tool_selection.py`
+(`CORE_TOOLS`, ~24 incl. the `find_tools` loader), then grows by retrieval:
+the model calls `find_tools(need)` when the core lacks a capability, and each
+finished user transcript pre-loads matches (sticky, LRU, size-bounded by
+`STICKY_CHAR_BUDGET`). Changes go out as a tools-only `session.update` via
+`LLMUpdateSettingsFrame`; instructions stay byte-identical (cacheable). A
+complete turn is **< 8k tokens** (measured: `_planning/notes/LAUNCH-12-VERIFY.md`).
+
+**128 tools per request is a hard ceiling.** Realtime itself accepts 183, but
+Groq rejects >128 and other providers may. `openai_tool_specs()` applies
+`min(REALTIME_TOOL_BUDGET, 128)`, `tool_selection.cap()` the same, and
+`tests/test_tool_selection.py` pins both. No setting lifts it.
+
+**Routing guidance lives with its tool**, in `tools/guidance.py`, appended to
+the description by `registry._spec()` — not in the system prompt, which only
+holds rules true of every turn. (`_docstring_summary` keeps two paragraphs, so
+a third docstring paragraph would be silently dropped.)
+
+When adding a tool:
+1. If it needs a credential, a CLI, or a binary the installer does not
+   provide, give its module a `def available() -> bool` (or the tool a
+   `@tool(available=...)`). Probes live in `tools/availability.py` and must do
+   no slow I/O — they run on every session build.
+2. Make it **retrievable**: put the Spanish/English trigger phrases the user
+   would actually say in its docstring or its `tools/guidance.py` entry. BM25
+   over that text is how the tool gets found.
+   `test_tool_selection.py::test_every_available_tool_is_reachable` fails if
+   it can't be.
+3. Add it to `CORE_TOOLS` only if any turn might need it regardless of topic,
+   and justify it in the verify doc. The core is paid on every turn, and its
+   order is part of the cache key: append to it, don't reorder it.
+4. `REALTIME_TOOL_BUDGET` (175) remains the registry-growth alarm:
+   `tests/test_tool_budget.py::test_registered_tool_count_within_budget`
+   asserts the available count pre-trim, so a batch of new tools can't land
+   unnoticed. It also caps the `TOOL_RETRIEVAL=false` fallback, together with
+   the 128 ceiling. In that fallback the trim order is core, then priority,
+   then unlisted (`registry._CORE_MODULES` / `_PRIORITY_MODULES`), never
+   alphabetical.
+5. Names are unique per module: `tools/base.py` raises
+   `ToolNameCollisionError` when two modules claim one name.
 
 ## Permissions convention (mandatory)
 
 Every TCC permission Emma needs is requested **upfront at install time** via
-`python -m emma.permissions bootstrap` (installer step 7.5, before the
-LaunchAgent loads). No permission may surface as a surprise pop-up during use.
+`python -m emma.permissions bootstrap` (installer **step 6/8**, after the
+daemon's app bundle is built at 5.5 and before the LaunchAgent loads at 7).
+No permission may surface as a surprise pop-up during use.
+
+**Opening a Settings pane is not requesting a permission.** macOS creates the
+row only when the process calls the request API — `AXIsProcessTrustedWithOptions`
+with `kAXTrustedCheckOptionPrompt` for Accessibility,
+`CGRequestScreenCaptureAccess()` for Screen Recording. Emma shipped for months
+opening panes it had no row in, which is why screen vision never worked once.
+`_MANUAL_PANES` carries the requester per pane; a pane with `None` there
+genuinely has no request API (Full Disk Access is toggle-only; Calendars is
+requested by EventKit on first real use).
+
+**The bootstrap runs as the daemon's own binary**
+(`~/.emma/EmmaDaemon.app/Contents/MacOS/emma-daemon`), because TCC grants
+belong to an executable. Asking from one binary and reading the screen from
+another means the grant belongs to someone else.
+
+**Probe the permission, not a proxy for it.** `check_accessibility_ax()` reads
+`AXIsProcessTrusted`. The old `check_accessibility()` shelled out to osascript
+and asked System Events for a process list — an *Automation* grant — and
+returned True with AX fully denied; it survives, honestly named, as
+`check_system_events_automation()`. Prefer a functional check where one is
+cheap: `permissions.ax_smoke()` catches trusted-but-dead, which the TCC read
+alone cannot.
 
 When adding a tool or feature that needs a new permission:
 1. Add the app/pane to the bootstrap list in `core/permissions.py`
-   (`_AUTOMATION_APPS` or `_MANUAL_PANES`).
-2. Add or extend the corresponding probe function (`check_*`).
+   (`_AUTOMATION_APPS` or `_MANUAL_PANES`, the latter with its requester).
+2. Add or extend the corresponding probe function (`check_*`), and wire it
+   into `preflight()` AND `emma/permissions.py:_check` — a probe with no
+   callers is how Screen Recording went unrequested for its whole life.
 3. Verify the install script re-runs cleanly end-to-end.
 4. Document the new permission in the prompt that adds the feature.
 
 Permissions covered today: Microphone, Automation (Calendar, Mail, Messages,
-Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility, Full Disk
-Access.
+Notes, Reminders, Safari, Finder, Music, Terminal), Accessibility,
+Screen Recording, Calendars, Full Disk Access.
 
 ## Security convention (mandatory)
 
@@ -212,11 +289,43 @@ No .pkg, no notarization, no Apple Developer Program. The installer
 - Downloads the sherpa-onnx KWS wake-word model to `~/.emma/sherpa-kws`
 - Pairs interactively via `emma --first-run --pair` (RFC 8628), FOREGROUND
   and BEFORE the LaunchAgent loads so failures surface in the terminal
+- Builds `~/.emma/EmmaDaemon.app` (step 5.5) — the daemon's TCC identity. Its
+  `Contents/MacOS/emma-daemon` is a re-signed copy of the interpreter, so
+  permission grants attach to Emma rather than to the uv-managed Python every
+  uv project on the machine shares. Falls back to the venv python if the build
+  or its import smoke test fails
 - Registers a LaunchAgent labelled `com.emma.daemon` (generic, public-copy
-  safe), booting out any legacy `com.garcia.emma` agent first
+  safe) pointing at that bundle binary, booting out any legacy
+  `com.garcia.emma` agent first
 
 Uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh` — removes
 `~/.emma`, both LaunchAgent labels, the logs, and the Secret-tier Keychain
-entries (`device_token`, `OPENAI_API_KEY` under the `com.garcia.emma` service).
+entries (`device_token`, `OPENAI_API_KEY` under the `com.garcia.emma` service),
+and resets the `com.emma.daemon` TCC grants so no permission row outlives the
+app it pointed at.
 
 The installer is idempotent — re-running upgrades in place.
+
+### Release policy (LAUNCH-4 finding 4g/4h — decided)
+
+`install.sh` fetches `main` from the **public** `theemmafamily/emma`. That is a
+different branch from the one you develop and test on, so **a green local test
+run describes code no user is running.** At the time of writing local `main` was
+**28 commits ahead** of the public head.
+
+- **Local `main` is not a release.** Publishing is an explicit push to the
+  public repo. Until that happens, every fix is invisible to users, including
+  the ones they are actively hitting.
+- **Verify the INSTALLATION, never the repo.** `git merge-base --is-ancestor
+  <commit> public/main` answers a question nobody asked. Run
+  `python -m emma.permissions check` and read the `Source:` block, or
+  `grep` the feature in `~/.emma/src` — that is the code that runs.
+- **`_landing/` stays out of this repo.** It is 472 MB, carries
+  `worker/node_modules`, and is **already a git repository of its own** where
+  `install.sh` and `uninstall.sh` are tracked. (The audit's premise that
+  install.sh is "outside version control" is wrong; what is true is that the
+  two repos are versioned independently, so plist/source drift between them is
+  invisible.) The mitigation is not a merge — it is that the daemon no longer
+  trusts the plist: `settings._is_managed()` resolves managed mode without the
+  env var, and `core/version.py` states which source is running at every boot.
+
