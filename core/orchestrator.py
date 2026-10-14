@@ -1,13 +1,13 @@
-"""Orchestrator: wake word → Pipecat session → repeat.
+"""Orchestrator: readiness → wake word → session → repeat.
 
-Pipecat owns the streaming pipeline (mic → OpenAIRealtimeLLMService →
-speaker, server-side VAD, native barge-in, function-call dispatch),
-so the orchestrator's job collapses to wake → run_session → loop.
+The session is ``core.cascade`` (Scribe STT → core/brain → ElevenLabs TTS, no
+LLM) or, with ``VOICE_BACKEND=realtime``, ``core.conversation`` (one OpenAI
+Realtime WebSocket). Pipecat owns the streaming pipeline either way, so the
+orchestrator's job collapses to park-until-ready → wake → run_session → loop.
 
-Memory priming is wired into the session system prompt (reads from
-long-term store on each session start). Reflection (automatic fact
-extraction from transcripts) requires Pipecat transcript event
-hooks — not yet implemented.
+On the Realtime backend, memory priming goes into the session system prompt and
+reflection runs from the transcript path (``core/conversation.py``). The cascade
+does neither: no model sees memory.
 """
 
 from __future__ import annotations

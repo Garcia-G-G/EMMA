@@ -4,7 +4,7 @@
     python -m emma.permissions retry       # re-run the walkthrough standalone (no reinstall)
     python -m emma.permissions check       # probe current state, no UI changes
 
-`bootstrap` is what installer/install_macos.sh runs at install time so every
+`bootstrap` is what install.sh runs at install time (step 6) so every
 TCC permission is requested upfront instead of surfacing mid-conversation.
 `retry` runs the same walkthrough on demand so a missed dialog can be
 re-triggered without reinstalling.
@@ -96,9 +96,9 @@ def _check() -> int:
 def _retry() -> int:
     """Re-run the full install-time permission walkthrough standalone.
 
-    Same code path as the installer's step 7.5, so the user can re-trigger any
+    Same code path as the installer's step 6, so the user can re-trigger any
     dialog that got missed without reinstalling. Exits 0 when the walkthrough
-    completes, 1 if it raises (e.g. the `say` binary is unavailable).
+    completes, 1 if it raises.
     """
     try:
         asyncio.run(permissions.bootstrap())

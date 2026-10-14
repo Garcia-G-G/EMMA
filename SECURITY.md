@@ -18,25 +18,26 @@ of what Emma protects, how, and what it explicitly does **not** protect.
 **Out of scope (do not assume protection):**
 - Malware running as the same user with Accessibility entitlements.
 - Hardware attacks (cold boot, Secure Enclave bypass).
-- Network adversaries (mitigated by HTTPS to OpenAI/etc.).
-- The conversation audio itself going to OpenAI during inference — that is an
-  architectural acceptance (see "What goes to OpenAI"). This layer restricts
-  what is in the *priming block*; it cannot eliminate the streaming audio path.
+- Network adversaries (mitigated by HTTPS to ElevenLabs and every other provider).
+- The conversation audio itself going to ElevenLabs for transcription, and the
+  reply text going to ElevenLabs for speech — that is an architectural acceptance
+  (see "What leaves the Mac"). This layer controls what is stored and logged; it
+  cannot eliminate the audio path.
 
 ## The three trust tiers
 
 | Tier | Examples | Storage |
 |------|----------|---------|
 | **Public** | tool registry, `self/capabilities.md`, version | plaintext on disk |
-| **Personal** | preferences, profile facts ("prefers Zed", "lives in San José"), schedule patterns | `~/.emma/memory.db` — cold-disk protection relies on **FileVault** |
+| **Personal** | preferences, profile facts ("prefers Zed", "lives in <city>"), schedule patterns | `~/.emma/memory.db` — cold-disk protection relies on **FileVault** |
 | **Secret** | passwords, API keys, account numbers, government IDs (CURP/RFC/SSN), credit cards, IBAN | **macOS Keychain only** (`com.garcia.emma` service). `memory.db` may hold a `vault_ref` label, **never** the value |
 
 **The architectural rule:** *no Secret-tier value ever lands in `memory.db`, in
-logs, or in the system prompt sent to OpenAI.*
+logs, or in anything sent to a provider (a prompt, a transcript, a TTS request).*
 
 Enforcement:
 - `core/secrets.py` is the only writer/reader of the Keychain.
-- `memory/reflection.py` classifies each extracted fact (deterministic
+- `memory/reflection.py` (Realtime backend only) classifies each extracted fact (deterministic
   `core/redaction.py` patterns first, then a `gpt-4o-mini` fallback). Secrets
   route to Keychain; only `content="(stored as secret: <label>)"` + `vault_ref`
   hit `memory.db`. The secret value is never embedded (so it never reaches the
@@ -50,7 +51,8 @@ Enforcement:
 - **Public:** `self/capabilities.md`, source tree — `~/Documents/EMMA/`.
 - **Personal:** `~/.emma/memory.db` (SQLite + sqlite-vec). Protect with FileVault.
 - **Secret:** login Keychain, service `com.garcia.emma`. Migrated credentials use
-  the env-var name as the label (`OPENAI_API_KEY`, `ELEVENLABS_API_KEY`,
+  the env-var name as the label (`ELEVENLABS_API_KEY` — the cascade's one
+  required credential — `OPENROUTER_API_KEY`, `OPENAI_API_KEY`,
   `PICOVOICE_ACCESS_KEY` — the Porcupine wake-word key added in Prompt 16 —
   `BRAVE_API_KEY`, `TAVILY_API_KEY`, `YOUTUBE_API_KEY`, `SPOTIFY_CLIENT_*`,
   `POSTGRES_DSN`); secret facts use `fact_<uuid>`; user secrets use whatever
@@ -64,6 +66,10 @@ Enforcement:
   gained `_WEBHOOK` so any `*_WEBHOOK` env var also migrates to Keychain.
 
 ## How to wipe everything
+
+Uninstalling does all of it: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh`
+deletes every Keychain item under the service (each fixed label by name, then
+any user-named ones), `~/.emma`, the logs, and the TCC rows of both Emma bundles.
 
 Per item:
 ```sh
@@ -93,31 +99,46 @@ from **Prompt 16.1** — it checks log redaction, the `vault_ref` priming filter
 the Keychain credential roundtrip in a launchd-like env, destructive-tool
 confirmation gating, and `vocabulary.append_entry` injection resistance.
 
-## What goes to OpenAI vs. stays local
+## What leaves the Mac
 
-Be honest about the boundary:
-- **Goes to OpenAI:** the live conversation audio (the Realtime API hears you
-  directly), and the priming block of Personal facts injected into the system
-  prompt. If you explicitly invoke `recall_secret`, that one value is spoken and
-  therefore reaches the Realtime model — it is gated to "use only when alone."
-- **Egress redaction (the data guard):** any text Emma sends to OpenAI for
-  *summarization/reflection* — screen reads, screenshot OCR (`look_at_screen`),
-  web pages, deep-research sources, and conversation transcripts — passes through
-  `redact()` FIRST, so a credit card / API key / CURP / RFC / SSN / IBAN visible
-  on screen or spoken aloud is stripped to `[REDACTED:…]` before it crosses the
-  network. Redaction guards egress, not just logs.
-- **Stays local:** all Secret-tier values at rest (Keychain), the full
-  `memory.db`, and anything `redact()` catches in logs. The priming block never
-  contains Secret-tier values (`vault_ref IS NULL` filter). Memory embeddings
-  send Personal-tier fact text (Secret-tier excluded by design) — a conscious
-  trade-off so semantic recall keeps working.
+Be honest about the boundary. On the shipped voice (the cascade, v0.4.0+):
+
+- **ElevenLabs, with your own key, and nothing else in the loop.** After the
+  wake word fires, microphone audio streams to ElevenLabs Scribe and text comes
+  back; Emma's reply text goes to ElevenLabs TTS and audio comes back. Your key
+  goes from the Keychain straight to `api.elevenlabs.io`; no server of ours sees
+  it, the audio or the text.
+- **No model sees your memory.** The brain decides locally; nothing builds a
+  prompt. Facts in `memory.db` are not sent anywhere on the cascade, and the
+  boot-time embedding backfill (OpenAI) does not run there.
+- **Before the wake word: nothing.** The wake word is detected offline.
+- **Stays local:** Secret-tier values at rest (Keychain), the whole `memory.db`,
+  the brain's decisions log, the voice clip cache.
+
+What the Emma backend (`api.theemmafamily.com`) stores, and when a cascade
+install talks to it:
+
+- A cascade install contacts it **only if you activate a license** from the
+  menubar: it sends the license key, a random `install_id` (Keychain) and the
+  Mac's name. The backend keeps them in `licenses` / `license_activations`.
+- Accounts made on the website (email, name, sign-in provider) and anything left
+  from the old managed tier: device tokens with the Mac's name and the last raw
+  IP, session minutes and usage rows. **Step 46** removes the managed proxy
+  (`/realtime`, `/v1/*`), the demo, the raw `last_ip` and the identifying
+  `device_name`.
+
+On the gated Realtime backend (`VOICE_BACKEND=realtime`), OpenAI hears the
+conversation audio and receives the priming block of Personal facts
+(`vault_ref IS NULL` only). Text sent for summarization or reflection passes
+through `redact()` first, so a card, key or ID number seen on screen or spoken
+aloud becomes `[REDACTED:…]` before it crosses the network.
 
 ## Known limitations
 - The `security add-generic-password -w <value>` call briefly exposes the value
   in the process's argument list — visible to other processes of the **same
   user** (out of scope per the threat model).
 - The unstructured-secret classifier (e.g. "my password is hunter2", no PII
-  pattern) depends on the `gpt-4o-mini` call; on classifier failure such a fact
+  pattern) depends on a `gpt-4o-mini` call (Realtime backend only); on classifier failure such a fact
   defaults to the Personal tier. Pattern-based secrets (cards, IDs, keys) are
   always caught deterministically by `redact()`.
 - Log redaction requires `core.redaction.redaction_processor` to be wired into
@@ -133,7 +154,11 @@ rotate one:
 3. Restart Emma (`launchctl kickstart -k …`). Settings re-read from Keychain.
 
 Cadence + blast radius:
-- **OPENAI_API_KEY** — manual; compromise = API spend + transcript exposure. Rotate
+- **ELEVENLABS_API_KEY** — the cascade's one required key. Rotate at
+  elevenlabs.io, then paste the new one from the menubar ("Mi key de
+  ElevenLabs…"), which validates and stores it. Compromise = character spend
+  on your ElevenLabs account; its usage page shows abuse.
+- **OPENAI_API_KEY** (Realtime backend only) — manual; compromise = API spend + transcript exposure. Rotate
   immediately on suspicion; OpenAI usage dashboard shows abuse.
 - **STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET** — manual via Stripe dashboard;
   compromise = forged billing events. Webhook signature verification limits this.

@@ -13,8 +13,9 @@ free text tier accepts and every architecture pays for. Now a turn carries:
 
 Why a loader instead of retrieving from the current utterance: Emma's Realtime
 session runs ``server_vad`` with automatic responses, so the server starts
-answering before the transcript of that utterance exists. The cascade path has
-the text first and calls :func:`select_for_text` directly.
+answering before the transcript of that utterance exists. (All of this is the
+Realtime backend's payload. The cascade sends no tool specs anywhere: the brain
+reads the registry locally.)
 
 Retriever: BM25 over name + description (+ ``tools/guidance.py`` trigger
 phrases). Measured on the frozen 140-item set (LAUNCH-12-VERIFY.md §Part 2):

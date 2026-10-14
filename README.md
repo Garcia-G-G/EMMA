@@ -1,13 +1,12 @@
 # Emma
 
-> A bilingual (Spanish / English), voice-activated AI assistant for macOS — fully local wake word, real actions on your machine, long-term memory, and a privacy-first secret store.
+> A bilingual (Spanish / English) voice assistant for macOS. The wake word and the decisions run on your Mac; ElevenLabs, with your own key, is how she hears and speaks.
 
-![platform](https://img.shields.io/badge/platform-macOS%2014%2B-black)
-![python](https://img.shields.io/badge/python-3.11%2B-blue)
-![voice](https://img.shields.io/badge/voice-OpenAI%20Realtime%20API-10a37f)
+![platform](https://img.shields.io/badge/platform-macOS%2014%2B%20·%20Apple%20Silicon-black)
+![voice](https://img.shields.io/badge/voice-ElevenLabs%20(your%20key)-blue)
 ![privacy](https://img.shields.io/badge/secrets-macOS%20Keychain-green)
 
-Say **"Hey Emma"** in Spanish or English. Emma opens a low-latency audio-to-audio session, reasons over a registry of **180+ tools**, executes real actions on your Mac — open apps, play music, search the web, manage Calendar/Mail/Notes/Reminders, run shell commands, control the browser — and replies in a natural voice. She remembers what matters across conversations and can describe her own capabilities out loud.
+Say **"Emma"** in Spanish or English and ask for something. Emma transcribes you with ElevenLabs Scribe, decides on your Mac with her own local brain (no language model), runs the matching action (open an app, set a timer, add a note or reminder, play music, check your calendar) and answers in the voice you chose. What she can't do yet, she says so. See [what changed](CHANGELOG.md).
 
 ## Install
 
@@ -15,64 +14,61 @@ Say **"Hey Emma"** in Spanish or English. Emma opens a low-latency audio-to-audi
 curl -fsSL https://theemmafamily.com/install.sh | sh
 ```
 
-macOS 14+ (Apple Silicon). The installer downloads the wake-word model, sets up
-the Python environment, and requests every macOS permission Emma needs up front.
-Then pair your Mac at [theemmafamily.com/pair](https://theemmafamily.com/pair).
+You need macOS 14+ on Apple Silicon and an **ElevenLabs API key**
+(elevenlabs.io → Developers → API Keys). You pay ElevenLabs for what you use.
+
+The installer sets up Python, downloads the wake-word and brain models, and asks
+for every macOS permission Emma needs up front. Emma's window then asks for your
+ElevenLabs key (stored in the macOS Keychain) and lets you pick her voice. There
+is no account and nothing to pair.
 
 To uninstall: `curl -fsSL https://theemmafamily.com/uninstall.sh | sh`.
 
 ---
 
-## Highlights
+## What works locally
 
-- 🎙️ **Local wake word** — "Emma" / "Oye Emma" / "Hey Emma" detected on-device, offline, via a [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) keyword spotter. No audio leaves the machine until a wake phrase fires.
-- ⚡ **Audio-to-audio** — a single [Pipecat](https://github.com/pipecat-ai/pipecat) pipeline over the **OpenAI Realtime API**: audio in → reasoning + tool calls → audio out, no separate STT/TTS hop.
-- 🧰 **180+ tools** — apps, music (Spotify), web/YouTube search, browser automation (Playwright), shell, screen brightness, and native macOS integrations (Calendar, Mail, Messages, Notes, Reminders, Safari, Finder, Music) via AppleScript.
-- 🧠 **Long-term memory** — a local SQLite fact store with semantic recall (sqlite-vec embeddings) and automatic deduplication. Emma primes each session with what she knows about you.
-- 🔐 **Privacy-first by design** — secrets (API keys, tokens) live **only in the macOS Keychain**; personal data sits in `~/.emma/` behind FileVault and owner-only permissions; nothing secret ever reaches logs or the model prompt. See [`SECURITY.md`](SECURITY.md).
-- ✅ **Safe destructive actions** — anything irreversible (delete, send, overwrite) goes through a spoken two-phase confirmation flow.
-- 🪄 **Background tasks** — long-running work (installs, builds, delegated coding jobs) runs in the background and notifies you when done, so you can walk away.
-- ⚛️ **Live dashboard + atom visualizer** — a real-time dashboard and Emma's line-art atom responding to live listening, thinking, speaking, and tool events.
-- 🔁 **Runs as a service** — installs as a launchd agent that survives reboots, with a voice-triggered dev mode and self-recovering crash handling.
+The brain resolves a request with no model at all, or it doesn't act:
+
+- **Runs on your Mac:** opening and switching apps, timers, notes, reminders,
+  calendar reads, music, the date and time, your files (find and open), GitHub
+  lookups (with a token), Emma's own settings and history. Anything that can't be
+  undone asks you first, out loud, and a one-word "sí" / "no" answers it.
+- **Not yet:** anything that needs a model to think: remembering new facts by
+  voice, summarizing, web research, reading your screen. Emma tells you it's not
+  something she can do yet, and the request is logged so the gaps are visible.
 
 ## How it works
 
 ```
-"Emma"      ──►  local wake word (sherpa-onnx KWS, offline)  ──►  ack chime
-                                                          │
-                                                          ▼
-        ┌──────────────── Pipecat pipeline ────────────────┐
-        │  mic ─► OpenAI Realtime (audio + reasoning) ─► speaker │
-        │                     │                              │
-        │                     ▼                              │
-        │              tool registry (180+)                  │
-        │         shell · apps · web · macOS · memory         │
-        └────────────────────────────────────────────────────┘
-                                                          │
-                                       idle timeout  ◄────┘
-                                            │
-                                            ▼
-                                  back to listening for "Hey Emma"
+"Emma"  ──►  local wake word (sherpa-onnx, offline)  ──►  chime
+                                   │
+                                   ▼
+   mic ─► Scribe v2 Realtime ─► local brain ─► template or local tool
+          (ElevenLabs, STT)     (no LLM)               │
+                                                       ▼
+   speaker ◄── cached clip or ElevenLabs TTS ◄── what to say
+                                   │
+                    idle timeout ──┘──► back to listening
 ```
 
-Emma runs an infinite loop: wait for the wake word, open a Realtime session, dispatch tool calls as they arrive, and return to listening when the session goes idle. Tool results are pushed back into the conversation so Emma can speak a natural follow-up.
+No audio leaves the Mac until the wake word fires. After that, audio goes to
+ElevenLabs with your key, and text comes back; nothing passes through a server of
+ours. Secrets live only in the Keychain, personal data in `~/.emma/`. See
+[`SECURITY.md`](SECURITY.md).
 
 ## Prerequisites
 
-- macOS 14+ (Apple Silicon)
-- Python 3.11+
-- [`uv`](https://docs.astral.sh/uv/) (`brew install uv`)
-- `ffmpeg` (`brew install ffmpeg`)
-- `brightness` CLI (`brew install brightness`) — for the `set_brightness` tool
-- Chromium for Playwright (`uv run playwright install chromium`)
-- An **OpenAI API key** with Realtime API access
+- macOS 14+ on Apple Silicon
+- An **ElevenLabs API key**
+- To run from source: Python 3.11+ and [`uv`](https://docs.astral.sh/uv/)
 
 ### Optional integrations
 
 | Integration | Needs |
 | --- | --- |
 | Music (Spotify) | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`, plus a one-time browser consent on first call. Token cached in `~/.emma/spotify_token.json`. |
-| Web search | `BRAVE_API_KEY` (preferred) or `TAVILY_API_KEY`. |
+| Web search | `BRAVE_API_KEY` (preferred) or `TAVILY_API_KEY`. Realtime backend only for now: on the default voice it needs a model to read the results. |
 | YouTube | `YOUTUBE_API_KEY` (Google Cloud → YouTube Data API v3). |
 | Browser tools | Run `uv run playwright install chromium` once; profile lives at `~/.emma/playwright-profile/`. |
 
@@ -81,15 +77,15 @@ Emma runs an infinite loop: wait for the wake word, open a Realtime session, dis
 The hosted installer above is the supported path. To run from a clone instead:
 
 ```sh
-cp .env.example .env        # then fill in the keys
-uv sync                     # create the venv, install deps
-uv run python -m emma --debug
+uv sync                                   # create the venv, install deps
+uv run python -m emma.brain fetch-model   # the local brain's embedder
+uv run python -m emma --debug             # the menubar window asks for the key + voice
 ```
 
 The installer is idempotent — re-running it upgrades in place, reloads the
 LaunchAgent, and re-requests every macOS permission Emma needs **up front**
-(Microphone, Automation, Accessibility, Full Disk Access) so nothing surprises
-you mid-conversation.
+(Microphone, Automation, Accessibility, Screen Recording; Full Disk Access and
+Calendars open their Settings pane) so nothing surprises you mid-conversation.
 
 Real-time dashboard (optional):
 
@@ -149,7 +145,7 @@ No secret value ever lands in `memory.db`, in logs, or in the model prompt. Full
 
 ## Crash handling
 
-Unhandled exceptions write a markdown crash report to `~/Library/Logs/Emma/crashes/`, auto-open a Terminal that `cat`s the report, and `say` a short failure message. Three crashes within 60 seconds suppress the auto-open (no terminal storms during crash loops). Exit code 1 lets launchd restart Emma on the next throttle interval.
+Unhandled exceptions write a markdown crash report to `~/Library/Logs/Emma/crashes/`, auto-open a Terminal that `cat`s the report, and play a short failure line in Emma's own voice (a cached clip). Three crashes within 60 seconds suppress the auto-open (no terminal storms during crash loops). Exit code 1 lets launchd restart Emma on the next throttle interval.
 
 One-shot test of the crash path:
 

@@ -1,14 +1,9 @@
-"""Compat shim post Realtime-API migration (Prompt 13).
+"""One spoken-line helper for code outside a voice session.
 
-ElevenLabs-driven streaming TTS is gone; :mod:`core.realtime` emits
-PCM audio directly from the Realtime session. The only piece left
-here is :func:`say_fallback`, which other in-tree code (notably
-``actions/environment.py`` for brew-install progress voice) still
-calls to speak short messages via the macOS ``say`` command when the
-network path is unavailable.
-
-Kept as a small utility rather than moved because the constraint for
-Phase 13 was "do not touch actions/*.py".
+:func:`say_fallback` speaks a short line in Emma's own voice through
+:mod:`core.voice` (cached clip, else ElevenLabs TTS), without blocking the
+caller. The macOS ``say`` command is no longer used (VOICE-1). The name is
+historical; ``actions/environment.py`` uses it to narrate long installs.
 """
 
 from __future__ import annotations
@@ -23,13 +18,9 @@ SpokenLang = Literal["es", "en"]
 
 
 def say_fallback(text: str, language: SpokenLang) -> None:
-    """Non-blocking spoken fallback via the macOS ``say`` command.
+    """Speak ``text`` in Emma's voice on a background thread (never blocks).
 
-    Used by:
-
-    - :mod:`actions.environment` to narrate long brew installs.
-    - Any future offline-degradation path that wants speech without
-      depending on the Realtime WebSocket.
+    Used by :mod:`actions.environment` to narrate long brew installs.
     """
     if not text.strip():
         return

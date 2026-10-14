@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Credentials that bootstrap_from_env migrates to Keychain. After migration
@@ -83,17 +83,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # CLIENT-INSTALL Phase 2B: optional now. A managed client daemon has NO sk- key —
-    # it pairs and uses a device bearer via the proxy (see the resolvers below). A
-    # dev/BYOK daemon still sets it in .env.
+    # Realtime backend only (VOICE_BACKEND=realtime). The cascade never reads it;
+    # a managed Realtime daemon uses a paired device bearer instead (see below).
     OPENAI_API_KEY: str = ""
-    # Managed HTTP proxy base, used ONLY in managed mode (EMMA_REQUIRE_PAIRING set).
+    # Managed HTTP proxy base, used ONLY by a managed Realtime daemon.
     OPENAI_BASE_URL: str = "https://api.theemmafamily.com/v1"
-    # DEPRECATED after the Prompt 13 Realtime migration — the Realtime API does
-    # ALL voice now; ElevenLabs is only touched by tools/diagnostics health-check.
-    # Optional so a fresh managed install (no .env) can boot; a dev/BYOK daemon
-    # can still set it. (Was required — broke every clean install: no ElevenLabs
-    # key exists in the managed model.)
+    # The cascade's one required credential (VOICE-1): Scribe STT + TTS with the
+    # user's own key, filled from the Keychain. Blank in a field default so the
+    # daemon can boot and park until onboarding stores it (core/readiness.py).
     ELEVENLABS_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""  # optional until BRAIN-2 (VOICE-1 Part 0)
     # VOICE-1: which voice path a wake session opens. `cascade` = Scribe STT ->
@@ -133,8 +130,10 @@ class Settings(BaseSettings):
     POSTMAN_API_KEY: str = ""    # optional — resolve collections via the Postman API
     # Where Emma drops cloned repos by default (override in .env).
     CLONE_DIR: Path = Path.home() / "Documents" / "repos"
-    ELEVENLABS_VOICE_ID_ES: str = ""  # DEPRECATED — Realtime API does voice (see ELEVENLABS_API_KEY)
-    ELEVENLABS_VOICE_ID_EN: str = ""  # DEPRECATED — Realtime API does voice
+    # Dev tooling only (wake-word data, acceptance audio): voices those scripts
+    # synthesize with. Emma's own voice is VOICE_ID.
+    ELEVENLABS_VOICE_ID_ES: str = ""
+    ELEVENLABS_VOICE_ID_EN: str = ""
     # Path to the locally-trained openWakeWord ONNX model. Produced by
     # scripts/train_wake_word.py (Prompt 16.2) → models/hey_emma.onnx.
     # Relative paths are anchored to the project root by core/wake_word.py.
@@ -297,37 +296,10 @@ class Settings(BaseSettings):
     # Cap on sequential tool calls per turn to prevent runaway loops.
     MAX_TOOL_STEPS: int = 5
 
-    # DEPRECATED — kept for env-file compat, no longer read by any
-    # live module after the Prompt-13 Pipecat migration. The Realtime
-    # API selects voice via `REALTIME_VOICE`; sentence-by-sentence
-    # ElevenLabs TTS is gone.
+    # Dev tooling only (wake-word data, acceptance audio). Emma's voice uses
+    # ELEVENLABS_TTS_MODEL. (Step 40 deleted the settings nothing read; old .env
+    # lines for them are ignored: extra="ignore".)
     ELEVENLABS_MODEL_ID: str = "eleven_flash_v2_5"
-    ELEVENLABS_LATENCY_MODE: int = 1
-    ELEVENLABS_OUTPUT_FORMAT: str = "pcm_16000"
-    TTS_FIRST_CHUNK_MIN_CHARS: int = 120
-
-    # DEPRECATED — kept for env-file compat, no longer read. Barge-in
-    # is now native to OpenAI Realtime (server-side VAD +
-    # `input_audio_buffer.speech_started` events). The custom
-    # heuristic-based listener was deleted in the migration.
-    BARGE_IN_ENABLED: bool = True
-    BARGE_IN_BLANKING_MS: int = 350
-    BARGE_IN_RMS: float = 1200.0
-    BARGE_IN_FRAMES: int = 6
-
-    # DEPRECATED — kept for env-file compat, no longer read. The
-    # Realtime model hears audio directly so we no longer need a
-    # separate Whisper bias prompt nor an "always stay in language X"
-    # policy.
-    WHISPER_PROMPT: str = ""
-    STRICT_LANGUAGE_POLICY: bool = True
-
-    @field_validator("WHISPER_PROMPT")
-    @classmethod
-    def _truncate_whisper_prompt(cls, v: str) -> str:
-        if not v:
-            return ""
-        return v[:800]
 
     @model_validator(mode="after")
     def _fill_credentials_from_keychain(self) -> Settings:
@@ -462,10 +434,6 @@ class Settings(BaseSettings):
     # facts to inject into the system prompt each turn. Keep small so
     # the prompt stays focused.
     MEMORY_PRIMING_TOP_N: int = 15
-
-    # DEPRECATED — kept for env-file compat, no longer read. The
-    # Realtime API transcribes server-side; out-of-band STT is gone.
-    STT_MODEL: str = "gpt-4o-mini-transcribe"
 
     # ---- Realtime API (Prompt 13) -----------------------------------
     # Audio-to-audio session model and voice. `coral` is a warm female

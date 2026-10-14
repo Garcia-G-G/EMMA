@@ -11,7 +11,7 @@ this data unchanged:
     <out>/positive/*.wav     # "hey emma" / "oye emma" / "hola emma"
     <out>/negative/*.wav     # speech that is NOT the wake word (TTS)
 
-ElevenLabs emits pcm_16000 directly (settings.ELEVENLABS_OUTPUT_FORMAT), i.e.
+ElevenLabs emits pcm_16000 directly (output_format=pcm_16000), i.e.
 16 kHz mono 16-bit — openWakeWord's exact input format — so there is NO
 resampling step (unlike the Piper path).
 

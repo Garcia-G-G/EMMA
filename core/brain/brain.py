@@ -2,7 +2,7 @@
 
 Holds the plain-data world the gate needs (tool metadata, the closed
 vocabularies, thresholds) plus the retriever. Built by the host
-(``core.brain_host``); executes nothing (BRAIN-1 is shadow-only).
+(``core.brain_host``); executes nothing itself: ``processor.py`` acts on the decision.
 """
 
 from __future__ import annotations

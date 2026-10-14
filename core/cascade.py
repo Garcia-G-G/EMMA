@@ -4,10 +4,10 @@
 
     LocalAudioTransport.input (16 kHz, echo-gated)
       -> VADProcessor (Silero; its onset/stop drive Scribe's manual commit)
-      -> ElevenLabsRealtimeSTTService (scribe_v2_realtime, language unset)
+      -> ScribeSTT (ElevenLabsRealtimeSTTService, scribe_v2_realtime, language unset)
       -> _UserTurnTap (session memory, injection guard, barge-in)
       -> BrainProcessor (decide -> template / execute / thinker)
-      -> ElevenLabsHttpTTSService (eleven_v4_turbo, 24 kHz, word timestamps)
+      -> CachedTTS (ElevenLabsHttpTTSService, eleven_v4_turbo, 24 kHz, word timestamps)
       -> _SpokenTap (what was actually played, cut at the barge-in word)
       -> EchoGateProcessor -> _AudioLevelTap -> LocalAudioTransport.output (24 kHz)
 
@@ -27,8 +27,8 @@ Pipecat 1.2.1, verified against the installed package and the live API:
 - Output runs at 24 kHz (``pcm_24000``). The echo gate's reference is
   resampled to the mic rate at its boundary — the brain never sees audio.
 
-The Realtime path (``core.conversation``) is untouched and selected by
-``VOICE_BACKEND=realtime``.
+This is the shipped voice. The Realtime path (``core.conversation``) remains the
+gated alternative, selected by ``VOICE_BACKEND=realtime``.
 """
 
 from __future__ import annotations

@@ -2,14 +2,12 @@
 # Verification shortcut — builds EmmaDaemon.app against an EXISTING ~/.emma
 # install, without re-running install.sh.
 #
-# This is a faithful extraction of the step-5.5 block from _landing/install.sh
-# (lines 141-215). It exists because `_landing/` is gitignored, so installer
-# changes live on disk but are not deployed — you can't get the bundle via
-# `curl install.sh | sh` until the landing deploy happens.
+# A copy of the step-5.5 block of install.sh (the _landing repo), for rebuilding
+# the bundle on a dev Mac without re-running the installer. Keep it in step with
+# that block when it changes.
 #
-# NOT a replacement for the real install path. Use it to verify the bundle and
-# the TCC identity today; the real E2E still has to go through install.sh once
-# the landing is deployed.
+# NOT a replacement for the real install path: the release check still goes
+# through `curl install.sh | sh`.
 set -eu
 
 EMMA_HOME="${HOME}/.emma"

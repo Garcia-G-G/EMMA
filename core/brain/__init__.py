@@ -7,5 +7,7 @@ walks the graph and fails on a violation. The brain gets tool metadata, app
 lists and thresholds as plain data from the caller; that is what lets Windows
 "implement the hands" instead of rewriting the head.
 
-Shadow mode only (BRAIN-1): a ``Decision`` is logged and compared, never executed.
+Since VOICE-1 a ``Decision`` drives the cascade: ``core/brain/processor.py``
+speaks templates and executes local tools through a host seam (the host owns
+dispatch). Every decision is still logged (``emma.brain report``).
 """
