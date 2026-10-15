@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emma · componentes</title>
+<link rel="icon" href="atom.svg" type="image/svg+xml">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--s-3)}
+.sw{border:1px solid var(--rule);border-radius:var(--r-2);padding:var(--s-3);font-family:var(--font-mono);font-size:var(--fs-1)}
+.sw i{display:block;height:40px;border-radius:var(--r-1);margin-bottom:var(--s-2)}
+.row{display:flex;gap:var(--s-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--s-4)}
+section{margin-bottom:var(--s-8)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main">
+  <h1>Componentes</h1>
+  <p class="label">design/preview.html · todas las piezas, todos los estados</p>
+
+  <section aria-labelledby="h-color"><h2 id="h-color">Color</h2>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--bg);border:1px solid var(--rule)"></i>--bg</div>
+      <div class="sw"><i style="background:var(--bg-elev)"></i>--bg-elev</div>
+      <div class="sw"><i style="background:var(--ink)"></i>--ink</div>
+      <div class="sw"><i style="background:var(--ink-soft)"></i>--ink-soft</div>
+      <div class="sw"><i style="background:var(--ink-faint)"></i>--ink-faint</div>
+      <div class="sw"><i style="background:var(--accent)"></i>--accent</div>
+      <div class="sw"><i style="background:var(--accent-soft)"></i>--accent-soft</div>
+      <div class="sw"><i style="background:var(--highlight)"></i>--highlight</div>
+      <div class="sw"><i style="background:var(--danger)"></i>--danger</div>
+      <div class="sw"><i style="background:var(--ok)"></i>--ok</div>
+      <div class="sw"><i style="background:var(--rule-strong)"></i>--rule-strong</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-type"><h2 id="h-type">Tipografía</h2>
+    <p style="font-family:var(--font-display);font-size:var(--fs-6);line-height:var(--lh-tight);color:var(--ink);margin:0">Habla como hablas tú.</p>
+    <h1>Título de página</h1>
+    <p style="font-size:var(--fs-4)">Lead: una asistente de voz para tu Mac.</p>
+    <p>Cuerpo: Emma decide en tu Mac y habla con tu propia key de ElevenLabs. <a href="#">Un enlace</a>, <b>un énfasis</b>, <code>~/.emma</code>.</p>
+    <p class="label">Etiqueta mono</p>
+  </section>
+
+  <section aria-labelledby="h-btn"><h2 id="h-btn">Botones</h2>
+    <div class="row"><button class="btn btn-primary">Primario</button><button class="btn btn-secondary">Secundario</button><button class="btn btn-ghost">Fantasma</button><button class="btn btn-danger">Peligro</button></div>
+    <div class="row"><button class="btn btn-primary btn-sm">Primario sm</button><button class="btn btn-secondary btn-sm">Secundario sm</button><button class="btn btn-ghost btn-sm">Fantasma sm</button></div>
+    <div class="row"><button class="btn btn-primary" disabled>Deshabilitado</button><button class="btn btn-secondary" disabled>Deshabilitado</button><button class="btn btn-primary" aria-busy="true">Cargando</button><button class="btn btn-secondary" aria-busy="true">Cargando</button></div>
+    <p class="label">hover y focus-visible: pasa el puntero o usa Tab</p>
+  </section>
+
+  <section aria-labelledby="h-form"><h2 id="h-form">Campos</h2>
+    <div style="max-width:420px">
+      <div class="field"><label for="p1">Correo</label><input class="input" id="p1" type="email" placeholder="tu@correo.com" aria-describedby="p1h"><p class="help" id="p1h">Te escribimos solo para tu cuenta.</p></div>
+      <div class="field"><label for="p2">Contraseña</label><input class="input" id="p2" type="password" value="corta" aria-invalid="true" aria-describedby="p2e"><p class="error" id="p2e" role="alert">Usa al menos 10 caracteres.</p></div>
+      <div class="field"><label for="p3">Deshabilitado</label><input class="input" id="p3" value="no editable" disabled></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-notice"><h2 id="h-notice">Avisos</h2>
+    <div class="stack"><div class="notice" role="status">Información: revisa tu correo.</div><div class="notice notice-ok" role="status">Listo: guardamos el cambio.</div><div class="notice notice-error" role="alert">Error: ese correo ya tiene cuenta.</div></div>
+  </section>
+
+  <section aria-labelledby="h-card"><h2 id="h-card">Tarjeta y tabla</h2>
+    <div class="card"><h2>Licencia</h2>
+      <div class="card-row"><span class="label">Plan</span><span>Anual</span></div>
+      <div class="card-row"><span class="label">Clave</span><code>EMMA-ABCD-EFGH-JKMN</code></div>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Equipo</th><th>Activado</th><th></th></tr></thead>
+      <tbody><tr><td>MacBook Air</td><td>2026-10-01</td><td><button class="btn btn-ghost btn-sm">Quitar</button></td></tr><tr><td>Mac mini</td><td>2026-09-12</td><td><button class="btn btn-ghost btn-sm">Quitar</button></td></tr></tbody></table></div></div>
+  </section>
+
+  <section aria-labelledby="h-atom"><h2 id="h-atom">Marca</h2>
+    <div class="row"><img src="atom.svg" width="96" height="96" alt="Emma"><img src="favicon-32.png" width="32" height="32" alt=""><img src="apple-touch-icon.png" width="60" height="60" alt=""><img src="email/atom-v1.png" width="48" height="48" alt="Emma"></div>
+  </section>
+</main>
+<footer data-footer></footer>
+<script src="nav.js"></script>
+</body>
+</html>

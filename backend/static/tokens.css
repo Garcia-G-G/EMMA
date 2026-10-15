@@ -1,201 +1,76 @@
-/* Emma design tokens — LANDING-28. ONE palette, ONE type system, shared by every
-   page (landing + the 5 backend pages). Edit here; both copies stay identical.
-   Deep palette (tech-premium). Seven color values. No --secondary/--tertiary. */
+/* Emma design tokens: the single source (design/tokens.css).
+   Mirrored byte-for-byte to backend/static/tokens.css and _landing/tokens.css by
+   scripts/sync_design.sh; tests/test_design_sync.py fails if a copy drifts.
+   Pages use these names only: no hex literal outside this file and SVG fills.
+
+   AA contrast (WCAG 2.1, normal text >= 4.5) on --bg #0a0400 / --bg-elev #140a03:
+     --ink 18.1 / 17.4 · --ink-soft 9.7 / 9.3 · --ink-faint 5.5 / 5.3
+     --highlight 13.3 / 12.8 · --accent 7.8 / 7.5 · --danger 6.6 / 6.3
+     --ok 11.6 / 11.1 · --on-accent on --accent 7.8
+   The two atmospheres keep every pair above 4.7 (worst: --ink-faint on --bg-bottom #2a1206). */
+
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif-italic.woff2') format('woff2');font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:'Mona Sans';src:url('fonts/mona-sans.woff2') format('woff2');font-weight:300 500;font-style:normal;font-display:swap}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/jetbrains-mono.woff2') format('woff2');font-weight:300 500;font-style:normal;font-display:swap}
+
 :root{
-  /* LANDING-31: Apple AirPods Pro cream palette + Artisan layout signals.
-     Light backgrounds. Warm clay accent. Emma's orb stays warm against the
-     cream — high contrast comes from form, not chroma. */
-  --bg:#faf6ef;          /* warm cream — primary surface */
-  --bg-elev:#f0e7d6;     /* elevated cards / pricing surfaces */
-  --ink:#1a1308;         /* deep warm-brown — primary text */
-  --ink-soft:#5a4628;    /* secondary text */
-  --rule:#d8cebd;        /* hairlines on cream */
-  --accent:#a04a16;      /* warm clay — links, eyebrow, mono labels */
-  --accent-q:#c08c5a;    /* lighter clay for hover/inactive */
-  --accent-2:#8a3e10;    /* deeper oxblood for italic emphasis */
-  --warm:#ff8c3a;        /* Emma's orange — orb canvas ONLY, never a CSS bg */
+  color-scheme:dark;
 
-  /* LANDING-33: Geist (Vercel) — refined product/AI face, off generic Inter. */
-  --font-display:"Geist","Inter Display","Inter Tight",-apple-system,BlinkMacSystemFont,sans-serif;
-  --font-body:"Geist",system-ui,-apple-system,sans-serif;
-  --font-mono:"Geist Mono","JetBrains Mono","SF Mono",ui-monospace,monospace;
+  /* color: semantic roles */
+  --bg:#0a0400;
+  --bg-elev:#140a03;
+  --bg-top:#110600;       /* atmosphere gradient ends (landing body) */
+  --bg-bottom:#2a1206;
+  --ink:#fff0d4;          /* headlines, primary text */
+  --ink-soft:#ff9a3e;     /* body copy */
+  --ink-faint:#b8763a;    /* meta, help text: lowest emphasis that still passes AA */
+  --rule:rgba(255,122,26,0.18);
+  --rule-strong:rgba(255,122,26,0.45);
+  --accent:#ff7a1a;       /* primary action, the atom's rings */
+  --accent-hover:#ff8b2f;
+  --accent-soft:rgba(255,122,26,0.12);
+  --on-accent:#0a0400;    /* text on --accent */
+  --highlight:#ffc77a;    /* the one reserved highlight; the atom's nucleus */
+  --nucleus:#fff6dc;
+  --danger:#ff5a3c;
+  --danger-soft:rgba(255,90,60,0.12);
+  --ok:#9fd18b;
+  --ok-soft:rgba(159,209,139,0.12);
+  --focus:#ffc77a;
 
-  --maxw:1280px;
-  --gutter:24px;
-  --ease:cubic-bezier(.22,.61,.36,1);
+  /* type */
+  --font-display:'Instrument Serif',ui-serif,serif;
+  --font-body:'Mona Sans','Helvetica Neue',system-ui,-apple-system,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --fs-1:11px;   /* mono labels */
+  --fs-2:13px;   /* small, help */
+  --fs-3:16px;   /* body */
+  --fs-4:20px;   /* lead */
+  --fs-5:clamp(28px,3.4vw,40px);   /* page title */
+  --fs-6:clamp(38px,5vw,72px);     /* hero */
+  --lh-tight:1.05;
+  --lh-normal:1.55;
+  --lh-loose:1.75;
+  --fw-light:300;
+  --fw-regular:400;
+  --fw-medium:500;
+  --ls-mono:0.18em;
+
+  /* space: 4px base */
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:32px;--s-7:48px;--s-8:64px;
+
+  /* shape, depth, motion */
+  --r-1:4px;--r-2:8px;--r-3:14px;
+  --e-1:0 1px 0 rgba(255,122,26,0.06),0 8px 24px rgba(0,0,0,0.35);
+  --e-2:0 0 0 1px rgba(255,122,26,0.12),0 18px 48px rgba(0,0,0,0.55);
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --dur-fast:150ms;
+  --dur-normal:300ms;
 }
 
-*,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{
-  margin:0;background:var(--bg);color:var(--ink);
-  font-family:var(--font-body);font-size:16px;line-height:1.6;font-weight:400;
-  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
-  text-rendering:optimizeLegibility;
-}
-::selection{background:var(--accent);color:#faf6ef}
-a{color:inherit;text-decoration:none}
-img,svg,canvas{display:block;max-width:100%}
+/* The landing's two atmospheres. Both dark; only the canvas and text warmth move. */
+[data-theme="tarde"]{--bg-top:#1a0e02;--bg:#110600;--bg-bottom:#2a1206;--ink:#fff2d8}
+[data-theme="nocturna"]{--bg-top:#04020a;--bg:#060306;--bg-bottom:#0c0500;--ink-soft:#ff8c3a}
 
-h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:600;font-feature-settings:"ss01","ss02","kern","liga"}
-h1{font-size:clamp(40px,6.6vw,80px);letter-spacing:-.03em;line-height:.95;text-wrap:balance}
-h2{font-size:clamp(30px,3.6vw,44px);letter-spacing:-.018em;line-height:1.05}
-h3{font-size:20px;letter-spacing:-.01em;line-height:1.2;font-weight:500}
-p{font-feature-settings:"kern","liga","calt"}
-p{margin:0}
-
-/* micro / label — the only place type goes uppercase */
-.eyebrow,.label,.mono{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--ink-soft)}
-.eyebrow{color:var(--accent);display:inline-flex;align-items:center;gap:10px}
-.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
-.ink-soft{color:var(--ink-soft)}
-code,.code{font-family:var(--font-mono);font-size:.86em;color:var(--accent);
-  background:rgba(160,74,22,.10);padding:1px 6px;border-radius:4px}
-
-.container{max-width:var(--maxw);margin:0 auto;padding:0 40px}
-@media(max-width:760px){.container{padding:0 22px}}
-
-/* ---- header ---- */
-.site-nav{position:sticky;top:0;z-index:40;background:rgba(250,246,239,.78);
-  backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid var(--rule)}
-.site-nav .row{max-width:var(--maxw);margin:0 auto;padding:16px 40px;
-  display:flex;align-items:center;justify-content:space-between}
-.brand{display:inline-flex;align-items:center;gap:11px;font-family:var(--font-display);
-  font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink)}
-.brand .mk{width:24px;height:24px;display:block;overflow:visible}
-.nav-links{display:flex;gap:28px;font-family:var(--font-mono);font-size:12px;
-  letter-spacing:.04em;text-transform:uppercase}
-.nav-links a{color:var(--ink-soft);transition:color .15s var(--ease)}
-.nav-links a:hover{color:var(--ink)}
-.nav-right{display:flex;align-items:center;gap:22px}
-.lang{display:inline-flex;gap:3px;font-family:var(--font-mono);font-size:12px;letter-spacing:.06em}
-.lang button{background:none;border:0;color:var(--ink-soft);cursor:pointer;
-  font:inherit;letter-spacing:inherit;text-transform:uppercase;padding:6px 4px;
-  opacity:.5;transition:opacity .15s,color .15s}
-.lang button.on{opacity:1;color:var(--ink)}
-.lang .sep{opacity:.3}
-@media(max-width:760px){.nav-links{display:none}.site-nav .row{padding:14px 22px}}
-
-/* ---- buttons ---- */
-.btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--font-mono);
-  font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
-  padding:14px 22px;border-radius:8px;border:1px solid var(--rule);
-  background:var(--bg-elev);color:var(--ink);
-  transition:border-color .15s var(--ease),background .15s var(--ease),transform .15s var(--ease)}
-.btn:hover{border-color:var(--accent-q);transform:translateY(-1px)}
-.btn .arr{transition:transform .2s var(--ease)}
-.btn:hover .arr{transform:translateX(3px)}
-/* Apple-style: warm clay primary, soft glow on hover. */
-.btn-primary{
-  background:var(--accent); color:#faf6ef; font-weight:600; letter-spacing:.01em;
-  border:1px solid #d9b07a; padding:13px 24px; border-radius:9px;
-  box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 8px 24px rgba(160,74,22,.22);
-  transition:transform .15s ease-out, background .15s ease-out, box-shadow .15s ease-out}
-.btn-primary:hover{transform:translateY(-1px); background:#b85a2a; box-shadow:0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px rgba(160,74,22,.3)}
-.btn-ghost{
-  background:transparent; border:1px solid var(--rule); color:var(--ink);
-  font-weight:500; letter-spacing:.01em; padding:13px 24px; border-radius:9px;
-  transition:border-color .15s ease-out, background .15s ease-out}
-.btn-ghost:hover{border-color:var(--accent-q); background:rgba(160,74,22,.06)}
-
-/* ---- section scaffolding ---- */
-.section{border-top:1px solid var(--rule)}
-.section .inner{max-width:var(--maxw);margin:0 auto;padding:96px 40px;min-height:480px;
-  display:flex;flex-direction:column;justify-content:center}
-.section .q{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--accent);margin-bottom:34px}
-.section .q .n{color:var(--ink-soft);margin-right:14px}
-@media(max-width:760px){.section .inner{padding:64px 22px;min-height:0}}
-
-/* ---- comparison table (pricing + anything tabular) ---- */
-.cmp{width:100%;border-collapse:collapse;font-size:15px}
-.cmp th,.cmp td{text-align:left;padding:18px 20px;border-bottom:1px solid var(--rule);vertical-align:top}
-.cmp thead th{font-family:var(--font-mono);font-size:12px;font-weight:500;
-  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
-.cmp thead th:last-child,.cmp thead th:nth-child(2){color:var(--ink)}
-.cmp tbody td:first-child{color:var(--ink-soft)}
-.cmp tbody td{color:var(--ink)}
-.cmp .price{font-family:var(--font-display);font-size:30px;font-weight:600;letter-spacing:-.01em}
-.cmp .per{color:var(--ink-soft);font-size:13px}
-
-/* ---- forms (login / register) ---- */
-.field{display:block;margin-bottom:18px}
-.field label{display:block;font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;
-  text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
-.field input{width:100%;background:var(--bg-elev);border:1px solid var(--rule);
-  border-radius:8px;padding:14px 14px;color:var(--ink);font-family:var(--font-body);
-  font-size:15px;outline:none;transition:border-color .15s var(--ease)}
-.field input:focus{border-color:var(--accent-q)}
-.field input::placeholder{color:#a89072}
-.form-note{font-size:13px;color:var(--ink-soft);margin-top:6px;min-height:18px}
-.form-note.err{color:#c4543a}.form-note.ok{color:var(--accent)}
-
-/* ---- footer ---- */
-.site-foot{border-top:1px solid var(--rule);font-family:var(--font-mono);font-size:12px;
-  letter-spacing:.04em;color:var(--ink-soft)}
-.site-foot .row{max-width:var(--maxw);margin:0 auto;padding:30px 40px;
-  display:flex;flex-direction:column;gap:8px}
-.site-foot a{color:var(--ink-soft);transition:color .15s}
-.site-foot a:hover{color:var(--ink)}
-.site-foot .links{display:flex;gap:18px}
-@media(max-width:760px){.site-foot .row{padding:26px 22px}}
-
-/* ---- ambient (LANDING-33): ONE drifting warm glow + grain. No cool/pink wash. ---- */
-.bg-glow{position:fixed;inset:0;z-index:-2;pointer-events:none;overflow:hidden}
-.bg-glow::before{content:"";position:absolute;left:-15vw;top:-10vh;width:80vw;height:80vh;
-  background:radial-gradient(circle, rgba(255,140,58,0.18), transparent 60%);
-  filter:blur(140px);animation:bg-drift 60s ease-in-out infinite alternate;will-change:transform}
-@keyframes bg-drift{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(30vw,15vh,0)}100%{transform:translate3d(-10vw,25vh,0)}}
-.bg-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:white;filter:url(#grain);opacity:0.04;mix-blend-mode:overlay}
-
-/* section hairline that draws across on scroll-in (subtle aliveness) */
-.section{position:relative}
-.section::before{content:"";position:absolute;left:0;top:0;height:1px;width:var(--draw,0%);
-  background:var(--accent-q);transition:width .6s var(--ease)}
-.section.in-view::before{--draw:100%}
-
-@media(prefers-reduced-motion:reduce){.bg-glow::before{animation:none}.section::before{transition:none}}
-
-@media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.001s!important;transition-duration:.001s!important}
-}
-
-/* CLEANUP-1: Raycast nav — ghost links + one filled CTA + CSS-only account menu */
-/* Compact, flat nav pill — overrides .btn-primary's large glow (defined earlier,
-   so this later rule wins). Keeps the nav CTA from looking oversized/too shiny. */
-.nav-cta{padding:8px 14px;border-radius:7px;text-transform:uppercase;font-size:11px;letter-spacing:.06em;
-  box-shadow:none;border-color:transparent}
-.nav-cta:hover{box-shadow:none;transform:none;background:#b85a2a}
-/* The CTA lives inside .nav-links, whose `.nav-links a` rule (specificity 0,1,1)
-   was overriding .btn-primary's cream → dark-on-brown text. Force cream with a
-   higher-specificity selector for both base + hover. */
-.nav-links a.nav-cta,.nav-links a.nav-cta:hover{color:#faf6ef}
-.acct-menu{position:relative}
-.acct-btn{background:none;border:0;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono);
-  font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:6px 2px}
-.acct-list{position:absolute;right:0;top:calc(100% + 6px);background:var(--bg-elev);
-  border:1px solid var(--rule);border-radius:8px;padding:6px;display:none;min-width:180px;
-  list-style:none;margin:0;z-index:50}
-.acct-menu:focus-within .acct-list,.acct-menu:hover .acct-list{display:block}
-.acct-list li{margin:0}
-.acct-list a{display:block;padding:8px 12px;font-size:13px;border-radius:5px;color:var(--ink-soft)}
-.acct-list a:hover{background:rgba(255,140,58,.08);color:var(--ink)}
-/* keep the Descargar pill + account menu visible on mobile; hide only text links */
-@media(max-width:760px){.nav-links{display:flex!important;gap:14px}.nav-links .nav-link{display:none}}
-
-/* AUDIT fix: eliminate mobile horizontal overflow (nav pill ~26px, pricing table ~18px) */
-@media(max-width:760px){
-  .cmp{font-size:13px}
-  .cmp th,.cmp td{padding:12px 10px}
-}
-@media(max-width:430px){
-  .site-nav .row{padding:12px 16px}
-  .nav-cta{padding:8px 11px;font-size:10px;letter-spacing:.04em}
-  .nav-links{gap:10px!important}
-}
-/* AUDIT fix: footer links wrap on mobile (5 links overflowed ~26px at 375px) */
-@media(max-width:760px){.site-foot .links{flex-wrap:wrap;gap:10px 14px}}
-/* AUDIT a11y: JS click/keyboard toggle for the account dropdown (in addition to hover/focus) */
-.acct-menu.open .acct-list{display:block}
+@media (prefers-reduced-motion:reduce){:root{--dur-fast:0ms;--dur-normal:0ms}}

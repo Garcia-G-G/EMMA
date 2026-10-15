@@ -1,0 +1,2 @@
+Instrument Serif, Mona Sans and JetBrains Mono: SIL Open Font License 1.1
+(https://openfontlicense.org). Latin subsets as served by Google Fonts.

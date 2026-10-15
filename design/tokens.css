@@ -1,0 +1,76 @@
+/* Emma design tokens: the single source (design/tokens.css).
+   Mirrored byte-for-byte to backend/static/tokens.css and _landing/tokens.css by
+   scripts/sync_design.sh; tests/test_design_sync.py fails if a copy drifts.
+   Pages use these names only: no hex literal outside this file and SVG fills.
+
+   AA contrast (WCAG 2.1, normal text >= 4.5) on --bg #0a0400 / --bg-elev #140a03:
+     --ink 18.1 / 17.4 · --ink-soft 9.7 / 9.3 · --ink-faint 5.5 / 5.3
+     --highlight 13.3 / 12.8 · --accent 7.8 / 7.5 · --danger 6.6 / 6.3
+     --ok 11.6 / 11.1 · --on-accent on --accent 7.8
+   The two atmospheres keep every pair above 4.7 (worst: --ink-faint on --bg-bottom #2a1206). */
+
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif-italic.woff2') format('woff2');font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:'Mona Sans';src:url('fonts/mona-sans.woff2') format('woff2');font-weight:300 500;font-style:normal;font-display:swap}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/jetbrains-mono.woff2') format('woff2');font-weight:300 500;font-style:normal;font-display:swap}
+
+:root{
+  color-scheme:dark;
+
+  /* color: semantic roles */
+  --bg:#0a0400;
+  --bg-elev:#140a03;
+  --bg-top:#110600;       /* atmosphere gradient ends (landing body) */
+  --bg-bottom:#2a1206;
+  --ink:#fff0d4;          /* headlines, primary text */
+  --ink-soft:#ff9a3e;     /* body copy */
+  --ink-faint:#b8763a;    /* meta, help text: lowest emphasis that still passes AA */
+  --rule:rgba(255,122,26,0.18);
+  --rule-strong:rgba(255,122,26,0.45);
+  --accent:#ff7a1a;       /* primary action, the atom's rings */
+  --accent-hover:#ff8b2f;
+  --accent-soft:rgba(255,122,26,0.12);
+  --on-accent:#0a0400;    /* text on --accent */
+  --highlight:#ffc77a;    /* the one reserved highlight; the atom's nucleus */
+  --nucleus:#fff6dc;
+  --danger:#ff5a3c;
+  --danger-soft:rgba(255,90,60,0.12);
+  --ok:#9fd18b;
+  --ok-soft:rgba(159,209,139,0.12);
+  --focus:#ffc77a;
+
+  /* type */
+  --font-display:'Instrument Serif',ui-serif,serif;
+  --font-body:'Mona Sans','Helvetica Neue',system-ui,-apple-system,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --fs-1:11px;   /* mono labels */
+  --fs-2:13px;   /* small, help */
+  --fs-3:16px;   /* body */
+  --fs-4:20px;   /* lead */
+  --fs-5:clamp(28px,3.4vw,40px);   /* page title */
+  --fs-6:clamp(38px,5vw,72px);     /* hero */
+  --lh-tight:1.05;
+  --lh-normal:1.55;
+  --lh-loose:1.75;
+  --fw-light:300;
+  --fw-regular:400;
+  --fw-medium:500;
+  --ls-mono:0.18em;
+
+  /* space: 4px base */
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:24px;--s-6:32px;--s-7:48px;--s-8:64px;
+
+  /* shape, depth, motion */
+  --r-1:4px;--r-2:8px;--r-3:14px;
+  --e-1:0 1px 0 rgba(255,122,26,0.06),0 8px 24px rgba(0,0,0,0.35);
+  --e-2:0 0 0 1px rgba(255,122,26,0.12),0 18px 48px rgba(0,0,0,0.55);
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --dur-fast:150ms;
+  --dur-normal:300ms;
+}
+
+/* The landing's two atmospheres. Both dark; only the canvas and text warmth move. */
+[data-theme="tarde"]{--bg-top:#1a0e02;--bg:#110600;--bg-bottom:#2a1206;--ink:#fff2d8}
+[data-theme="nocturna"]{--bg-top:#04020a;--bg:#060306;--bg-bottom:#0c0500;--ink-soft:#ff8c3a}
+
+@media (prefers-reduced-motion:reduce){:root{--dur-fast:0ms;--dur-normal:0ms}}
