@@ -43,7 +43,7 @@
   --font-display:'Instrument Serif',ui-serif,serif;
   --font-body:'Mona Sans','Helvetica Neue',system-ui,-apple-system,sans-serif;
   --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
-  --fs-1:11px;   /* mono labels */
+  --fs-1:12px;   /* mono labels: the smallest size (Lighthouse legibility floor) */
   --fs-2:13px;   /* small, help */
   --fs-3:16px;   /* body */
   --fs-4:20px;   /* lead */
