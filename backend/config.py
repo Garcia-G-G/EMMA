@@ -11,6 +11,20 @@ import os
 from pathlib import Path
 from typing import Any
 
+# Secrets live in files, one per name: /run/secrets/<NAME> (on the server,
+# /root/secrets mounted read-only by /root/run-backend.sh), so no key sits in
+# the env file, `docker inspect` or a process listing. The env var is the
+# fallback for development.
+SECRETS_DIR = Path(os.environ.get("EMMA_SECRETS_DIR", "/run/secrets"))
+
+
+def _secret(name: str, default: str = "") -> str:
+    try:
+        return (SECRETS_DIR / name).read_text(encoding="utf-8").strip() or default
+    except OSError:
+        return os.environ.get(name, default)
+
+
 # Per-plan caps (LANDING-27). One source of truth the demo bridge reads to size a
 # session. ``session_seconds`` = per-session length; ``daily_seconds`` = user/day
 # ceiling (0 = none beyond monthly); ``monthly_seconds`` = user/month; ``cost_cap_cents``
@@ -74,7 +88,7 @@ def bundle_per_min_usd(key: str) -> float:
 
 class Settings:
     # ---- OpenAI (server-side only) ----
-    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+    OPENAI_API_KEY = _secret("OPENAI_API_KEY", "")
     # 25.0.3: GA model name (beta "gpt-realtime-2" is gone). session.created echoes
     # "gpt-realtime". Override via env if OpenAI ships a dated GA snapshot.
     OPENAI_REALTIME_MODEL = os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime")
@@ -83,8 +97,8 @@ class Settings:
     DEMO_DEBUG_REALTIME = os.environ.get("DEMO_DEBUG_REALTIME", "").lower() in ("1", "true", "yes")
 
     # ---- session tokens / cookies ----
-    JWT_SECRET = os.environ.get("JWT_SECRET", "dev-insecure-change-me")
-    SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-insecure-change-me")
+    JWT_SECRET = _secret("JWT_SECRET", "dev-insecure-change-me")
+    SESSION_SECRET = _secret("SESSION_SECRET", "dev-insecure-change-me")
     ADMIN_EMAILS = os.environ.get("ADMIN_EMAILS", "")  # comma-separated operator emails
     SESSION_TOKEN_TTL_S = 300  # signed session_token validity (5 min) — A3
     DEMO_SESSION_SECONDS = int(os.environ.get("DEMO_SESSION_SECONDS", "120"))
@@ -102,13 +116,13 @@ class Settings:
     OPS_ALERT_WEBHOOK = os.environ.get("OPS_ALERT_WEBHOOK", "")  # optional Slack/Discord; no-op if unset
     # Hashed-IP salt + the user's test bypass token. BOTH are secrets — set via env on
     # the Fly host (migrated to the host's secret store), NEVER committed.
-    DEMO_IP_SALT = os.environ.get("DEMO_IP_SALT", "")
-    DEMO_BYPASS_TOKEN = os.environ.get("DEMO_BYPASS_TOKEN", "")
+    DEMO_IP_SALT = _secret("DEMO_IP_SALT", "")
+    DEMO_BYPASS_TOKEN = _secret("DEMO_BYPASS_TOKEN", "")
     # Public Turnstile site key the landing embeds (NOT a secret; the SECRET is
     # CLOUDFLARE_TURNSTILE_SECRET, server-side only).
     TURNSTILE_SITE_KEY = os.environ.get("TURNSTILE_SITE_KEY", "")
     # Optional web-search backend for the demo's one read-only tool.
-    BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
+    BRAVE_API_KEY = _secret("BRAVE_API_KEY", "")
 
     # ---- cost guard (A4) ----
     MONTHLY_BUDGET_USD = float(os.environ.get("MONTHLY_BUDGET_USD", "50"))
@@ -117,21 +131,21 @@ class Settings:
     COST_PER_M_OUTPUT = float(os.environ.get("COST_PER_M_OUTPUT", "80"))
 
     # ---- transactional mail (backend/mail.py); same Resend account as the worker ----
-    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+    RESEND_API_KEY = _secret("RESEND_API_KEY", "")
 
     # ---- captcha ----
-    CLOUDFLARE_TURNSTILE_SECRET = os.environ.get("CLOUDFLARE_TURNSTILE_SECRET", "")
+    CLOUDFLARE_TURNSTILE_SECRET = _secret("CLOUDFLARE_TURNSTILE_SECRET", "")
     TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
     # ---- OAuth ----
     GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
-    GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
+    GOOGLE_OAUTH_CLIENT_SECRET = _secret("GOOGLE_OAUTH_CLIENT_SECRET", "")
     GITHUB_OAUTH_CLIENT_ID = os.environ.get("GITHUB_OAUTH_CLIENT_ID", "")
-    GITHUB_OAUTH_CLIENT_SECRET = os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", "")
+    GITHUB_OAUTH_CLIENT_SECRET = _secret("GITHUB_OAUTH_CLIENT_SECRET", "")
 
     # ---- Stripe ----
-    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
-    STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_SECRET_KEY = _secret("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = _secret("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO", "")
     STRIPE_PRICE_POWER = os.environ.get("STRIPE_PRICE_POWER", "")
     STRIPE_PRICE_TEAM = os.environ.get("STRIPE_PRICE_TEAM", "")  # legacy alias for power
