@@ -1,13 +1,16 @@
 /* Emma design tokens: the single source (design/tokens.css).
    Mirrored byte-for-byte to backend/static/tokens.css and _landing/tokens.css by
-   scripts/sync_design.sh; tests/test_design_sync.py fails if a copy drifts.
+   scripts/sync_design.sh; backend/tests/test_design_sync.py fails if a copy drifts.
    Pages use these names only: no hex literal outside this file and SVG fills.
 
-   AA contrast (WCAG 2.1, normal text >= 4.5) on --bg #0a0400 / --bg-elev #140a03:
-     --ink 18.1 / 17.4 · --ink-soft 9.7 / 9.3 · --ink-faint 5.5 / 5.3
-     --highlight 13.3 / 12.8 · --accent 7.8 / 7.5 · --danger 6.6 / 6.3
-     --ok 11.6 / 11.1 · --on-accent on --accent 7.8
-   The two atmospheres keep every pair above 4.7 (worst: --ink-faint on --bg-bottom #2a1206). */
+   Palette: "cream" (Step 40.2, owner's pick; _planning/design/paletas-c-v1.html),
+   with the softened ink. Light only: the darkest colour on the site is --ink.
+   The palette's own --ink3, --accent and --second are below AA for text on this
+   background, so they colour lines, the atom and decoration only; text uses:
+   AA (WCAG 2.1, normal text >= 4.5) on --bg #f5efe7 / --surface #fbf8f3:
+     --ink 10.6 / 11.5 · --ink2 4.7 / 5.0 · --accent-ink 4.8 / 5.2
+     --second-ink 4.4 (large serif only, >= 3) / 4.7 · --danger 5.0 / 5.4
+     --ok 5.3 / 5.8 · --on-ink on --ink 11.5 · --line-strong 3.1 (input borders) */
 
 @font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:'Instrument Serif';src:url('fonts/instrument-serif-italic.woff2') format('woff2');font-weight:400;font-style:italic;font-display:swap}
@@ -15,29 +18,30 @@
 @font-face{font-family:'JetBrains Mono';src:url('fonts/jetbrains-mono.woff2') format('woff2');font-weight:300 500;font-style:normal;font-display:swap}
 
 :root{
-  color-scheme:dark;
+  color-scheme:light;
 
-  /* color: semantic roles */
-  --bg:#0a0400;
-  --bg-elev:#140a03;
-  --bg-top:#110600;       /* atmosphere gradient ends (landing body) */
-  --bg-bottom:#2a1206;
-  --ink:#fff0d4;          /* headlines, primary text */
-  --ink-soft:#ff9a3e;     /* body copy */
-  --ink-faint:#b8763a;    /* meta, help text: lowest emphasis that still passes AA */
-  --rule:rgba(255,122,26,0.18);
-  --rule-strong:rgba(255,122,26,0.45);
-  --accent:#ff7a1a;       /* primary action, the atom's rings */
-  --accent-hover:#ff8b2f;
-  --accent-soft:rgba(255,122,26,0.12);
-  --on-accent:#0a0400;    /* text on --accent */
-  --highlight:#ffc77a;    /* the one reserved highlight; the atom's nucleus */
-  --nucleus:#fff6dc;
-  --danger:#ff5a3c;
-  --danger-soft:rgba(255,90,60,0.12);
-  --ok:#9fd18b;
-  --ok-soft:rgba(159,209,139,0.12);
-  --focus:#ffc77a;
+  /* color: the cream palette, exactly as chosen */
+  --bg:#f5efe7;
+  --bg2:#ede5da;
+  --surface:#fbf8f3;
+  --line:rgba(61,52,45,.10);
+  --ink:#3d342d;
+  --ink2:#75695f;
+  --ink3:#a0948a;          /* decoration only (outlined hours, dots): 2.6 on --bg */
+  --accent:#c9764a;        /* Emma acting: the atom, the confirmation, the window change */
+  --accent-soft:rgba(201,118,74,.12);
+  --glow:rgba(201,118,74,.25);
+  --second:#7f9a86;        /* decoration; English words use --second-ink */
+  /* AA companions for text and controls */
+  --accent-ink:#9e5530;
+  --second-ink:#5c7563;
+  --line-strong:rgba(61,52,45,.55);
+  --on-ink:#fbf8f3;
+  --danger:#b3412b;
+  --danger-soft:rgba(179,65,43,.10);
+  --ok:#436b4d;
+  --ok-soft:rgba(67,107,77,.10);
+  --focus:#9e5530;
 
   /* type */
   --font-display:'Instrument Serif',ui-serif,serif;
@@ -62,15 +66,15 @@
 
   /* shape, depth, motion */
   --r-1:4px;--r-2:8px;--r-3:14px;
-  --e-1:0 1px 0 rgba(255,122,26,0.06),0 8px 24px rgba(0,0,0,0.35);
-  --e-2:0 0 0 1px rgba(255,122,26,0.12),0 18px 48px rgba(0,0,0,0.55);
+  --e-1:0 1px 0 rgba(255,255,255,.6) inset,0 12px 30px -18px rgba(61,52,45,.25);
+  --e-2:0 30px 60px -30px rgba(61,52,45,.35);
   --ease:cubic-bezier(.2,.7,.2,1);
+  --ease-out:cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out:cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer:cubic-bezier(0.32, 0.72, 0, 1);
   --dur-fast:150ms;
   --dur-normal:300ms;
 }
 
-/* The landing's two atmospheres. Both dark; only the canvas and text warmth move. */
-[data-theme="tarde"]{--bg-top:#1a0e02;--bg:#110600;--bg-bottom:#2a1206;--ink:#fff2d8}
-[data-theme="nocturna"]{--bg-top:#04020a;--bg:#060306;--bg-bottom:#0c0500;--ink-soft:#ff8c3a}
 
 @media (prefers-reduced-motion:reduce){:root{--dur-fast:0ms;--dur-normal:0ms}}

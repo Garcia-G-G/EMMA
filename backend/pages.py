@@ -77,7 +77,7 @@ def _head(key: str, lang: str, t: dict[str, str]) -> str:
             '<meta name="viewport" content="width=device-width,initial-scale=1">',
             f"<title>{title}</title>",
             f'<meta name="description" content="{desc}">',
-            '<meta name="theme-color" content="#0a0400">',
+            '<meta name="theme-color" content="#f5efe7">',
             f'<link rel="canonical" href="{SITE}{paths[lang]}">',
             f'<link rel="alternate" hreflang="es" href="{SITE}{paths["es"]}">',
             f'<link rel="alternate" hreflang="en" href="{SITE}{paths["en"]}">',
