@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+.tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s-5)}
+.tiers .card{display:flex;flex-direction:column;gap:var(--s-3);margin:0}
+.price{font-family:var(--font-display);font-size:var(--fs-6);line-height:var(--lh-tight);color:var(--ink)}
+.price small{font-family:var(--font-body);font-size:var(--fs-3);color:var(--ink-faint)}
+.tiers .btn{margin-top:auto}
+.lead{font-size:var(--fs-4)}
+.faq details{border-top:1px solid var(--rule);padding:var(--s-4) 0}
+.faq details:last-child{border-bottom:1px solid var(--rule)}
+.faq summary{cursor:pointer;color:var(--ink);font-size:var(--fs-3)}
+.faq summary:hover{color:var(--highlight)}
+.faq h2{margin-bottom:var(--s-4)}
+.faq summary::marker{color:var(--accent)}
+code{white-space:nowrap}
+.faq details p{margin:var(--s-3) 0 0}
+.page main ul{padding-left:var(--s-5)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main">
+  <h1>{{t.h1}}</h1>
+  <p class="lead">{{t.lead}}</p>
+  <section class="tiers" aria-label="{{t.tiers_label}}">
+    <div class="card">
+      <span class="label">{{t.monthly_name}}</span>
+      <p class="price">{{t.monthly_price}} <small>{{t.monthly_unit}}</small></p>
+      <p>{{t.monthly_note}}</p>
+      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+    </div>
+    <div class="card">
+      <span class="label">{{t.annual_name}}</span>
+      <p class="price">{{t.annual_price}} <small>{{t.annual_unit}}</small></p>
+      <p>{{t.annual_note}}</p>
+      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+    </div>
+    <div class="card">
+      <span class="label">{{t.lifetime_name}}</span>
+      <p class="price">{{t.lifetime_price}} <small>{{t.lifetime_unit}}</small></p>
+      <p>{{t.lifetime_note}}</p>
+      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+    </div>
+  </section>
+  <p class="notice" id="soon">{{t.soon_line}}</p>
+  <section class="stack">
+    <h2>{{t.includes_h}}</h2>
+    <ul>
+      <li>{{t.includes_1}}</li>
+      <li>{{t.includes_2}}</li>
+      <li>{{t.includes_3}}</li>
+    </ul>
+    <p>{{t.voice_note}}</p>
+  </section>
+  <section class="faq">
+    <h2>{{t.faq_h}}</h2>
+    <details><summary>{{t.faq_key_q}}</summary><p>{{t.faq_key_a}}</p></details>
+    <details><summary>{{t.faq_data_q}}</summary><p>{{t.faq_data_a}}</p></details>
+    <details><summary>{{t.faq_licence_q}}</summary><p>{{t.faq_licence_a}}</p></details>
+    <details><summary>{{t.faq_try_q}}</summary><p>{{t.faq_try_a}}</p></details>
+  </section>
+</main>
+<footer data-footer></footer>
+</body>
+</html>

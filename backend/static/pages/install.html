@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+.cmd{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;background:var(--bg-elev);border:1px solid var(--rule-strong);border-radius:var(--r-2);padding:var(--s-3) var(--s-3) var(--s-3) var(--s-4)}
+.cmd pre{flex:1 1 280px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.cmd code{font-size:var(--fs-2);color:var(--ink)}
+.copied{font-family:var(--font-mono);font-size:var(--fs-1);letter-spacing:var(--ls-mono);text-transform:uppercase;color:var(--ok)}
+.lead{font-size:var(--fs-4)}
+.page main ol,.page main ul{padding-left:var(--s-5)}
+.page main li+li{margin-top:var(--s-2)}
+.page main section>*+*{margin-top:var(--s-4)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="reading">
+  <h1>{{t.h1}}</h1>
+  <p class="lead">{{t.lead}}</p>
+  <div class="cmd">
+      <pre><code id="cmd-install">curl -fsSL https://theemmafamily.com/install.sh | sh</code></pre>
+      <span class="copied" id="st-install" aria-live="polite"></span>
+      <button class="btn btn-secondary btn-sm" type="button" data-copy="cmd-install">{{t.copy}}</button>
+  </div>
+
+  <section>
+    <h2>{{t.req_h}}</h2>
+    <ul>
+      <li>{{t.req_1}}</li>
+      <li>{{t.req_2}}</li>
+      <li>{{t.req_3}}</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>{{t.steps_h}}</h2>
+    <ol>
+      <li>{{t.step_1}}</li>
+      <li>{{t.step_2}}</li>
+      <li>{{t.step_3}}</li>
+      <li>{{t.step_4}}</li>
+      <li>{{t.step_5}}</li>
+      <li>{{t.step_6}}</li>
+      <li>{{t.step_7}}</li>
+    </ol>
+    <p>{{t.xcode}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.perm_h}}</h2>
+    <p>{{t.perm_lead}}</p>
+    <ul>
+      <li>{{t.perm_mic}}</li>
+      <li>{{t.perm_auto}}</li>
+      <li>{{t.perm_ax}}</li>
+      <li>{{t.perm_screen}}</li>
+      <li>{{t.perm_cal}}</li>
+      <li>{{t.perm_disk}}</li>
+    </ul>
+    <p>{{t.perm_manual}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.first_h}}</h2>
+    <p>{{t.first_1}}</p>
+    <p>{{t.first_2}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.update_h}}</h2>
+    <p>{{t.update_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.uninstall_h}}</h2>
+    <div class="cmd">
+      <pre><code id="cmd-uninstall">curl -fsSL https://theemmafamily.com/uninstall.sh | sh</code></pre>
+      <span class="copied" id="st-uninstall" aria-live="polite"></span>
+      <button class="btn btn-secondary btn-sm" type="button" data-copy="cmd-uninstall">{{t.copy}}</button>
+    </div>
+    <p>{{t.uninstall_1}}</p>
+  </section>
+</main>
+<footer data-footer></footer>
+<script>
+const T = {{i18n}};
+document.querySelectorAll('[data-copy]').forEach((btn) => {
+  const code = document.getElementById(btn.dataset.copy);
+  const status = document.getElementById(btn.dataset.copy.replace('cmd-', 'st-'));
+  let timer;
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      status.textContent = T.copied;
+    } catch (_) {
+      // No clipboard access (old browser, insecure context): select it for a manual copy.
+      getSelection().selectAllChildren(code);
+      status.textContent = T.copy_failed;
+    }
+    clearTimeout(timer);
+    timer = setTimeout(() => { status.textContent = ''; }, 3000);
+  });
+});
+</script>
+</body>
+</html>

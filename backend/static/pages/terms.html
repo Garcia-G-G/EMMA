@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+.page main section>*+*{margin-top:var(--s-3)}
+.page main ul{padding-left:var(--s-5);margin:0}
+.page main li+li{margin-top:var(--s-2)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="reading">
+  <!-- TODO: name the party offering these terms (legal entity and address); not known yet. -->
+  <!-- TODO: governing law and jurisdiction; not decided. Do not invent one. -->
+  <!-- TODO: cancellation and refund policy for paid licences; to be decided before checkout opens. -->
+  <h1>{{t.h1}}</h1>
+  <p class="fine">{{t.updated}}</p>
+  <p>{{t.intro}}</p>
+
+  <section>
+    <h2>{{t.licence_h}}</h2>
+    <p>{{t.licence_1}}</p>
+    <ul>{{t.licence_list}}</ul>
+    <p>{{t.licence_2}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.source_h}}</h2>
+    <!-- TODO: link the source code licence once it is chosen; this page does not grant rights to the code beyond it. -->
+    <p>{{t.source_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.asis_h}}</h2>
+    <!-- TODO: limitation of liability clause; needs legal review. -->
+    <p>{{t.asis_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.eleven_h}}</h2>
+    <p>{{t.eleven_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.use_h}}</h2>
+    <p>{{t.use_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.account_h}}</h2>
+    <p>{{t.account_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.changes_h}}</h2>
+    <p>{{t.changes_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.contact_h}}</h2>
+    <p>{{t.contact_1}}</p>
+  </section>
+</main>
+<footer data-footer></footer>
+</body>
+</html>

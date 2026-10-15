@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+.page main section>*+*{margin-top:var(--s-3)}
+.page main ul{padding-left:var(--s-5);margin:0}
+.page main li+li{margin-top:var(--s-2)}
+.cmdline{overflow-x:auto;white-space:nowrap;background:var(--bg-elev);border:1px solid var(--rule);border-radius:var(--r-2);padding:var(--s-3) var(--s-4)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="reading">
+  <h1>{{t.h1}}</h1>
+  <p class="fine">{{t.updated}}</p>
+  <p>{{t.intro}}</p>
+
+  <section>
+    <h2>{{t.mac_h}}</h2>
+    <p>{{t.mac_1}}</p>
+    <ul>{{t.mac_list}}</ul>
+  </section>
+
+  <section>
+    <h2>{{t.eleven_h}}</h2>
+    <p>{{t.eleven_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.backend_h}}</h2>
+    <p>{{t.backend_1}}</p>
+    <ul>{{t.backend_list}}</ul>
+    <p>{{t.backend_2}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.waitlist_h}}</h2>
+    <p>{{t.waitlist_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.logs_h}}</h2>
+    <!-- TODO: state how long server logs (with IP addresses) are kept once the retention period is decided. -->
+    <p>{{t.logs_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.pay_h}}</h2>
+    <p>{{t.pay_1}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.delete_h}}</h2>
+    <p>{{t.delete_account}} <a href="{{path.account}}">{{t.account_link}}</a></p>
+    <p>{{t.delete_local}}</p>
+    <p class="cmdline"><code>curl -fsSL https://theemmafamily.com/uninstall.sh | sh</code></p>
+    <p>{{t.delete_2}}</p>
+  </section>
+
+  <section>
+    <h2>{{t.contact_h}}</h2>
+    <!-- TODO: name the data controller (legal entity and address) if one is required; not known yet. -->
+    <p>{{t.contact_1}}</p>
+  </section>
+</main>
+<footer data-footer></footer>
+</body>
+</html>
