@@ -6,6 +6,7 @@
 .page main section>*+*{margin-top:var(--s-3)}
 .page main ul{padding-left:var(--s-5);margin:0}
 .page main li+li{margin-top:var(--s-2)}
+/* idle atom in the corner: same snippet on every page (candidate for components.css) */
 </style>
 </head>
 <body class="page">
@@ -38,11 +39,6 @@
   </section>
 
   <section>
-    <h2>{{t.eleven_h}}</h2>
-    <p>{{t.eleven_1}}</p>
-  </section>
-
-  <section>
     <h2>{{t.use_h}}</h2>
     <p>{{t.use_1}}</p>
   </section>
@@ -63,5 +59,6 @@
   </section>
 </main>
 <footer data-footer></footer>
+<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 </body>
 </html>

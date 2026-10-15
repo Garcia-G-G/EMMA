@@ -3,14 +3,25 @@
 <head>
 {{head}}
 <style>
-.cmd{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;background:var(--bg-elev);border:1px solid var(--rule-strong);border-radius:var(--r-2);padding:var(--s-3) var(--s-3) var(--s-3) var(--s-4)}
+.cmd{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-2);padding:var(--s-3) var(--s-3) var(--s-3) var(--s-4)}
 .cmd pre{flex:1 1 280px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .cmd code{font-size:var(--fs-2);color:var(--ink)}
-.copied{font-family:var(--font-mono);font-size:var(--fs-1);letter-spacing:var(--ls-mono);text-transform:uppercase;color:var(--ok)}
+.copied{font-size:var(--fs-2);color:var(--ok)}
 .lead{font-size:var(--fs-4)}
 .page main ol,.page main ul{padding-left:var(--s-5)}
 .page main li+li{margin-top:var(--s-2)}
 .page main section>*+*{margin-top:var(--s-4)}
+.page main .mornings{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--s-4)}
+.page main .mornings li{margin:0;padding:var(--s-5);display:flex;flex-direction:column;gap:var(--s-2)}
+.mornings .top{display:flex;justify-content:space-between;align-items:flex-start}
+.hour{font-family:var(--font-display);font-size:44px;line-height:1;color:transparent;-webkit-text-stroke:1px var(--ink3)}
+.mornings li:last-child .hour{color:var(--ink);-webkit-text-stroke-color:transparent}
+.mornings .atom{width:20px;height:20px}
+.mornings .atom .ring{stroke-width:5}
+.mornings h3{font-size:var(--fs-3);font-weight:var(--fw-medium);margin-top:var(--s-3)}
+.mornings p{margin:0}
+.specs{color:var(--ink2);font-size:var(--fs-2)}
+/* idle atom in the corner: same snippet on every page (candidate for components.css) */
 </style>
 </head>
 <body class="page">
@@ -24,13 +35,16 @@
       <button class="btn btn-secondary btn-sm" type="button" data-copy="cmd-install">{{t.copy}}</button>
   </div>
 
+  <p class="specs">{{t.specs}}</p>
+
   <section>
-    <h2>{{t.req_h}}</h2>
-    <ul>
-      <li>{{t.req_1}}</li>
-      <li>{{t.req_2}}</li>
-      <li>{{t.req_3}}</li>
-    </ul>
+    <h2>{{t.morning_h}}</h2>
+    <ol class="mornings">
+    <li class="card"><div class="top"><span class="hour" aria-hidden="true">06:58</span><svg class="atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/></g><circle class="core" cx="50" cy="50" r="9"/></svg></div><h3>{{t.m1_h}}</h3><p>{{t.m1}}</p></li>
+    <li class="card"><div class="top"><span class="hour" aria-hidden="true">06:59</span><svg class="atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/></g><circle class="core" cx="50" cy="50" r="9"/></svg></div><h3>{{t.m2_h}}</h3><p>{{t.m2}}</p></li>
+    <li class="card"><div class="top"><span class="hour" aria-hidden="true">07:00</span><svg class="atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/></g><circle class="core" cx="50" cy="50" r="9"/></svg></div><h3>{{t.m3_h}}</h3><p>{{t.m3}}</p></li>
+    </ol>
+    <p>{{t.wake}}</p>
   </section>
 
   <section>
@@ -62,12 +76,6 @@
   </section>
 
   <section>
-    <h2>{{t.first_h}}</h2>
-    <p>{{t.first_1}}</p>
-    <p>{{t.first_2}}</p>
-  </section>
-
-  <section>
     <h2>{{t.update_h}}</h2>
     <p>{{t.update_1}}</p>
   </section>
@@ -83,6 +91,7 @@
   </section>
 </main>
 <footer data-footer></footer>
+<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 <script>
 const T = {{i18n}};
 document.querySelectorAll('[data-copy]').forEach((btn) => {

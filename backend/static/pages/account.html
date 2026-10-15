@@ -4,7 +4,7 @@
 {{head}}
 <style>
   .acct .card-row>span:first-child{min-width:9rem}
-  .lic+.lic{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--rule-strong)}
+  .lic+.lic{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--line-strong)}
   .key{display:inline-flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
   .key code{font-size:var(--fs-3);letter-spacing:0.04em}
   .macs{margin:0;padding:0;list-style:none;text-align:right}
@@ -12,7 +12,8 @@
   .st-off{color:var(--danger)}
   #how{margin:var(--s-4) 0 0}
   .acct [hidden]{display:none}
-  .confirm{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--rule)}
+  .confirm{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--line)}
+/* idle atom in the corner: same snippet on every page (candidate for components.css) */
 </style>
 </head>
 <body class="page">
@@ -80,6 +81,7 @@
   </section>
 </main>
 <footer data-footer></footer>
+<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 <script>
 const T = {{i18n}};
 const $ = (id) => document.getElementById(id);

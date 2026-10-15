@@ -1,7 +1,7 @@
 {
   "es": {
     "title": "Términos · Emma",
-    "description": "Términos de uso de Emma: la licencia, el código público, ElevenLabs y el uso aceptable.",
+    "description": "Términos de uso de Emma: la licencia, el código público, los reembolsos y el uso aceptable.",
     "h1": "Términos de uso",
     "updated": "Última actualización: 2026-10-15",
     "intro": "Estos términos cubren el uso de Emma, el asistente de voz para macOS, y de este sitio web. Al instalar Emma o crear una cuenta, los aceptas.",
@@ -13,8 +13,6 @@
     "source_1": "El código fuente de Emma es público en <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a> para que puedas leerlo y ver qué hace Emma en tu Mac. Es código de fuente disponible, con todos los derechos reservados. Poder leerlo no te da ningún derecho sobre él. Lo que sí puedes hacer es instalar Emma con el instalador oficial y usarla en tus Macs según estos términos, con una licencia comprada cuando haga falta. Copiarlo, modificarlo o redistribuirlo requiere permiso por escrito. Los detalles están en el archivo <a href=\"https://github.com/theemmafamily/EMMA/blob/main/LICENSE\">LICENSE</a>.",
     "asis_h": "Sin garantías",
     "asis_1": "Emma se ofrece tal cual, sin garantías de ningún tipo. Puede equivocarse, entender mal lo que pides o dejar de funcionar con una versión de macOS. Emma te pide confirmación por voz antes de las acciones que no se pueden deshacer; revisa lo que confirmas.",
-    "eleven_h": "Tu cuenta de ElevenLabs",
-    "eleven_1": "La voz de Emma usa tu propia cuenta de ElevenLabs. Tú eres responsable de esa cuenta, de su clave y de lo que ElevenLabs te cobre. Su uso se rige por los términos de ElevenLabs.",
     "use_h": "Uso aceptable",
     "use_1": "No uses Emma para algo ilegal, para dañar a otras personas ni para acceder a cuentas o equipos que no son tuyos. No intentes saturar ni atacar nuestro servidor.",
     "account_h": "Tu cuenta en la web",
@@ -28,7 +26,7 @@
   },
   "en": {
     "title": "Terms · Emma",
-    "description": "Emma's terms of use: the licence, the public source, ElevenLabs and acceptable use.",
+    "description": "Emma's terms of use: the licence, the public source, refunds and acceptable use.",
     "h1": "Terms of use",
     "updated": "Last updated: 2026-10-15",
     "intro": "These terms cover the use of Emma, the voice assistant for macOS, and of this website. By installing Emma or creating an account, you accept them.",
@@ -40,8 +38,6 @@
     "source_1": "Emma's source code is public on <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a> so you can read it and see what Emma does on your Mac. It is source-available, with all rights reserved. Being able to read it gives you no rights to it. What you may do is install Emma with the official installer and use it on your Macs under these terms, with a purchased licence where one is required. Copying, modifying or redistributing it needs written permission. The <a href=\"https://github.com/theemmafamily/EMMA/blob/main/LICENSE\">LICENSE</a> file has the details.",
     "asis_h": "No warranty",
     "asis_1": "Emma is provided as is, without warranty of any kind. She can make mistakes, misunderstand what you ask or stop working with a macOS version. Emma asks you to confirm by voice before actions that can't be undone; check what you confirm.",
-    "eleven_h": "Your ElevenLabs account",
-    "eleven_1": "Emma's voice uses your own ElevenLabs account. You are responsible for that account, its key and whatever ElevenLabs charges you. Its use falls under ElevenLabs' terms.",
     "use_h": "Acceptable use",
     "use_1": "Don't use Emma for anything illegal, to harm other people or to get into accounts or computers that aren't yours. Don't try to overload or attack our server.",
     "account_h": "Your website account",

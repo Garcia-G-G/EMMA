@@ -5,7 +5,8 @@
 <style>
 /* gaps in components.css: notice spacing inside a form card, small print outside .field */
 #form .notice{margin-bottom:var(--s-5)}
-.fine{font-size:var(--fs-2);color:var(--ink-faint);margin:var(--s-4) 0 0}
+.fine{font-size:var(--fs-2);color:var(--ink2);margin:var(--s-4) 0 0}
+/* idle atom in the corner: same snippet on every page (candidate for components.css) */
 </style>
 </head>
 <body class="page">
@@ -25,6 +26,7 @@
   <p class="switch"><a href="{{path.login}}">{{t.back}}</a></p>
 </main>
 <footer data-footer></footer>
+<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 <script>
 const T = {{i18n}};
 const form = document.getElementById('form'), err = document.getElementById('err'), ok = document.getElementById('ok'), btn = document.getElementById('submit');

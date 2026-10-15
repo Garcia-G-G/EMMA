@@ -6,18 +6,19 @@
 .tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s-5)}
 .tiers .card{display:flex;flex-direction:column;gap:var(--s-3);margin:0}
 .price{font-family:var(--font-display);font-size:var(--fs-6);line-height:var(--lh-tight);color:var(--ink)}
-.price small{font-family:var(--font-body);font-size:var(--fs-3);color:var(--ink-faint)}
-.tiers .soon{margin-top:auto;color:var(--highlight)}
+.price small{font-family:var(--font-body);font-size:var(--fs-3);color:var(--ink2)}
+.tiers .soon{margin-top:auto}
 .lead{font-size:var(--fs-4)}
-.faq details{border-top:1px solid var(--rule);padding:var(--s-4) 0}
-.faq details:last-child{border-bottom:1px solid var(--rule)}
+.faq details{border-top:1px solid var(--line);padding:var(--s-4) 0}
+.faq details:last-child{border-bottom:1px solid var(--line)}
 .faq summary{cursor:pointer;color:var(--ink);font-size:var(--fs-3)}
-.faq summary:hover{color:var(--highlight)}
+.faq summary:hover,.faq details[open] summary{color:var(--accent-ink)}
 .faq h2{margin-bottom:var(--s-4)}
-.faq summary::marker{color:var(--accent)}
+.faq summary::marker{color:var(--ink2)}
 code{white-space:nowrap}
 .faq details p{margin:var(--s-3) 0 0}
 .page main ul{padding-left:var(--s-5)}
+/* idle atom in the corner: same snippet on every page (candidate for components.css) */
 </style>
 </head>
 <body class="page">
@@ -53,11 +54,9 @@ code{white-space:nowrap}
       <li>{{t.includes_2}}</li>
       <li>{{t.includes_3}}</li>
     </ul>
-    <p>{{t.voice_note}}</p>
   </section>
   <section class="faq">
     <h2>{{t.faq_h}}</h2>
-    <details><summary>{{t.faq_key_q}}</summary><p>{{t.faq_key_a}}</p></details>
     <details><summary>{{t.faq_data_q}}</summary><p>{{t.faq_data_a}}</p></details>
     <details><summary>{{t.faq_licence_q}}</summary><p>{{t.faq_licence_a}}</p></details>
     <details><summary>{{t.faq_try_q}}</summary><p>{{t.faq_try_a}}</p></details>
@@ -66,5 +65,6 @@ code{white-space:nowrap}
   </section>
 </main>
 <footer data-footer></footer>
+<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 </body>
 </html>
