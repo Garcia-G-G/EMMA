@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+  .acct .card-row>span:first-child{min-width:9rem}
+  .lic+.lic{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--rule-strong)}
+  .key{display:inline-flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
+  .key code{font-size:var(--fs-3);letter-spacing:0.04em}
+  .macs{margin:0;padding:0;list-style:none;text-align:right}
+  .st-active{color:var(--ok)}
+  .st-off{color:var(--danger)}
+  #how{margin:var(--s-4) 0 0}
+  .acct [hidden]{display:none}
+  .confirm{margin-top:var(--s-5);padding-top:var(--s-5);border-top:1px solid var(--rule)}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="reading acct">
+  <h1>{{t.h1}}</h1>
+  <div class="notice notice-error" id="load_err" role="alert"></div>
+
+  <section class="card" aria-labelledby="h_email">
+    <h2 id="h_email">{{t.h_email}}</h2>
+    <p>{{t.email_current}} <b id="cur_email">…</b></p>
+    <form id="f_email" novalidate>
+      <div class="notice" id="m_email" role="status" aria-live="polite"></div>
+      <div class="field">
+        <label for="new_email">{{t.email_new}}</label>
+        <input class="input" id="new_email" type="email" autocomplete="email" required>
+      </div>
+      <button class="btn btn-secondary" type="submit">{{t.email_submit}}</button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="h_lic">
+    <h2 id="h_lic">{{t.h_lic}}</h2>
+    <div id="lics" aria-live="polite"><p>…</p></div>
+    <p class="fine" id="how" hidden>{{t.lic_how}}</p>
+  </section>
+
+  <section class="card" aria-labelledby="h_pw">
+    <h2 id="h_pw">{{t.h_pw}}</h2>
+    <form id="f_pw" novalidate>
+      <div class="notice" id="m_pw" role="status" aria-live="polite"></div>
+      <div class="field">
+        <label for="pw_cur">{{t.pw_current}}</label>
+        <input class="input" id="pw_cur" type="password" autocomplete="current-password" aria-describedby="pw_cur_help">
+        <p class="help" id="pw_cur_help">{{t.pw_current_help}}</p>
+      </div>
+      <div class="field">
+        <label for="pw_new">{{t.pw_new}}</label>
+        <input class="input" id="pw_new" type="password" autocomplete="new-password" required aria-describedby="pw_new_help">
+        <p class="help" id="pw_new_help">{{t.pw_new_help}}</p>
+      </div>
+      <button class="btn btn-secondary" type="submit">{{t.pw_submit}}</button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="h_out">
+    <h2 id="h_out">{{t.h_out}}</h2>
+    <div class="notice notice-error" id="m_out" role="alert"></div>
+    <button class="btn btn-secondary" type="button" id="b_out">{{t.out_submit}}</button>
+  </section>
+
+  <section class="card" aria-labelledby="h_del">
+    <h2 id="h_del">{{t.h_del}}</h2>
+    <p>{{t.del_body}}</p>
+    <button class="btn btn-danger" type="button" id="b_del_open" aria-expanded="false" aria-controls="del_box">{{t.del_open}}</button>
+    <form class="confirm" id="del_box" hidden novalidate>
+      <div class="notice notice-error" id="m_del" role="alert"></div>
+      <div class="field">
+        <label for="del_email">{{t.del_type}}</label>
+        <input class="input" id="del_email" type="email" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn btn-danger" type="submit" id="b_del" disabled>{{t.del_submit}}</button>
+      <button class="btn btn-ghost" type="button" id="b_del_cancel">{{t.del_cancel}}</button>
+    </form>
+  </section>
+</main>
+<footer data-footer></footer>
+<script>
+const T = {{i18n}};
+const $ = (id) => document.getElementById(id);
+const lang = document.documentElement.lang;
+let email = '';
+const fmt = (s) => new Intl.DateTimeFormat(lang, {dateStyle: 'long'}).format(new Date(s * 1000));
+const api = (url, method, body) => fetch(url, {method, credentials: 'same-origin',
+  headers: body ? {'Content-Type': 'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function row(label, value) {
+  const r = el('div', 'card-row'); r.append(el('span', 'label', label));
+  r.append(typeof value === 'string' ? el('span', null, value) : value); return r;
+}
+function say(box, msg, ok) { box.className = 'notice ' + (ok ? 'notice-ok' : 'notice-error'); box.textContent = msg; }
+function busy(btn, on) { on ? btn.setAttribute('aria-busy', 'true') : btn.removeAttribute('aria-busy'); }
+
+function renderLicences(list) {
+  const box = $('lics'); box.textContent = '';
+  if (!list.length) {
+    const p = el('p', null, T.lic_none + ' ');
+    const a = el('a', null, T.lic_pricing); a.href = '{{path.pricing}}'; p.append(a);
+    box.append(p); return;
+  }
+  $('how').hidden = false;
+  const now = Date.now() / 1000;
+  for (const l of list) {
+    const d = el('div', 'lic');
+    d.append(row(T.lic_plan, T['plan_' + l.plan] || l.plan));
+    const k = el('span', 'key'); k.append(el('code', null, l.key));
+    const c = el('button', 'btn btn-ghost btn-sm', T.copy); c.type = 'button';
+    c.setAttribute('aria-label', T.copy_label + ' ' + l.key);
+    c.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(l.key); c.textContent = T.copied; }
+      catch (_) { c.textContent = T.copy_fail; }
+      setTimeout(() => { c.textContent = T.copy; }, 2000);
+    });
+    k.append(c); d.append(row(T.lic_key, k));
+    const expired = l.expires_at != null && l.expires_at < now;
+    const st = l.status === 'active' && !expired ? 'active' : (expired && l.status === 'active' ? 'expired' : l.status);
+    d.append(row(T.lic_status, el('span', st === 'active' ? 'st-active' : 'st-off', T['st_' + st] || st)));
+    d.append(row(expired ? T.lic_expired_on : T.lic_expires, l.expires_at == null ? T.lifetime : fmt(l.expires_at)));
+    d.append(row(T.lic_macs, T.macs_used.replace('{n}', l.activations.length).replace('{max}', l.activations_max)));
+    if (l.activations.length) {
+      const ul = el('ul', 'macs');
+      for (const a of l.activations) ul.append(el('li', null, (a.device_name || T.mac_unnamed) + ' · ' + T.since + ' ' + fmt(a.activated_at)));
+      d.append(row(T.lic_on, ul));
+    }
+    box.append(d);
+  }
+}
+
+async function load() {
+  try {
+    const [a, l] = await Promise.all([api('/api/account', 'GET'), api('/api/me/licenses', 'GET')]);
+    if (a.status === 401) { location.assign('{{path.login}}?next=' + encodeURIComponent(location.pathname)); return; }
+    if (!a.ok || !l.ok) throw new Error();
+    email = (await a.json()).email; $('cur_email').textContent = email;
+    renderLicences((await l.json()).licenses);
+  } catch (_) { $('load_err').textContent = T.err_load; }
+}
+load();
+
+$('f_email').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = $('new_email'), btn = e.submitter || e.target.querySelector('button'), box = $('m_email');
+  const v = f.value.trim().toLowerCase();
+  box.textContent = ''; f.removeAttribute('aria-invalid');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { f.setAttribute('aria-invalid', 'true'); return say(box, T.err_email_invalid); }
+  busy(btn, true);
+  try {
+    const r = await api('/api/me/email', 'POST', {email: v});
+    if (r.ok) { email = (await r.json()).email; $('cur_email').textContent = email; f.value = ''; say(box, T.email_ok, true); }
+    else { f.setAttribute('aria-invalid', 'true'); say(box, r.status === 409 ? T.err_email_taken : r.status === 401 ? T.err_session : T.err_email_invalid); }
+  } catch (_) { say(box, T.err_network); }
+  busy(btn, false);
+});
+
+$('f_pw').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const cur = $('pw_cur'), nw = $('pw_new'), btn = e.target.querySelector('button'), box = $('m_pw');
+  box.textContent = ''; cur.removeAttribute('aria-invalid'); nw.removeAttribute('aria-invalid');
+  if (nw.value.length < 8) { nw.setAttribute('aria-invalid', 'true'); return say(box, T.err_pw_weak); }
+  busy(btn, true);
+  try {
+    const r = await api('/api/me/password', 'POST', {current_password: cur.value, new_password: nw.value});
+    if (r.ok) { cur.value = ''; nw.value = ''; say(box, T.pw_ok, true); }
+    else if (r.status === 403) { cur.setAttribute('aria-invalid', 'true'); say(box, T.err_pw_current); }
+    else if (r.status === 400) { nw.setAttribute('aria-invalid', 'true'); say(box, T.err_pw_weak); }
+    else say(box, r.status === 401 ? T.err_session : T.err_network);
+  } catch (_) { say(box, T.err_network); }
+  busy(btn, false);
+});
+
+$('b_out').addEventListener('click', async (e) => {
+  const btn = e.currentTarget; busy(btn, true); $('m_out').textContent = '';
+  try { const r = await api('/api/auth/logout', 'POST'); if (r.ok) { location.assign(T.home); return; } } catch (_) {}
+  $('m_out').textContent = T.err_network; busy(btn, false);
+});
+
+const delBox = $('del_box'), delOpen = $('b_del_open'), delIn = $('del_email'), delBtn = $('b_del');
+function toggleDel(open) {
+  delBox.hidden = !open; delOpen.hidden = open; delOpen.setAttribute('aria-expanded', String(open));
+  if (open) delIn.focus(); else { delIn.value = ''; delBtn.disabled = true; $('m_del').textContent = ''; delOpen.focus(); }
+}
+delOpen.addEventListener('click', () => toggleDel(true));
+$('b_del_cancel').addEventListener('click', () => toggleDel(false));
+delIn.addEventListener('input', () => { delBtn.disabled = !email || delIn.value.trim() !== email; });
+delBox.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (delBtn.disabled) return;
+  busy(delBtn, true); $('m_del').textContent = '';
+  try { const r = await api('/api/me', 'DELETE'); if (r.ok) { location.assign(T.home); return; }
+    $('m_del').textContent = r.status === 401 ? T.err_session : T.err_network;
+  } catch (_) { $('m_del').textContent = T.err_network; }
+  busy(delBtn, false);
+});
+</script>
+</body>
+</html>

@@ -944,6 +944,32 @@ def get_license(license_key: str) -> dict[str, Any] | None:
         conn.close()
 
 
+def licenses_for_user(user_id: int) -> list[dict[str, Any]]:
+    """The user's licences, newest first, each with its activations (install_id left out)."""
+    conn = connect()
+    try:
+        lics = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, license_key, plan, status, expires_at, activations_max "
+                "FROM licenses WHERE user_id=? ORDER BY created_at DESC, id DESC",
+                (user_id,),
+            )
+        ]
+        for lic in lics:
+            lic["activations"] = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT device_name, first_seen_at FROM license_activations "
+                    "WHERE license_id=? ORDER BY first_seen_at",
+                    (lic.pop("id"),),
+                )
+            ]
+        return lics
+    finally:
+        conn.close()
+
+
 def record_activation(license_id: int, install_id: str, device_name: str | None) -> tuple[bool, int]:
     """Register this install against the license. Returns (allowed, activations_used).
 

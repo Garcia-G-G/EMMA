@@ -71,6 +71,28 @@ async def account(request: Request) -> dict[str, Any]:
     return _me_payload(await require_user(request))
 
 
+@router.get("/api/me/licenses")
+async def my_licenses(request: Request) -> dict[str, Any]:
+    """Read-only: the signed-in user's licence keys and the Macs each is on."""
+    user = await require_user(request)
+    return {
+        "licenses": [
+            {
+                "key": lic["license_key"],
+                "plan": lic["plan"],
+                "status": lic["status"],
+                "expires_at": lic["expires_at"],
+                "activations_max": lic["activations_max"],
+                "activations": [
+                    {"device_name": a["device_name"], "activated_at": a["first_seen_at"]}
+                    for a in lic["activations"]
+                ],
+            }
+            for lic in db.licenses_for_user(user["id"])
+        ]
+    }
+
+
 class PasswordChange(BaseModel):
     current_password: str = ""
     new_password: str
