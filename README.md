@@ -162,3 +162,7 @@ uv run python tests/acceptance/runner.py --mock-external   # acceptance suite, n
 uv run ruff check . && uv run ruff format .      # lint + format
 uv run mypy .                                    # type check
 ```
+
+## License
+
+Source-available, all rights reserved: the code is public to read; using Emma is covered by the [terms](https://theemmafamily.com/terminos). See [LICENSE](LICENSE).
