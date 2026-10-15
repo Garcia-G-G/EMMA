@@ -127,13 +127,3 @@ b,strong{color:var(--ink);font-weight:var(--fw-regular)}
 .footer-brand{display:inline-flex;align-items:center;gap:var(--s-2)}
 .footer-brand .atom{width:18px;height:18px}
 .footer-links{display:flex;gap:var(--s-5);flex-wrap:wrap}
-
-/* ---- idle atom: fixed in the corner of every page, decorative (aria-hidden) ---- */
-.idle-atom{position:fixed;right:var(--s-4);bottom:var(--s-4);width:36px;height:36px;z-index:20;pointer-events:none;opacity:.85}
-.idle-atom .ring{stroke-width:3}
-.footer{padding-right:calc(var(--s-4) + 56px)}
-@media (max-width:720px){.idle-atom{width:28px;height:28px;right:var(--s-3);bottom:var(--s-3)}}
-.idle-atom .ia-e1{transform:translate(42px,0)}.idle-atom .ia-e2{transform:translate(-42px,0)}.idle-atom .ia-e3{transform:translate(0,14px)}
-@media (prefers-reduced-motion:no-preference){.idle-atom .ia-spin{animation:ia-turn 120s linear infinite}
-@supports (offset-path:path('M0 0')){.idle-atom .ia-e{transform:none;offset-path:path('M42 0A42 14 0 1 1 -42 0A42 14 0 1 1 42 0');animation:ia-orbit 14s linear infinite}.idle-atom .ia-e2{animation-duration:19s;animation-delay:-7s}.idle-atom .ia-e3{animation-duration:23s;animation-delay:-15s}}}
-@keyframes ia-turn{to{transform:rotate(360deg)}}@keyframes ia-orbit{to{offset-distance:100%}}

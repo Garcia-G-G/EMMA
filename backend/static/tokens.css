@@ -31,6 +31,9 @@
   --accent:#c9764a;        /* Emma acting: the atom, the confirmation, the window change */
   --accent-soft:rgba(201,118,74,.12);
   --glow:rgba(201,118,74,.25);
+  /* wallpaper of the landing's Mac: the sky at dawn (first scene) and at dusk (last) */
+  --dawn-1:#c9d3e6;--dawn-2:#e9d6d4;--dawn-3:#f6d2b0;--dawn-4:#f3c08f;--dawn-sun:rgba(255,226,170,.95);
+  --dusk-1:#2c3256;--dusk-2:#5b4a72;--dusk-3:#b56f78;--dusk-4:#e89a7a;--dusk-glow:rgba(240,140,100,.9);--star:#fff;
   --second:#7f9a86;        /* decoration; English words use --second-ink */
   /* AA companions for text and controls */
   --accent-ink:#9e5530;

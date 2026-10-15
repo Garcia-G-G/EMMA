@@ -21,7 +21,12 @@
 .mornings h3{font-size:var(--fs-3);font-weight:var(--fw-medium);margin-top:var(--s-3)}
 .mornings p{margin:0}
 .specs{color:var(--ink2);font-size:var(--fs-2)}
-/* idle atom in the corner: same snippet on every page (candidate for components.css) */
+.wait{max-width:520px}
+.wait .label{display:block;margin-bottom:var(--s-2)}
+.wait-row{display:flex;gap:var(--s-2);flex-wrap:wrap}
+.wait-row .input{flex:1 1 220px;min-width:0}
+.wait-msg{min-height:20px;margin:var(--s-2) 0 0;font-size:var(--fs-2);color:var(--ink2)}
+.wait-msg.ok{color:var(--ok)}.wait-msg.err{color:var(--danger)}
 </style>
 </head>
 <body class="page">
@@ -29,6 +34,18 @@
 <main id="main" class="reading">
   <h1>{{t.h1}}</h1>
   <p class="lead">{{t.lead}}</p>
+  <form class="wait" id="waitForm" novalidate>
+    <label class="label" for="wait-email">{{t.wait_label}}</label>
+    <div class="wait-row">
+      <input class="input" type="email" id="wait-email" name="email" placeholder="{{t.wait_ph}}" required autocomplete="email">
+      <button class="btn btn-primary" type="submit" id="wait-btn">{{t.wait_btn}}</button>
+    </div>
+    <p class="wait-msg" id="wait-msg" role="status" aria-live="polite"></p>
+    <p class="fine">{{t.wait_trust}}</p>
+  </form>
+
+  <h2>{{t.early_h}}</h2>
+  <p>{{t.early}}</p>
   <div class="cmd">
       <pre><code id="cmd-install">curl -fsSL https://theemmafamily.com/install.sh | sh</code></pre>
       <span class="copied" id="st-install" aria-live="polite"></span>
@@ -91,7 +108,6 @@
   </section>
 </main>
 <footer data-footer></footer>
-<svg class="atom idle-atom" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="translate(50 50)"><g class="ia-spin"><ellipse class="ring" rx="42" ry="14"/><ellipse class="ring" rx="42" ry="14" transform="rotate(60)"/><ellipse class="ring" rx="42" ry="14" transform="rotate(-60)"/><circle class="electron ia-e ia-e1" r="4"/><g transform="rotate(60)"><circle class="electron ia-e ia-e2" r="4"/></g><g transform="rotate(-60)"><circle class="electron ia-e ia-e3" r="4"/></g></g><circle class="core" r="8"/></g></svg>
 <script>
 const T = {{i18n}};
 document.querySelectorAll('[data-copy]').forEach((btn) => {
@@ -110,6 +126,26 @@ document.querySelectorAll('[data-copy]').forEach((btn) => {
     clearTimeout(timer);
     timer = setTimeout(() => { status.textContent = ''; }, 3000);
   });
+});
+// Waitlist: the /api/notify Worker answers {ok, already}.
+const wf = document.getElementById('waitForm'), we = document.getElementById('wait-email');
+const wm = document.getElementById('wait-msg'), wb = document.getElementById('wait-btn');
+wf.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = we.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    wm.textContent = T.msg_invalid; wm.className = 'wait-msg err';
+    we.setAttribute('aria-invalid', 'true'); we.focus(); return;
+  }
+  we.removeAttribute('aria-invalid');
+  wb.disabled = true; wm.textContent = T.msg_sending; wm.className = 'wait-msg';
+  try {
+    const r = await fetch('/api/notify', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email})});
+    if (!r.ok) throw new Error(String(r.status));
+    const d = await r.json().catch(() => ({}));
+    wm.textContent = d.already ? T.msg_already : T.msg_ok; wm.className = 'wait-msg ok'; we.value = '';
+  } catch (_) { wm.textContent = T.msg_err; wm.className = 'wait-msg err'; }
+  finally { wb.disabled = false; }
 });
 </script>
 </body>
