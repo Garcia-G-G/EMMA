@@ -102,8 +102,8 @@ b,strong{color:var(--ink);font-weight:var(--fw-regular)}
 
 /* ---- nav ---- */
 .nav{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;justify-content:space-between;align-items:center;gap:var(--s-5);
-  padding:var(--s-5) clamp(var(--s-4),4vw,38px);font-family:var(--font-mono);font-size:var(--fs-1);letter-spacing:var(--ls-mono);text-transform:uppercase;
-  background:linear-gradient(180deg,var(--bg) 0%,transparent 100%)}
+  padding:var(--s-4) clamp(var(--s-4),4vw,38px);font-family:var(--font-mono);font-size:var(--fs-1);letter-spacing:var(--ls-mono);text-transform:uppercase;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule)}
 .nav a{color:var(--ink-soft);text-decoration:none}
 .nav a:hover,.nav a[aria-current="page"]{color:var(--highlight)}
 .nav-brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
