@@ -42,11 +42,23 @@ nginx on `theemmafamily.com` (it proxies `/entrar`, `/en/login`, … `/api/*`,
 (the daemon's licence activation) via cloudflared.
 
 Server changes this needs (once):
-1. `/root/run-backend.sh`: add `--network kamal` to the `docker run` line
-   (keep `-p 127.0.0.1:8000:8000` for cloudflared and `-v /root/emma-data:/data`).
+1. `/root/run-backend.sh`: `--network kamal` and `-v /root/secrets:/run/secrets:ro`
+   on the `docker run` line (keep `-p 127.0.0.1:8000:8000` for cloudflared and
+   `-v /root/emma-data:/data`). Done 2026-10-15.
 2. `/root/emma.env`: `PUBLIC_URL=https://theemmafamily.com` (CSRF origin check,
-   reset links, OAuth callbacks and the `__Host-` session cookie all follow it),
-   and `RESEND_API_KEY=<key>` (read by `backend/config.py`, used by `backend/mail.py`).
+   reset links, OAuth callbacks and the `__Host-` session cookie all follow it).
+   Done 2026-10-15.
+
+## Secrets
+
+Every key and signing secret is a file `/root/secrets/<NAME>` (dir 0700, files
+0600), mounted read-only at `/run/secrets`; `backend/config.py:_secret` reads it.
+`/root/emma.env` holds only non-secret settings. Add or rotate one:
+
+```sh
+ssh root@5.78.216.62 'umask 077; cat > /root/secrets/RESEND_API_KEY'   # paste, Enter, Ctrl-D
+ssh root@5.78.216.62 docker restart emma-backend
+```
 3. OAuth apps (only if their keys are set): add the redirect URIs
    `https://theemmafamily.com/auth/google/callback` and
    `https://theemmafamily.com/auth/github/callback`.
