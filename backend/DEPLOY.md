@@ -33,6 +33,26 @@ because the DB was still the in-image default `backend_emma.db` with no mount.
 
 **Never** hand-write a `docker run` for emma-backend without the `-v` mount.
 
+## Pages on the bare domain (Step 40.1)
+
+Every HTML page is served by this backend but reached through the landing's
+nginx on `theemmafamily.com` (it proxies `/entrar`, `/en/login`, … `/api/*`,
+`/auth/*`, `/static/*`, `/admin` to `http://emma-backend:8000` over the
+`kamal` docker network). `api.theemmafamily.com` keeps working for `/api/*`
+(the daemon's licence activation) via cloudflared.
+
+Server changes this needs (once):
+1. `/root/run-backend.sh`: add `--network kamal` to the `docker run` line
+   (keep `-p 127.0.0.1:8000:8000` for cloudflared and `-v /root/emma-data:/data`).
+2. `/root/emma.env`: `PUBLIC_URL=https://theemmafamily.com` (CSRF origin check,
+   reset links, OAuth callbacks and the `__Host-` session cookie all follow it),
+   and `RESEND_API_KEY=<key>` (read by `backend/config.py`, used by `backend/mail.py`).
+3. OAuth apps (only if their keys are set): add the redirect URIs
+   `https://theemmafamily.com/auth/google/callback` and
+   `https://theemmafamily.com/auth/github/callback`.
+
+Check mail from the server: `docker exec emma-backend python -m backend.mail --test <addr>`.
+
 ## Backups (recommended)
 
 `/root/emma-data/backend_emma.db` is the single source of truth for accounts.

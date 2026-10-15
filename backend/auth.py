@@ -168,7 +168,7 @@ async def callback(provider: str, request: Request) -> Any:
         name, pid = gh.get("name") or gh.get("login", ""), str(gh.get("id", ""))
     if not email:
         raise HTTPException(400, "No pude leer tu correo del proveedor.")
-    response = RedirectResponse(url="/dashboard")
+    response = RedirectResponse(url="/cuenta")
     login_user(response, email, name, provider, pid)
     return response
 

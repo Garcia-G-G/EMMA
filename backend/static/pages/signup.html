@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+/* gaps in components.css: notice spacing inside a form card, small print outside .field */
+#form .notice{margin-bottom:var(--s-5)}
+.fine{font-size:var(--fs-2);color:var(--ink-faint);margin:var(--s-4) 0 0}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="narrow">
+  <h1>{{t.h1}}</h1>
+  <form id="form" class="card" novalidate>
+    <div class="notice notice-error" id="err" role="alert" aria-live="assertive"></div>
+    <div class="field">
+      <label for="name">{{t.name}}</label>
+      <input class="input" id="name" name="name" type="text" autocomplete="name" maxlength="80">
+    </div>
+    <div class="field">
+      <label for="email">{{t.email}}</label>
+      <input class="input" id="email" name="email" type="email" autocomplete="email" required>
+    </div>
+    <div class="field">
+      <label for="password">{{t.password}}</label>
+      <input class="input" id="password" name="password" type="password" autocomplete="new-password" required aria-describedby="pw-help">
+      <p class="help" id="pw-help">{{t.password_help}}</p>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit" id="submit">{{t.submit}}</button>
+    <p class="fine">{{t.legal_pre}} <a href="{{path.terms}}">{{t.legal_terms}}</a> {{t.legal_and}} <a href="{{path.privacy}}">{{t.legal_privacy}}</a>.</p>
+  </form>
+  <div class="oauth stack">{{oauth}}</div>
+  <p class="switch">{{t.have_account}} <a href="{{path.login}}">{{t.login}}</a></p>
+</main>
+<footer data-footer></footer>
+<script>
+const T = {{i18n}};
+const form = document.getElementById('form'), err = document.getElementById('err'), btn = document.getElementById('submit');
+const fields = [form.email, form.password];
+// Mirrors backend/passwords.py:password_problem (code points, like Python len()).
+function pwProblem(pw) {
+  const cp = [...pw];
+  if (cp.length < 8) return T.err_pw_short;
+  if (cp.length > 1024) return T.err_pw_long;
+  if (new Set(cp).size < 4) return T.err_pw_simple;
+  return null;
+}
+function fail(msg, field, link) {
+  const span = document.createElement('span'); span.textContent = msg;
+  if (link) { const a = document.createElement('a'); a.href = '{{path.login}}'; a.textContent = link; span.append(' ', a); }
+  err.replaceChildren(span);
+  fields.forEach(f => f.setAttribute('aria-invalid', String(f === field || (field === true && !f.value))));
+  btn.removeAttribute('aria-busy');
+}
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  err.textContent = '';
+  const email = form.email.value.trim(), pw = form.password.value;
+  if (!email || !pw) return fail(T.err_required, true);
+  const problem = pwProblem(pw);
+  if (problem) return fail(problem, form.password);
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    const r = await fetch('/api/auth/register', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin', body: JSON.stringify({email, password: pw, name: form.name.value.trim()})});
+    if (r.ok) { location.assign('{{path.account}}'); return; }
+    if (r.status === 409) return fail(T.err_409, form.email, T.login);
+    if (r.status === 422) return fail(T.err_email, form.email);
+    if (r.status === 400) return fail(T.err_pw_simple, form.password);
+    fail(r.status === 429 ? T.err_429 : T.err_server, null);
+  } catch (_) { fail(T.err_network, null); }
+});
+</script>
+</body>
+</html>

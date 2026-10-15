@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+/* gaps in components.css: notice spacing inside a form card, small print outside .field */
+#form .notice{margin-bottom:var(--s-5)}
+.notice[hidden]{display:none}
+.fine{font-size:var(--fs-2);color:var(--ink-faint);margin:var(--s-4) 0 0}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="narrow">
+  <h1>{{t.h1}}</h1>
+  <div class="notice notice-error" id="no-token" role="alert" hidden><span>{{t.err_no_token}} <a href="{{path.forgot}}">{{t.ask_again}}</a></span></div>
+  <form id="form" class="card" novalidate>
+    <div class="notice notice-error" id="err" role="alert" aria-live="assertive"></div>
+    <div class="notice notice-ok" id="ok" role="status" aria-live="polite"></div>
+    <div class="field">
+      <label for="password">{{t.password}}</label>
+      <input class="input" id="password" name="password" type="password" autocomplete="new-password" required aria-describedby="pw-help">
+      <p class="help" id="pw-help">{{t.password_help}}</p>
+    </div>
+    <div class="field">
+      <label for="confirm">{{t.confirm}}</label>
+      <input class="input" id="confirm" name="confirm" type="password" autocomplete="new-password" required>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit" id="submit">{{t.submit}}</button>
+  </form>
+</main>
+<footer data-footer></footer>
+<script>
+const T = {{i18n}};
+const form = document.getElementById('form'), err = document.getElementById('err'), ok = document.getElementById('ok'), btn = document.getElementById('submit');
+const fields = [form.password, form.confirm];
+const token = new URLSearchParams(location.search).get('token');
+if (!token) { document.getElementById('no-token').hidden = false; form.hidden = true; }
+// Mirrors backend/passwords.py:password_problem (code points, like Python len()).
+function pwProblem(pw) {
+  const cp = [...pw];
+  if (cp.length < 8) return T.err_pw_short;
+  if (cp.length > 1024) return T.err_pw_long;
+  if (new Set(cp).size < 4) return T.err_pw_simple;
+  return null;
+}
+function fail(msg, field, forgot) {
+  const span = document.createElement('span'); span.textContent = msg;
+  if (forgot) { const a = document.createElement('a'); a.href = '{{path.forgot}}'; a.textContent = T.ask_again; span.append(' ', a); }
+  err.replaceChildren(span);
+  fields.forEach(f => f.setAttribute('aria-invalid', String(f === field || (field === true && !f.value))));
+  btn.removeAttribute('aria-busy');
+}
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  err.textContent = '';
+  const pw = form.password.value;
+  if (!pw || !form.confirm.value) return fail(T.err_required, true);
+  const problem = pwProblem(pw);
+  if (problem) return fail(problem, form.password);
+  if (pw !== form.confirm.value) return fail(T.err_mismatch, form.confirm);
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    const r = await fetch('/api/auth/reset-confirm', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin', body: JSON.stringify({token, new_password: pw})});
+    if (r.ok) {
+      // The API signed us in: confirm, then go to the account.
+      fields.forEach(f => f.setAttribute('aria-invalid', 'false'));
+      ok.textContent = T.done;
+      setTimeout(() => location.assign('{{path.account}}'), 1500);
+      return;
+    }
+    if (r.status === 400) {
+      // 400 is a weak password or a bad link; the client check already covers the former.
+      return pwProblem(pw) ? fail(pwProblem(pw), form.password) : fail(T.err_400, null, true);
+    }
+    fail(r.status === 429 ? T.err_429 : T.err_server, null);
+  } catch (_) { fail(T.err_network, null); }
+});
+</script>
+</body>
+</html>

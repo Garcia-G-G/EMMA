@@ -1,0 +1,32 @@
+{
+  "es": {
+    "title": "Recuperar contraseña · Emma",
+    "description": "Pide un enlace para elegir una contraseña nueva.",
+    "h1": "Recuperar contraseña",
+    "lead": "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una contraseña nueva.",
+    "email": "Correo",
+    "submit": "Enviar enlace",
+    "back": "Volver a entrar",
+    "sent": "Si existe una cuenta con ese correo, te enviamos un enlace. Vale durante una hora.",
+    "err_required": "Escribe tu correo.",
+    "err_email": "Ese correo no parece válido.",
+    "err_429": "Demasiados intentos. Espera unos minutos.",
+    "err_server": "Algo falló de nuestro lado. Inténtalo de nuevo.",
+    "err_network": "No pudimos conectar. Inténtalo de nuevo."
+  },
+  "en": {
+    "title": "Reset password · Emma",
+    "description": "Ask for a link to choose a new password.",
+    "h1": "Reset password",
+    "lead": "Enter your account email and we'll send you a link to choose a new password.",
+    "email": "Email",
+    "submit": "Send link",
+    "back": "Back to sign in",
+    "sent": "If an account exists for that email, we sent a link. It is valid for one hour.",
+    "err_required": "Enter your email.",
+    "err_email": "That email doesn't look valid.",
+    "err_429": "Too many attempts. Wait a few minutes.",
+    "err_server": "Something failed on our side. Try again.",
+    "err_network": "We couldn't connect. Try again."
+  }
+}

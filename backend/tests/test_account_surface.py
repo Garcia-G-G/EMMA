@@ -32,38 +32,6 @@ def _register(client, email="a@b.com", pw="correcthorse9"):
     client.post("/api/auth/register", json={"email": email, "password": pw})
 
 
-def test_login_page_has_email_password_form(client):
-    body = client.get("/login").text
-    assert '/api/auth/login' in body
-    assert 'type="password"' in body
-    assert 'Continuar con Google' in body  # OAuth still present
-
-
-def test_public_pages_have_logged_out_account_menu(client):
-    for path in ("/login", "/register", "/plans", "/download"):
-        body = client.get(path).text
-        assert 'acct-menu' in body, f"{path} missing Cuenta dropdown"
-        assert '<li><a href="/login">Entrar</a></li>' in body, f"{path} missing Entrar item"
-        assert '<li><a href="/register">Crear cuenta</a></li>' in body, f"{path} missing Crear cuenta item"
-
-
-def test_legal_pages(client):
-    p = client.get("/privacy")
-    assert p.status_code == 200
-    assert "Privacidad" in p.text
-    assert "OpenAI" in p.text and "Stripe" in p.text  # subprocessors disclosed
-    t = client.get("/terms")
-    assert t.status_code == 200
-    assert "Términos" in t.text
-    assert "[PLACEHOLDER" in t.text  # entity/jurisdiction left for legal review
-
-
-def test_footers_link_legal(client):
-    for path in ("/login", "/register", "/plans", "/download"):
-        body = client.get(path).text
-        assert '/privacy' in body and '/terms' in body, f"{path} footer missing legal links"
-
-
 def test_dashboard_api_managed_shape(client):
     _register(client)
     d = client.get("/api/dashboard").json()
@@ -73,16 +41,6 @@ def test_dashboard_api_managed_shape(client):
     assert d["subscription"]["plan"] == "free"
     assert "active" in d["subscription"]
     assert set(d["downloads"]) == {"mac", "win"}
-
-
-def test_dashboard_page_has_account_settings(client):
-    _register(client)
-    body = client.get("/dashboard").text
-    assert "/api/me/password" in body
-    assert "/api/me/email" in body
-    assert "/api/me" in body            # delete account
-    assert "Minutos" in body and "Tu plan" in body   # usage KPIs + plan meter (redesigned dashboard)
-    assert "min/sesión" not in body     # managed: no cap framing shown
 
 
 def test_admin_overview_requires_login(client):
@@ -106,22 +64,10 @@ def test_api_plans_is_managed(client):
     assert d["plans"][0]["id"] == "pro"
 
 
-def test_plans_page_managed_copy(client):
-    body = client.get("/plans").text
-    assert "trae tu llave" not in body.lower()
-    assert "administrado" in body.lower() or "incluidos" in body.lower()
-
-
-def test_download_page_managed_copy(client):
-    body = client.get("/download").text.lower()
-    assert "trae tu llave" not in body
-    assert "pega tu llave" not in body
-
-
 def test_admin_page_is_admin_gated(client, monkeypatch):
     # anon → redirect to login
     r = client.get("/admin")
-    assert r.status_code in (302, 307) and "/login" in r.headers.get("location", "")
+    assert r.status_code in (302, 307) and "/entrar" in r.headers.get("location", "")
     # logged-in non-admin → still redirected (page not leaked)
     _register(client, email="nobody@x.com", pw="correcthorse9")
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
@@ -130,3 +76,57 @@ def test_admin_page_is_admin_gated(client, monkeypatch):
     # admin → 200 page
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "nobody@x.com")
     assert client.get("/admin").status_code == 200
+
+
+# ---- Step 40.1: one host, ES + EN pages (backend/pages.py) ----
+
+
+def test_login_page_has_email_password_form(client):
+    for path in ("/entrar", "/en/login"):
+        body = client.get(path).text
+        assert "/api/auth/login" in body and 'type="password"' in body
+        assert 'hreflang="en"' in body and 'hreflang="es"' in body
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [("/login", "/entrar"), ("/register", "/registro"), ("/plans", "/precios"),
+     ("/download", "/instalar"), ("/privacy", "/privacidad"), ("/terms", "/terminos"),
+     ("/auth/reset?token=abc", "/restablecer?token=abc")],
+)
+def test_old_routes_301(client, old, new):
+    r = client.get(old)
+    assert r.status_code == 301 and r.headers["location"] == new
+
+
+def test_account_page_has_settings_and_no_usage(client):
+    _register(client)
+    body = client.get("/cuenta").text
+    for api in ("/api/me/password", "/api/me/email", "/api/me/licenses", "/api/auth/logout"):
+        assert api in body
+    assert "Minutos" not in body and "minutes" not in body.lower()
+
+
+def test_pages_make_no_retired_claims(client):
+    for path in ("/precios", "/en/pricing", "/instalar", "/en/install", "/privacidad", "/en/privacy",
+                 "/terminos", "/en/terms"):
+        body = client.get(path).text
+        assert client.get(path).status_code == 200, path
+        for gone in ("OpenAI", "Realtime", "coral", "$19", "90 segundos", "minutos incluidos"):
+            assert gone not in body, f"{path}: {gone}"
+
+
+def test_pricing_matches_the_licence_plans(client):
+    from backend.license_routes import PLANS
+
+    body = client.get("/precios").text
+    for plan in PLANS.values():
+        assert f"${plan['usd']:g}" in body
+
+
+def test_install_page_has_the_installer_line(client):
+    for path in ("/instalar", "/en/install"):
+        body = client.get(path).text
+        assert "curl -fsSL https://theemmafamily.com/install.sh | sh" in body
+        assert "uninstall.sh" in body
+

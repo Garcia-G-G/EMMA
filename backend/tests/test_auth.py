@@ -317,7 +317,7 @@ def test_register_and_reset_schedule_mail(client, monkeypatch):
     client.post("/api/auth/reset-request", json={"email": "a@b.com"})
     client.post("/api/auth/reset-request", json={"email": "ghost@b.com"})
     assert [to for to, _ in sent] == ["a@b.com", "a@b.com"]
-    assert "/auth/reset?token=" in sent[1][1]
+    assert "/restablecer?token=" in sent[1][1]
 
 
 def test_mail_cli_reports_unset_key(monkeypatch, capsys):

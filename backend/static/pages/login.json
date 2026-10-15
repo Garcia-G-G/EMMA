@@ -1,0 +1,38 @@
+{
+  "es": {
+    "title": "Entrar · Emma",
+    "description": "Entra a tu cuenta de Emma para ver tu licencia.",
+    "h1": "Entrar",
+    "email": "Correo",
+    "password": "Contraseña",
+    "submit": "Entrar",
+    "forgot": "¿Olvidaste tu contraseña?",
+    "no_account": "¿No tienes cuenta?",
+    "signup": "Crear cuenta",
+    "or": "o",
+    "oauth_google": "Entrar con Google",
+    "oauth_github": "Entrar con GitHub",
+    "err_required": "Escribe tu correo y tu contraseña.",
+    "err_401": "Correo o contraseña incorrectos.",
+    "err_429": "Demasiados intentos. Espera unos minutos.",
+    "err_network": "No pudimos conectar. Inténtalo de nuevo."
+  },
+  "en": {
+    "title": "Sign in · Emma",
+    "description": "Sign in to your Emma account to see your licence.",
+    "h1": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "forgot": "Forgot your password?",
+    "no_account": "No account yet?",
+    "signup": "Create one",
+    "or": "or",
+    "oauth_google": "Sign in with Google",
+    "oauth_github": "Sign in with GitHub",
+    "err_required": "Enter your email and password.",
+    "err_401": "Wrong email or password.",
+    "err_429": "Too many attempts. Wait a few minutes.",
+    "err_network": "We couldn't connect. Try again."
+  }
+}

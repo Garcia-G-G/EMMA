@@ -136,7 +136,7 @@ async def reset_request(body: ResetRequest, request: Request, tasks: BackgroundT
     _record_fail(ip)
     token = secrets.token_urlsafe(32)
     if db.set_reset_token(str(body.email).lower(), token, time.time() + 3600):
-        link = f"{settings.PUBLIC_URL}/auth/reset?token={token}"
+        link = f"{settings.PUBLIC_URL}/restablecer?token={token}"
         # after the response, so a known address doesn't answer slower (enumeration)
         tasks.add_task(mail.send, str(body.email), mail.reset_message(link))
     return {"ok": True}

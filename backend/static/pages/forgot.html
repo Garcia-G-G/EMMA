@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+{{head}}
+<style>
+/* gaps in components.css: notice spacing inside a form card, small print outside .field */
+#form .notice{margin-bottom:var(--s-5)}
+.fine{font-size:var(--fs-2);color:var(--ink-faint);margin:var(--s-4) 0 0}
+</style>
+</head>
+<body class="page">
+<header data-nav></header>
+<main id="main" class="narrow">
+  <h1>{{t.h1}}</h1>
+  <p>{{t.lead}}</p>
+  <form id="form" class="card" novalidate>
+    <div class="notice notice-error" id="err" role="alert" aria-live="assertive"></div>
+    <div class="notice notice-ok" id="ok" role="status" aria-live="polite"></div>
+    <div class="field">
+      <label for="email">{{t.email}}</label>
+      <input class="input" id="email" name="email" type="email" autocomplete="email" required>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit" id="submit">{{t.submit}}</button>
+  </form>
+  <p class="switch"><a href="{{path.login}}">{{t.back}}</a></p>
+</main>
+<footer data-footer></footer>
+<script>
+const T = {{i18n}};
+const form = document.getElementById('form'), err = document.getElementById('err'), ok = document.getElementById('ok'), btn = document.getElementById('submit');
+function fail(msg, invalid) {
+  err.textContent = msg;
+  form.email.setAttribute('aria-invalid', String(invalid));
+  btn.removeAttribute('aria-busy');
+}
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  err.textContent = ''; ok.textContent = '';
+  const email = form.email.value.trim();
+  if (!email) return fail(T.err_required, true);
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    const r = await fetch('/api/auth/reset-request', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin', body: JSON.stringify({email})});
+    if (r.status === 429) return fail(T.err_429, false);
+    if (r.status === 422) return fail(T.err_email, true);
+    if (!r.ok) return fail(T.err_server, false);
+    // Same notice whether or not the account exists: never reveal which emails are registered.
+    form.email.setAttribute('aria-invalid', 'false');
+    btn.removeAttribute('aria-busy');
+    ok.textContent = T.sent;
+  } catch (_) { fail(T.err_network, false); }
+});
+</script>
+</body>
+</html>

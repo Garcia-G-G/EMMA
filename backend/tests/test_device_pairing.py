@@ -156,8 +156,8 @@ def test_pending_and_pair_page_gate():
     info = c.post("/api/device/code").json()
     r = c.post("/api/device/token", json={"device_code": info["device_code"]})
     assert r.status_code == 401 and r.json()["detail"]["error"] == "authorization_pending"
-    # /pair redirects to login when not authed
-    assert c.get("/pair").status_code in (302, 307)
+    # pairing UI is gone: /pair lands on the account page (which asks for a login)
+    assert c.get("/pair", follow_redirects=False).headers["location"] == "/cuenta"
 
 
 # --- LAUNCH-7: the daemon reads its own balance -----------------------------

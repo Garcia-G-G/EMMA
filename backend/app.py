@@ -29,6 +29,7 @@ from backend import (
     device_pairing,
     license_routes,
     openai_proxy,
+    pages,
     realtime_proxy,
     stripe_routes,
 )
@@ -36,7 +37,7 @@ from backend import (
 # wake_routes disabled in Fly deploy — depends on daemon's core.background / config.settings.
 # Re-enable after vendoring those modules into backend/ (follow-up prompt 16.3.1).
 from backend import session as session_mod
-from backend.auth import current_user, require_admin, require_user
+from backend.auth import require_admin, require_user
 from backend.config import assert_secure_secrets, settings
 from backend.request_security import browser_mutation_allowed
 
@@ -94,6 +95,8 @@ if not settings.CLOUDFLARE_TURNSTILE_SECRET:
 app.include_router(session_mod.router)
 app.include_router(realtime_proxy.router)
 app.include_router(openai_proxy.router)  # CLIENT-INSTALL Phase 2A: /v1/* managed HTTP proxy
+# pages first: /auth/reset (legacy) must win over auth's /auth/{provider}
+app.include_router(pages.router)  # Step 40.1: every HTML page, ES + EN
 app.include_router(auth.router)
 app.include_router(auth_local.router)
 app.include_router(account_routes.router)
@@ -159,55 +162,10 @@ async def demo_config() -> dict[str, Any]:
     }
 
 
-@app.get("/", response_class=HTMLResponse)
-async def landing() -> str:
-    return (_STATIC / "landing.html").read_text(encoding="utf-8")
-
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page() -> str:
-    return (_STATIC / "login.html").read_text(encoding="utf-8")
-
-
-# LANDING-27.post: the lock-screen CTAs (_landing/index.html:482,486,490) link to
-# /login + /plans + /download. Previously only /login existed; the other two 404'd.
-# Register is rendered server-side so signup flows from the landing don't bounce
-# through /login first. Each page is a minimal HTML shell that pulls live data
-# from existing JSON endpoints (/api/plans, /api/account, etc).
-@app.get("/plans", response_class=HTMLResponse)
-async def plans_page() -> str:
-    return (_STATIC / "plans.html").read_text(encoding="utf-8")
-
-
-@app.get("/download", response_class=HTMLResponse)
-async def download_page() -> str:
-    return (_STATIC / "download.html").read_text(encoding="utf-8")
-
-
-@app.get("/register", response_class=HTMLResponse)
-async def register_page() -> str:
-    return (_STATIC / "register.html").read_text(encoding="utf-8")
-
-
-@app.get("/privacy", response_class=HTMLResponse)
-async def privacy_page() -> str:
-    return (_STATIC / "privacy.html").read_text(encoding="utf-8")
-
-
-@app.get("/terms", response_class=HTMLResponse)
-async def terms_page() -> str:
-    return (_STATIC / "terms.html").read_text(encoding="utf-8")
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request) -> Any:
-    if await current_user(request) is None:
-        return RedirectResponse("/login")
-    # The page is served static (no Jinja), so inject the Stripe *publishable* key
-    # (safe to expose) by substituting the placeholder. Bundle purchases need it.
-    html = (_STATIC / "dashboard.html").read_text(encoding="utf-8")
-    html = html.replace("{{ stripe_pk }}", settings.STRIPE_PUBLISHABLE_KEY)
-    return HTMLResponse(html)
+@app.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    # Pages live on the bare domain (backend/pages.py); the api host has none.
+    return RedirectResponse(pages.SITE, 301)
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -215,7 +173,7 @@ async def admin_page(request: Request) -> Any:
     try:
         await require_admin(request)  # gate the PAGE, not just the API
     except HTTPException:
-        return RedirectResponse("/login")
+        return RedirectResponse("/entrar?next=/admin")
     return HTMLResponse((_STATIC / "admin.html").read_text(encoding="utf-8"))
 
 
@@ -268,13 +226,6 @@ async def delete_device(device_id: int, request: Request) -> Any:
     if not device_pairing.revoke_token(device_id, user["id"]):
         raise HTTPException(404, "not found")
     return {"ok": True}
-
-
-@app.get("/pair", response_class=HTMLResponse)
-async def pair_page(request: Request) -> Any:
-    if await current_user(request) is None:
-        return RedirectResponse("/login?next=/pair")
-    return HTMLResponse((_STATIC / "pair.html").read_text(encoding="utf-8"))
 
 
 @app.get("/api/dashboard")

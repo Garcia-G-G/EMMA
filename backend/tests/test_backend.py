@@ -131,4 +131,6 @@ def test_dashboard_api_gated(client):
 
 def test_dashboard_page_redirects_anon(client):
     r = client.get("/dashboard", follow_redirects=False)
-    assert r.status_code in (302, 307) and "/login" in r.headers["location"]
+    assert r.status_code == 301 and r.headers["location"] == "/cuenta"
+    r = client.get("/cuenta", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/entrar?next=/cuenta"
