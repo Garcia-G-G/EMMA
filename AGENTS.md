@@ -296,7 +296,8 @@ git config user.name Emma; git config user.email hello@theemmafamily.com
 ```
 
 The pre-commit hook also rejects any author or committer other than
-`Emma <hello@theemmafamily.com>`.
+`Emma <hello@theemmafamily.com>`, and any date whose offset is not `+0000`
+(a local offset is a location hint): commit with `TZ=UTC git commit`.
 
 ## Background tasks convention (mandatory)
 
