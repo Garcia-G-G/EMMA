@@ -9,8 +9,8 @@
     "licence_1": "Una licencia te permite usar Emma en tus Macs durante el plazo que pagaste:",
     "licence_list": "<li>Mensual ($6): un mes.</li><li>Anual ($59): un año.</li><li>De por vida ($249): sin fecha de vencimiento.</li>",
     "licence_2": "Las tres dan el mismo software. Cada licencia puede estar activa en hasta 3 Macs. La clave es personal: no la compartas ni la revendas.",
-    "source_h": "Código público",
-    "source_1": "El código fuente de Emma es público en <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a>. Puedes leerlo para ver qué hace Emma en tu Mac.",
+    "source_h": "El código",
+    "source_1": "El código fuente de Emma es público en <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a> para que puedas leerlo y ver qué hace Emma en tu Mac. Es código de fuente disponible, con todos los derechos reservados. Poder leerlo no te da ningún derecho sobre él. Lo que sí puedes hacer es instalar Emma con el instalador oficial y usarla en tus Macs según estos términos, con una licencia comprada cuando haga falta. Copiarlo, modificarlo o redistribuirlo requiere permiso por escrito. Los detalles están en el archivo <a href=\"https://github.com/theemmafamily/EMMA/blob/main/LICENSE\">LICENSE</a>.",
     "asis_h": "Sin garantías",
     "asis_1": "Emma se ofrece tal cual, sin garantías de ningún tipo. Puede equivocarse, entender mal lo que pides o dejar de funcionar con una versión de macOS. Emma te pide confirmación por voz antes de las acciones que no se pueden deshacer; revisa lo que confirmas.",
     "eleven_h": "Tu cuenta de ElevenLabs",
@@ -22,7 +22,9 @@
     "changes_h": "Cambios",
     "changes_1": "Si cambiamos estos términos, actualizamos esta página y su fecha.",
     "contact_h": "Contacto",
-    "contact_1": "Escríbenos a <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a>."
+    "contact_1": "Escríbenos a <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a>.",
+    "refund_h": "Reembolsos",
+    "refund_1": "Durante los 14 días siguientes a la compra puedes pedir el reembolso completo, sin preguntas. Escríbenos a <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a> y la licencia queda reembolsada."
   },
   "en": {
     "title": "Terms · Emma",
@@ -34,8 +36,8 @@
     "licence_1": "A licence lets you use Emma on your Macs for the period you paid for:",
     "licence_list": "<li>Monthly ($6): one month.</li><li>Yearly ($59): one year.</li><li>Lifetime ($249): no expiry date.</li>",
     "licence_2": "All three give you the same software. Each licence can be active on up to 3 Macs. The key is yours: don't share or resell it.",
-    "source_h": "Public source",
-    "source_1": "Emma's source code is public on <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a>. You can read it to see what Emma does on your Mac.",
+    "source_h": "The code",
+    "source_1": "Emma's source code is public on <a href=\"https://github.com/theemmafamily/EMMA\">GitHub</a> so you can read it and see what Emma does on your Mac. It is source-available, with all rights reserved. Being able to read it gives you no rights to it. What you may do is install Emma with the official installer and use it on your Macs under these terms, with a purchased licence where one is required. Copying, modifying or redistributing it needs written permission. The <a href=\"https://github.com/theemmafamily/EMMA/blob/main/LICENSE\">LICENSE</a> file has the details.",
     "asis_h": "No warranty",
     "asis_1": "Emma is provided as is, without warranty of any kind. She can make mistakes, misunderstand what you ask or stop working with a macOS version. Emma asks you to confirm by voice before actions that can't be undone; check what you confirm.",
     "eleven_h": "Your ElevenLabs account",
@@ -47,6 +49,8 @@
     "changes_h": "Changes",
     "changes_1": "If we change these terms, we update this page and its date.",
     "contact_h": "Contact",
-    "contact_1": "Write to us at <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a>."
+    "contact_1": "Write to us at <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a>.",
+    "refund_h": "Refunds",
+    "refund_1": "Within 14 days of buying you can ask for a full refund, no questions asked. Write to <a href=\"mailto:hello@theemmafamily.com\">hello@theemmafamily.com</a> and the licence is refunded."
   }
 }

@@ -24,8 +24,8 @@
     "perm_lead": "macOS abre un diálogo para cada permiso. Acéptalos todos.",
     "perm_mic": "<b>Micrófono</b>: para oírte.",
     "perm_auto": "<b>Automatización</b> de Calendario, Mail, Mensajes, Notas, Recordatorios, Safari, Finder, Música y Terminal: para usar esas apps cuando se lo pides.",
-    "perm_ax": "<b>Accesibilidad</b>: para leer la pantalla cuando se lo pides.",
-    "perm_screen": "<b>Grabación de pantalla</b>: para leer la pantalla con una captura y reconocimiento de texto en el Mac.",
+    "perm_ax": "<b>Accesibilidad</b>: para manejar apps por ti, con atajos de teclado y opciones de menú.",
+    "perm_screen": "<b>Grabación de pantalla</b>: se pide al instalar para que no aparezca un aviso más adelante. Esta versión no usa funciones de pantalla.",
     "perm_cal": "<b>Calendarios</b>: para leer tu agenda.",
     "perm_disk": "<b>Acceso total al disco</b>: para leer tus mensajes y correos cuando se lo pides.",
     "perm_manual": "Acceso total al disco y Calendarios se activan a mano: Emma abre el panel de Ajustes del Sistema y tú activas Emma en la lista. Si dejas alguno pendiente, puedes darlo después en Ajustes del Sistema, Privacidad y Seguridad.",
@@ -33,9 +33,9 @@
     "first_1": "Al terminar se abre la ventana de Emma. Pega tu clave de ElevenLabs en el campo seguro (va al Llavero de macOS) y elige una voz. No hay cuenta que crear para usar Emma.",
     "first_2": "Después di «Emma», «oye Emma» o «hey Emma» y pídele algo.",
     "update_h": "Actualizar",
-    "update_1": "Ejecuta la misma línea otra vez. El instalador actualiza Emma en su sitio y conserva tu memoria, tu clave y tu voz.",
+    "update_1": "Ejecuta la misma línea otra vez. El instalador actualiza Emma en su sitio y conserva tus ajustes, tu clave y tu voz.",
     "uninstall_h": "Desinstalar",
-    "uninstall_1": "Quita <code>~/.emma</code> (incluida la memoria), el servicio en segundo plano, los registros, todo lo que Emma guardó en el Llavero y los permisos de macOS que le diste."
+    "uninstall_1": "Quita <code>~/.emma</code>, el servicio en segundo plano, los registros, todo lo que Emma guardó en el Llavero y los permisos de macOS que le diste."
   },
   "en": {
     "title": "Install · Emma",
@@ -62,8 +62,8 @@
     "perm_lead": "macOS shows a dialog for each permission. Accept them all.",
     "perm_mic": "<b>Microphone</b>: to hear you.",
     "perm_auto": "<b>Automation</b> for Calendar, Mail, Messages, Notes, Reminders, Safari, Finder, Music and Terminal: to use those apps when you ask.",
-    "perm_ax": "<b>Accessibility</b>: to read the screen when you ask.",
-    "perm_screen": "<b>Screen Recording</b>: to read the screen with a capture and text recognition on the Mac.",
+    "perm_ax": "<b>Accessibility</b>: to work apps for you, with keyboard shortcuts and menu items.",
+    "perm_screen": "<b>Screen Recording</b>: requested at install so no prompt shows up later. This version doesn't use screen features.",
     "perm_cal": "<b>Calendars</b>: to read your schedule.",
     "perm_disk": "<b>Full Disk Access</b>: to read your messages and mail when you ask.",
     "perm_manual": "Full Disk Access and Calendars are switched on by hand: Emma opens the System Settings pane and you turn Emma on in the list. If you skip one, you can grant it later in System Settings, Privacy & Security.",
@@ -71,8 +71,8 @@
     "first_1": "When it finishes, Emma's window opens. Paste your ElevenLabs key into the secure field (it goes to the macOS Keychain) and pick a voice. There is no account to create to use Emma.",
     "first_2": "Then say “Emma”, “oye Emma” or “hey Emma” and ask for something.",
     "update_h": "Update",
-    "update_1": "Run the same line again. The installer upgrades Emma in place and keeps your memory, your key and your voice.",
+    "update_1": "Run the same line again. The installer upgrades Emma in place and keeps your settings, your key and your voice.",
     "uninstall_h": "Uninstall",
-    "uninstall_1": "Removes <code>~/.emma</code> (memory included), the background service, the logs, everything Emma stored in the Keychain and the macOS permissions you gave her."
+    "uninstall_1": "Removes <code>~/.emma</code>, the background service, the logs, everything Emma stored in the Keychain and the macOS permissions you gave her."
   }
 }

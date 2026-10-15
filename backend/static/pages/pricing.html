@@ -7,7 +7,7 @@
 .tiers .card{display:flex;flex-direction:column;gap:var(--s-3);margin:0}
 .price{font-family:var(--font-display);font-size:var(--fs-6);line-height:var(--lh-tight);color:var(--ink)}
 .price small{font-family:var(--font-body);font-size:var(--fs-3);color:var(--ink-faint)}
-.tiers .btn{margin-top:auto}
+.tiers .soon{margin-top:auto;color:var(--highlight)}
 .lead{font-size:var(--fs-4)}
 .faq details{border-top:1px solid var(--rule);padding:var(--s-4) 0}
 .faq details:last-child{border-bottom:1px solid var(--rule)}
@@ -30,22 +30,22 @@ code{white-space:nowrap}
       <span class="label">{{t.monthly_name}}</span>
       <p class="price">{{t.monthly_price}} <small>{{t.monthly_unit}}</small></p>
       <p>{{t.monthly_note}}</p>
-      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+      <p class="label soon">{{t.soon}}</p>
     </div>
     <div class="card">
       <span class="label">{{t.annual_name}}</span>
       <p class="price">{{t.annual_price}} <small>{{t.annual_unit}}</small></p>
       <p>{{t.annual_note}}</p>
-      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+      <p class="label soon">{{t.soon}}</p>
     </div>
     <div class="card">
       <span class="label">{{t.lifetime_name}}</span>
       <p class="price">{{t.lifetime_price}} <small>{{t.lifetime_unit}}</small></p>
       <p>{{t.lifetime_note}}</p>
-      <button class="btn btn-primary btn-block" type="button" disabled aria-disabled="true" aria-describedby="soon">{{t.soon}}</button>
+      <p class="label soon">{{t.soon}}</p>
     </div>
   </section>
-  <p class="notice" id="soon">{{t.soon_line}}</p>
+  <p class="notice">{{t.soon_line}}</p>
   <section class="stack">
     <h2>{{t.includes_h}}</h2>
     <ul>
@@ -61,6 +61,8 @@ code{white-space:nowrap}
     <details><summary>{{t.faq_data_q}}</summary><p>{{t.faq_data_a}}</p></details>
     <details><summary>{{t.faq_licence_q}}</summary><p>{{t.faq_licence_a}}</p></details>
     <details><summary>{{t.faq_try_q}}</summary><p>{{t.faq_try_a}}</p></details>
+    <details><summary>{{t.faq_refund_q}}</summary><p>{{t.faq_refund_a}}</p></details>
+    <details><summary>{{t.faq_code_q}}</summary><p>{{t.faq_code_a}}</p></details>
   </section>
 </main>
 <footer data-footer></footer>
