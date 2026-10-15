@@ -18,10 +18,10 @@ import time
 from collections import defaultdict, deque
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel, field_validator
 
-from backend import db
+from backend import db, mail
 from backend.auth import clear_session_cookie, current_user, set_session_cookie
 from backend.config import settings
 from backend.netutil import client_ip as _client_ip
@@ -86,7 +86,7 @@ def _public_user(u: dict) -> dict:
 
 
 @router.post("/api/auth/register")
-async def register(body: Credentials, response: Response) -> dict:
+async def register(body: Credentials, response: Response, tasks: BackgroundTasks) -> dict:
     problem = password_problem(body.password)
     if problem:
         raise HTTPException(400, problem)
@@ -96,6 +96,7 @@ async def register(body: Credentials, response: Response) -> dict:
         raise HTTPException(409, "Ya existe una cuenta con ese correo.")
     set_session_cookie(response, user["id"])  # auto-login after register
     log.info("user_registered", uid=user["id"])
+    tasks.add_task(mail.send, user["email"], mail.welcome_message())
     return _public_user(user)
 
 
@@ -125,7 +126,7 @@ async def logout(response: Response) -> dict:
 
 
 @router.post("/api/auth/reset-request")
-async def reset_request(body: ResetRequest, request: Request) -> dict:
+async def reset_request(body: ResetRequest, request: Request, tasks: BackgroundTasks) -> dict:
     # Always 200 — never reveal whether the email exists (enumeration guard). But
     # throttle per-IP so this can't be used to email-bomb a victim, drain the Resend
     # quota, or churn a victim's in-flight reset token (shares the login bucket).
@@ -136,7 +137,8 @@ async def reset_request(body: ResetRequest, request: Request) -> dict:
     token = secrets.token_urlsafe(32)
     if db.set_reset_token(str(body.email).lower(), token, time.time() + 3600):
         link = f"{settings.PUBLIC_URL}/auth/reset?token={token}"
-        await _send_reset_email(str(body.email), link)
+        # after the response, so a known address doesn't answer slower (enumeration)
+        tasks.add_task(mail.send, str(body.email), mail.reset_message(link))
     return {"ok": True}
 
 
@@ -151,25 +153,6 @@ async def reset_confirm(body: ResetConfirm, response: Response) -> dict:
     db.set_password(user["id"], hash_password(body.new_password))
     set_session_cookie(response, user["id"])  # log them in on success
     return {"ok": True}
-
-
-async def _send_reset_email(email: str, link: str) -> None:
-    """Send the reset link via Resend if configured; otherwise log (dev no-op)."""
-    key = getattr(settings, "RESEND_API_KEY", "")
-    if not key:
-        log.info("reset_email_skipped", reason="no RESEND_API_KEY")
-        return
-    import httpx
-    with __import__("contextlib").suppress(Exception):
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            await client.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {key}"},
-                json={"from": "Emma <noreply@theemmafamily.com>", "to": [email],
-                      "subject": "Restablece tu contraseña de Emma",
-                      "html": f'<p>Para restablecer tu contraseña, abre este enlace '
-                              f'(válido 1 hora):</p><p><a href="{link}">{link}</a></p>'},
-            )
 
 
 @router.get("/api/auth/whoami")

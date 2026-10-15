@@ -262,10 +262,12 @@ def test_reset_request_never_enumerates(client):
 
 
 @pytest.mark.asyncio
-async def test_reset_email_closes_http_client(monkeypatch):
+async def test_mail_send_posts_from_noreply_with_text_and_closes_client(monkeypatch):
     import httpx
 
-    state = {"exited": False, "posted": False}
+    from backend import mail
+
+    state: dict = {"exited": False}
 
     class FakeClient:
         def __init__(self, **_kwargs):
@@ -277,15 +279,53 @@ async def test_reset_email_closes_http_client(monkeypatch):
         async def __aexit__(self, *_args):
             state["exited"] = True
 
-        async def post(self, *_args, **_kwargs):
-            state["posted"] = True
+        async def post(self, url, headers, json):
+            state["json"] = json
+            return httpx.Response(200, text='{"id":"x"}')
 
-    monkeypatch.setattr(settings, "RESEND_API_KEY", "test-key", raising=False)
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "test-key")
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
 
-    await auth_local._send_reset_email("alex@example.test", "https://example.test/reset")
+    res = await mail.send("alex@example.test", mail.reset_message("https://example.test/reset?t=<x>"))
 
-    assert state == {"exited": True, "posted": True}
+    assert res == (200, '{"id":"x"}')
+    assert state["exited"]
+    sent = state["json"]
+    assert sent["from"] == "Emma <noreply@theemmafamily.com>"
+    assert "https://example.test/reset?t=<x>" in sent["text"]
+    assert "t=&lt;x&gt;" in sent["html"] and "<x>" not in sent["html"]  # escaped
+
+
+@pytest.mark.asyncio
+async def test_mail_send_without_key_sends_nothing(monkeypatch):
+    from backend import mail
+
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "")
+    assert await mail.send("alex@example.test", mail.test_message()) is None
+
+
+def test_register_and_reset_schedule_mail(client, monkeypatch):
+    from backend import mail
+
+    sent: list[tuple[str, str]] = []
+
+    async def fake_send(to, message):
+        sent.append((to, message["text"]))
+
+    monkeypatch.setattr(mail, "send", fake_send)
+    client.post("/api/auth/register", json={"email": "a@b.com", "password": "correcthorse9"})
+    client.post("/api/auth/reset-request", json={"email": "a@b.com"})
+    client.post("/api/auth/reset-request", json={"email": "ghost@b.com"})
+    assert [to for to, _ in sent] == ["a@b.com", "a@b.com"]
+    assert "/auth/reset?token=" in sent[1][1]
+
+
+def test_mail_cli_reports_unset_key(monkeypatch, capsys):
+    from backend import mail
+
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "")
+    assert mail.main(["--test", "alex@example.test"]) == 1
+    assert "RESEND_API_KEY" in capsys.readouterr().out
 
 
 def test_reset_confirm_changes_password(client):

@@ -116,6 +116,9 @@ class Settings:
     COST_PER_M_INPUT = float(os.environ.get("COST_PER_M_INPUT", "40"))
     COST_PER_M_OUTPUT = float(os.environ.get("COST_PER_M_OUTPUT", "80"))
 
+    # ---- transactional mail (backend/mail.py); same Resend account as the worker ----
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+
     # ---- captcha ----
     CLOUDFLARE_TURNSTILE_SECRET = os.environ.get("CLOUDFLARE_TURNSTILE_SECRET", "")
     TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
