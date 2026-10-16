@@ -145,8 +145,24 @@ def _date(v: str) -> str | None:
     return f"{_MONTHS[month]:02d}-{int(day):02d}"
 
 
+# A question is never a statement: "¿cuál es mi color favorito?" must not read as
+# "X es mi color favorito" with X = "cuál" (found by the Step 42 Part 5 measurement).
+_QUESTION_START = re.compile(
+    # Wh-words and English auxiliaries only: "soy …" / "tengo …" open statements too,
+    # so a Spanish yes/no question is told by its question marks (STT writes them).
+    r"^(?:que|cual|cuales|cuando|donde|como|quien|quienes|cuanto|cuantos|cuantas|"
+    r"what|which|when|where|who|how|do|does|did|am|is|are|can|could)\b")
+
+
+def is_question(text: str) -> bool:
+    t = fold(text).strip()
+    return "?" in t or "¿" in t or bool(_QUESTION_START.match(_clean(text)))
+
+
 def parse_statement(text: str) -> Slot | None:
     """The slot a statement sets (or closes), or None: then it's a free-text note."""
+    if is_question(text):
+        return None
     t = _clean(text)
     for pat, attr in _STATEMENTS:
         m = pat.match(t)
@@ -411,10 +427,12 @@ def route(text: str) -> tuple[str, str] | None:
         if f is not None and f.attribute.split(":")[0] in _ROUTED:
             return "forget_fact", rest.strip(" ,.;:¿?¡!")
         return None
+    # A question first (it can look like a statement); and only a real question:
+    # "soy vegetariano" is a statement, "¿soy vegetariano?" a question.
+    q = parse_question(text) if is_question(text) else None
+    if q is not None:
+        return ("recall_facts", strip_trigger(text)) if q[1].split(":")[0] in _ROUTED else None
     s = parse_statement(text)
     if s is not None and s.attribute.split(":")[0] in _ROUTED:
         return "remember_fact", strip_trigger(text)
-    q = parse_question(text)
-    if q is not None and q[1].split(":")[0] in _ROUTED:
-        return "recall_facts", strip_trigger(text)
     return None

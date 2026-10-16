@@ -120,3 +120,22 @@ def test_the_grammar_is_neutral() -> None:
     code = re.sub(r'"""[\s\S]*?"""', "", src)
     for word in REGIONAL_DENYLIST:
         assert not re.search(rf"\b{re.escape(word)}\b", code), word
+
+
+def test_a_question_is_never_a_statement_or_a_store() -> None:
+    """Found by the Part 5 measurement: "¿cuál es mi color favorito?" read as
+    'X es mi color favorito' with X = 'cuál', and was routed to remember_fact."""
+    for q, _ in QUERIES:
+        assert st.parse_statement(q) is None, q
+        r = st.route(q)
+        assert r is None or r[0] == "recall_facts", (q, r)
+    for q in UNANSWERABLE:
+        assert st.parse_statement(q) is None, q
+        r = st.route(q)
+        assert r is None or r[0] == "recall_facts", (q, r)
+
+
+def test_every_fact_said_as_a_statement_routes_to_a_store_or_nowhere() -> None:
+    for text in FACTS.values():
+        r = st.route(f"Recuerda que {text}.")
+        assert r is None or r[0] == "remember_fact", (text, r)
