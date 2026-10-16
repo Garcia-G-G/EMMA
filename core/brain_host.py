@@ -240,6 +240,24 @@ async def listings() -> tuple[tuple[str, ...], tuple[str, ...]]:
     return notes, playlists
 
 
+def servable_tools() -> frozenset[str]:
+    """What Emma can actually do on THIS machine now (Step 43.1).
+
+    With no Thinker on the LLM-free cascade: tools the brain has a frame for AND
+    that are available here (availability already drops every LLM-backed module
+    on the cascade). With a Thinker, or on the Realtime path where a model picks
+    the tool: everything available. One source, no second list.
+    """
+    from core.brain import thinker
+    from core.brain.slots import TOOLS
+    from tools.availability import llm_allowed
+
+    available = {d.name for d in tool_docs(available_only=True)}
+    if thinker.WIRED or llm_allowed():
+        return frozenset(available)
+    return frozenset(available & set(TOOLS))
+
+
 def evaluate(
     brain: Brain,
     examples: list[Example] | None = None,

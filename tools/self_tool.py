@@ -99,8 +99,73 @@ def regenerate_capabilities_md() -> None:
         log.warning("self_capabilities_write_failed", error=str(exc))
 
 
+# What each servable tool lets Emma say she can do, in plain words (Step 43.1).
+# Order is the order she says them in. tests/test_self_capabilities.py requires
+# every framed tool to be grouped here or listed in _NOT_SAID.
+_GROUPS: tuple[tuple[str, str, frozenset[str]], ...] = (
+    ("poner y controlar tu música", "play and control your music", frozenset({
+        "play_track", "play_playlist", "pause", "resume", "next_track", "now_playing"})),
+    ("abrir tus apps", "open your apps", frozenset({"open_application", "open_in_app"})),
+    ("ajustar el volumen", "set the volume", frozenset({"set_volume", "mute", "unmute"})),
+    ("decirte la hora", "tell you the time", frozenset({"current_time", "current_datetime_speak"})),
+    ("ponerte recordatorios", "set reminders", frozenset({"add_reminder", "list_today"})),
+    ("poner temporizadores", "set timers", frozenset({"start_timer", "list_timers"})),
+    ("leer y editar tus notas", "read and edit your notes", frozenset({
+        "read_note", "delete_note", "append_to_note", "list_notes"})),
+    ("decirte tu agenda", "tell you your calendar", frozenset({"today_events", "next_event"})),
+    ("abrir páginas y videos", "open pages and videos", frozenset({
+        "open_url", "open_my_page", "latest_video_from_creator"})),
+    ("manejar las pestañas del navegador", "manage browser tabs", frozenset({
+        "close_current_tab", "close_duplicate_tabs", "list_browser_tabs"})),
+    ("buscar archivos", "find files", frozenset({"find_file"})),
+    ("abrir código en tu editor", "open code in your editor", frozenset({
+        "open_in_ide", "toggle_ide_terminal", "ide_terminal_send"})),
+    ("correr comandos", "run commands", frozenset({"run_command"})),
+    ("cambiar el brillo", "change the brightness", frozenset({"set_brightness"})),
+    ("ver tus repos de GitHub", "look at your GitHub repos", frozenset({"my_repos", "search_github"})),
+    ("aprender tus páginas y apps preferidas", "learn your pages and preferred apps", frozenset({
+         "remember_page", "remember_connection", "remember_app", "remember_user_profile",
+         "set_preferred_app"})),
+    ("repetir o contarte lo que hice", "repeat or tell you what I did", frozenset({
+        "recall_last_action", "repeat_last", "what_did_you_do"})),
+    ("recordar cosas sobre ti", "remember things about you", frozenset({
+        "remember_fact", "recall_facts"})),
+    ("buscar y pulsar botones por su nombre", "find and click buttons by name", frozenset({
+        "find_button", "click_button"})),
+)
+# Framed tools that aren't a capability to announce.
+_NOT_SAID = frozenset({"describe_capabilities", "shutdown_emma", "snooze_listening"})
+_SHORT = 4  # groups in the first answer; the rest after "¿quieres más?"
+
+
+def capability_phrases(servable: frozenset[str], lang: str) -> list[str]:
+    """The groups Emma can say she does, in order, for the tools she can serve."""
+    return [en if lang == "en" else es for es, en, tools in _GROUPS if tools & servable]
+
+
+def _join(items: list[str], lang: str) -> str:
+    last = " and " if lang == "en" else " y "
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + last + items[-1]
+
+
+def capabilities_answer(servable: frozenset[str], lang: str, full: bool) -> tuple[str, bool]:
+    """(what to say, whether more is on offer). One or two short sentences."""
+    groups = capability_phrases(servable, lang)
+    if not groups:
+        return ("Right now there's nothing I can do on my own here." if lang == "en"
+                else "Ahora mismo no tengo nada listo para hacer sola aquí."), False
+    shown = groups if full else groups[:_SHORT]
+    more = not full and len(groups) > _SHORT
+    if lang == "en":
+        return f"I can {_join(shown, lang)}." + (" Want to hear more?" if more else ""), more
+    return f"Puedo {_join(shown, lang)}." + (" ¿Quieres que te diga más?" if more else ""), more
+
+
+# Step 43.1: the answer is built from what Emma can serve on this machine now
+# (core.brain_host.servable_tools), not from self/capabilities.md, which lists the
+# whole registry. The docstring stays as the Realtime spec pins it.
 @tool(reversible=True, reversible_because="read-only: it reports, changes nothing")
-def describe_capabilities() -> ToolResult:
+def describe_capabilities(confirmed: bool = False) -> ToolResult:
     """Tell the user what Emma can do, in one or two short spoken sentences.
 
     Use when the user says any of:
@@ -114,81 +179,12 @@ def describe_capabilities() -> ToolResult:
     live tool registry). Returns the structured list in ``data`` and a
     spoken-friendly summary in ``user_message``.
     """
-    if not CAPABILITIES_PATH.exists():
-        return ToolResult(
-            True,
-            {"tools": []},
-            "Aún estoy arrancando; en un momento te puedo decir.",
-            False,
-        )
-    try:
-        text = CAPABILITIES_PATH.read_text()
-    except Exception as exc:
-        return ToolResult(False, None, f"No pude leer mi propio archivo: {exc}", False)
+    from core import runtime
+    from core.brain_host import servable_tools
 
-    tool_names: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line.startswith("| `") and "` |" in line:
-            name = line.split("`", 2)[1]
-            tool_names.append(name)
-
-    if not tool_names:
-        return ToolResult(
-            True,
-            {"tools": []},
-            "Mi archivo de capacidades está vacío.",
-            False,
-        )
-
-    categories = _summarize_for_voice(tool_names)
-    msg = (
-        f"Puedo: {categories}. En total tengo {len(tool_names)} herramientas. "
-        "Si me pides algo específico te digo si puedo o no."
-    )
-    return ToolResult(
-        True,
-        {"tools": tool_names, "count": len(tool_names)},
-        msg,
-        False,
-    )
-
-
-def _summarize_for_voice(tool_names: list[str]) -> str:
-    """Map raw tool names to a short, spoken list of categories."""
-
-    def has(*prefixes: str) -> bool:
-        return any(any(t.startswith(p) for p in prefixes) for t in tool_names)
-
-    bits: list[str] = []
-    if has("play_", "pause", "resume", "next_track", "previous_track", "now_playing"):
-        bits.append("controlar música")
-    if has("latest_video", "search_and_open"):
-        bits.append("abrir videos de YouTube")
-    if has("set_volume", "mute", "unmute"):
-        bits.append("ajustar el volumen")
-    if has("set_brightness"):
-        bits.append("cambiar el brillo")
-    if has("sleep_display", "lock_screen"):
-        bits.append("apagar pantalla o bloquear")
-    if has("current_time"):
-        bits.append("decir la hora")
-    if has("open_application"):
-        bits.append("abrir apps")
-    if has("search_web", "summarize_page"):
-        bits.append("buscar en la web y resumir páginas")
-    if has("open_url"):
-        bits.append("abrir enlaces")
-    if has("browser_navigate", "browser_click", "browser_do"):
-        bits.append("automatizar el navegador")
-    if has("remember_fact", "recall_facts", "forget_fact"):
-        bits.append("recordar cosas sobre ti")
-    if has("set_preferred_app", "get_preferred_app", "set_default_browser"):
-        bits.append("guardar tus preferencias de apps")
-    if has("health_check", "describe_my_health"):
-        bits.append("hacerme un diagnóstico")
-    if has("open_workspace"):
-        bits.append("abrir mi propio código para que me edites")
-    if not bits:
-        return "varias cosas"
-    return ", ".join(bits)
+    servable = servable_tools()
+    lang = runtime.get_spoken_lang()
+    # "¿Quieres que te diga más?" is a real question: a spoken yes re-runs this
+    # with confirmed=True (the one pending confirmation) and gets the full list.
+    said, more = capabilities_answer(servable, lang, full=confirmed)
+    return ToolResult(True, {"tools": sorted(servable)}, said, requires_confirmation=more)

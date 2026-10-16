@@ -273,9 +273,19 @@ TOOLS: dict[str, ToolSlots] = {
                       "cuanto falta", "mis temporizadores", "temporizadores", "temporizador",
                       "timers", "my timers", "what timers do i have", "how much time is left",
                       "time left", "timer", "cuanto le queda al timer", "cuanto le falta", "cuanto queda", "que timers hay activos", "lista mis temporizadores", "hay algun timer corriendo", "temporizadores activos", "dime mis timers", "que cuenta regresiva tengo", "cuantos timers tengo", "estado del temporizador", "que timers corren", "timer", "active timers", "list my timers", "any timers running", "how long is left", "timer status", "check my timers", "how many timers are running", "show my timers", "which timers are on", "what's left on the countdown"),
-    # describe_capabilities: no frame on purpose. Its answer lists the whole registry
-    # ("buscar en la web", "185 herramientas"), which the LLM-free cascade can't do;
-    # it stays deferred until it describes only what the brain serves (Step 43 Part 5).
+    # Step 43.1: its answer now names only what Emma can serve here (servable_tools).
+    "describe_capabilities": _t(None, "que puedes hacer", "que sabes hacer", "en que me ayudas",
+                                "que cosas haces", "como me puedes ayudar", "ayuda", "what can you do",
+                                "how can you help", "what do you do", "help", "en que me puedes ayudar",
+                                "que funciones tienes", "para que sirves", "cuales son tus habilidades",
+                                "que herramientas tienes disponibles", "que puedo pedirte",
+                                "dime lo que puedes hacer", "que eres capaz de hacer",
+                                "que puede hacer usted", "que comandos entiendes", "en que eres buena",
+                                "que tareas haces", "what are you able to do", "what are your features",
+                                "what tools do you have", "what can i ask you", "tell me what you can do",
+                                "what are your skills", "what commands do you understand",
+                                "what are you good at", "what tasks can you do", "list your abilities",
+                                "what's possible with you"),
     "what_did_you_do": _t(None, "que hiciste hoy", "que hiciste", "que has hecho hoy",
                           "que has hecho", "dime que hiciste", "cuentame que hiciste",
                           "historial de acciones", "resumen de lo que hiciste", "hiciste", "hoy",

@@ -23,6 +23,7 @@ EXPECTED_UNEXPLAINED = {
     "next_track": {"no me gusta esta, la siguiente", "I don't like this, skip", "siguiente canson"},
     "unmute": {"let it play sound", "anmiut"},
     "list_timers": {"que taimers tengo"},
+    "describe_capabilities": {"que puedes aser"},
     "what_did_you_do": {
         "qué hiciste el lunes", "qué hiciste la semana pasada", "qué hiciste por mí el lunes",
         "qué hiciste por mí la semana pasada", "qué hiciste esta semana", "lo que hiciste el lunes",
@@ -37,11 +38,10 @@ EXPECTED_UNEXPLAINED = {
 }
 
 
-def test_every_reversible_tool_has_a_frame_but_one_that_overclaims() -> None:
-    # start_timer got its frame with the time grammar (Part 3). describe_capabilities
-    # would recite the whole registry, which the cascade can't do: it stays deferred.
+def test_every_reversible_tool_has_a_frame() -> None:
+    # start_timer: Step 43 Part 3. describe_capabilities: Step 43.1, once it told the truth.
     missing = sorted(d.name for d in DOCS.values() if d.reversible and d.name not in TOOLS)
-    assert missing == ["describe_capabilities"]
+    assert missing == []
 
 
 @pytest.mark.parametrize("tool", sorted(EXPECTED_UNEXPLAINED))

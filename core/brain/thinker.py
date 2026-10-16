@@ -27,6 +27,9 @@ from core.brain.respond import Responder, language
 from core.tool_selection import BM25, doc_tokens, query_tokens
 
 CONTEXT_TURNS = 4  # A5: how many past turns a thinker sees
+# Set True by whoever installs a real Thinker (Steps 41/42). With none, Emma does
+# only what the brain decides locally, and "¿qué puedes hacer?" says exactly that.
+WIRED = False
 FACTS_K = 5  # A4: how many facts, by relevance
 
 
