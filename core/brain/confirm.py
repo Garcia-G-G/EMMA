@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from core.brain.decision import SlotScalar
 from core.brain.respond import action_phrase
@@ -31,9 +32,13 @@ class Pending:
     asked_at: float = 0.0  # time.monotonic() when the question was spoken
 
 
-def question(tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
-    """Short, names the action, answerable with one word: "¿Borrar la nota Compras?"."""
+def question(
+    tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang, now: datetime | None = None
+) -> str:
+    """Short, names the action, answerable with one word: "¿Borrar la nota Compras?".
+
+    ``now``: the clock a moment is said against ("mañana"); the real one by default."""
     shown = {k: (s if len(s := str(v)) <= _SPOKEN_CHARS else s[: _SPOKEN_CHARS - 3] + "...")
              for k, v in list(slots.items())[:_SPOKEN_VALUES] if k not in ("confirmed", "cancelled")}
-    action = action_phrase(tool, shown, lang)
+    action = action_phrase(tool, shown, lang, now)
     return f"{action}?" if lang == "en" else f"¿{action}?"

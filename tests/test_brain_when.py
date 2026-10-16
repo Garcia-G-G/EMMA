@@ -110,11 +110,15 @@ def test_the_resolved_time_is_said_back(lang: str, want: str) -> None:
 
 
 def test_the_confirmation_names_the_resolved_time() -> None:
-    from datetime import timedelta
-
     from core.brain.confirm import question
 
-    due = (datetime.now() + timedelta(days=1)).replace(hour=20, minute=0).isoformat(timespec="minutes")
-    q = question("add_reminder", {"title": "sacar la basura", "due_iso": due}, "es")
-    assert q == "¿Recordarte «sacar la basura» mañana a las 20:00?"
+    # "a las 8" said at 9:00 resolves to 20:00 today; said back on the same clock.
+    due = _moment("a las 8")
+    assert due is not None
+    q = question("add_reminder", {"title": "sacar la basura", "due_iso": due.isoformat()}, "es", NOW)
+    assert q == "¿Recordarte «sacar la basura» hoy a las 20:00?"
+    tomorrow = _moment("mañana a las nueve")
+    assert tomorrow is not None
+    q_en = question("add_reminder", {"title": "x", "due_iso": tomorrow.isoformat()}, "en", NOW)
+    assert q_en == "Remind you to «x» tomorrow at 9:00?"
     assert question("add_reminder", {"title": "x"}, "en") == "Remind you to «x»?"

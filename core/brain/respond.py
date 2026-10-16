@@ -20,6 +20,7 @@ from __future__ import annotations
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 
 from rapidfuzz import fuzz
@@ -420,10 +421,13 @@ class Responder:
         return self.pick(f"options:{lang}", _CLARIFY["options"][lang]).format(options=listed)
 
 
-def action_phrase(tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
+def action_phrase(
+    tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang, now: datetime | None = None
+) -> str:
     """The concrete action and its target — what a "sí" agrees to. Capitalized."""
     if any(k.endswith("_iso") for k in slots):  # a moment is said, never read as ISO
-        slots = {k: when.spoken(str(v), lang) if k.endswith("_iso") else v for k, v in slots.items()}
+        slots = {k: when.spoken(str(v), lang, now) if k.endswith("_iso") else v
+                 for k, v in slots.items()}
     phrase = _ACTION.get(tool, {}).get(lang)
     if phrase and not _fills(phrase, slots):
         phrase = _ACTION.get(f"{tool}:no_time", {}).get(lang)
