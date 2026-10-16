@@ -8,6 +8,7 @@ the labelled set.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 from pathlib import Path
@@ -213,6 +214,21 @@ def vocab(
         connections=connections or tuple(dictionary.connections()),
         contacts=contacts,
     )
+
+
+# Tools whose success changes a listing the vocabulary holds.
+CHANGES_LISTINGS = frozenset({"create_note", "append_to_note", "merge_notes", "delete_note"})
+
+
+async def listings() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(notes, playlists) from the tools' own read-only listings. A failing
+    listing is empty, never an error: its requests just keep deferring."""
+    from tools import music, notes_tool
+
+    got = await asyncio.gather(notes_tool.note_titles(), music.playlist_names(),
+                               return_exceptions=True)
+    notes, playlists = (g if isinstance(g, tuple) else () for g in got)
+    return notes, playlists
 
 
 def evaluate(

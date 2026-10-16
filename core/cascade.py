@@ -81,6 +81,7 @@ from core import (
 from core.brain import log as brain_log
 from core.brain.decision import Decision
 from core.brain.processor import BrainProcessor, Outcome
+from core.brain_host import CHANGES_LISTINGS
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
 from core.redaction import redact
@@ -407,6 +408,8 @@ class _Host:
             session_memory.record_completed_action(
                 tool, dict(args), user_text=session_memory.last_user_speech_text()
             )
+            if tool in CHANGES_LISTINGS:
+                brain_shadow.refresh_listings()
         if getattr(result, "ends_session", False):
             self.end_after_speech = True
         return Outcome(result.success, redact(result.user_message or ""),

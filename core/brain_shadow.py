@@ -18,6 +18,7 @@ to the turn being spoken, not the previous one.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import threading
 import time
 import uuid
@@ -211,12 +212,36 @@ def _load_brain() -> None:
             brain.decide("abre safari")
         with _brain_lock:
             _brain = brain
+        refresh_listings()
         log.info("brain_shadow_ready", tools=len(docs), knn=brain.retriever.has_knn,
                  examples=len(index) if index else 0)
     except Exception as exc:
         log.warning("brain_shadow_load_failed", error=str(exc))
     finally:
         _loading = False
+
+
+def refresh_listings() -> threading.Thread:
+    """Re-read notes and playlists into the live brain's vocabulary, off the turn.
+
+    Per session (``start_session``) and after a tool that changes them
+    (``brain_host.CHANGES_LISTINGS``). Until it lands, the old lists answer."""
+    def run() -> None:
+        from core.brain_host import listings
+
+        try:
+            notes, playlists = asyncio.run(listings())
+        except Exception as exc:
+            log.warning("brain_listings_failed", error=str(exc))
+            return
+        brain = _brain
+        if brain is not None:
+            brain.vocab = dataclasses.replace(brain.vocab, notes=notes, playlists=playlists)
+            log.info("brain_listings", notes=len(notes), playlists=len(playlists))
+
+    t = threading.Thread(target=run, name="brain-listings", daemon=True)
+    t.start()
+    return t
 
 
 def ensure_loading() -> None:
@@ -237,6 +262,8 @@ def start_session() -> Shadow:
     """A fresh shadow for a wake session; starts loading the brain if needed."""
     global _shadow
     ensure_loading()
+    if _brain is not None:
+        refresh_listings()
     with _brain_lock:
         _shadow = Shadow(_brain)
     return _shadow

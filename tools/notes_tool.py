@@ -139,6 +139,17 @@ def _enumerate_light_script(scan_cap: int) -> str:
     )
 
 
+async def note_titles(scan_cap: int = 500) -> tuple[str, ...]:
+    """Every live note title, for the brain's closed vocabulary (Step 43). Read-only.
+
+    Never launches Notes: with Notes closed this is () and note requests defer,
+    as they did before the brain could see titles."""
+    if not await macos.app_is_running("Notes"):
+        return ()
+    raw = await macos.osascript(_enumerate_light_script(scan_cap), timeout_s=_NOTES_TIMEOUT_S)
+    return tuple(dict.fromkeys(m.title for m in parse_matches(raw) if m.title))
+
+
 async def _most_recent_note(scan_cap: int = 500) -> Match | None:
     """The most recently MODIFIED note (what the user means by 'la última nota').
 

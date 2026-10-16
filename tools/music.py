@@ -213,6 +213,27 @@ async def _ensure_running(app: str) -> None:
         await macos.launch_app(app)
 
 
+async def playlist_names() -> tuple[str, ...]:
+    """Library playlist names, for the brain's closed vocabulary (Step 43). Read-only.
+
+    Music only when it's already running (never launched for this); Spotify only
+    with a valid cached token, so no login flow ever opens from here."""
+    names: list[str] = []
+    if await macos.app_is_running("Music"):
+        raw = await macos.osascript(
+            'tell application "Music"\n'
+            "  set AppleScript's text item delimiters to linefeed\n"
+            "  return (name of user playlists) as text\n"
+            "end tell",
+            timeout_s=10.0,
+        )
+        names += raw.splitlines()
+    if spotify_token_status() == "valid" and (sp := _spotify()) is not None:
+        items = await asyncio.to_thread(lambda: sp.current_user_playlists(limit=50).get("items", []))
+        names += [p["name"] for p in items]
+    return tuple(dict.fromkeys(n.strip() for n in names if n.strip()))
+
+
 def _spotify_search_uri(query: str) -> str | None:
     """Resolve a free-text query to a Spotify track URI via the Web API (search
     only — playback goes through AppleScript). None if unavailable / no match."""
