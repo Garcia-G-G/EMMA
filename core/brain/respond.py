@@ -283,6 +283,8 @@ _CLARIFY: dict[str, Phrasings] = {
                      "What exactly should I close?")},
     "generic": {"es": ("¿Qué exactamente?", "Dime un poco más.", "¿De qué se trata?", "¿Qué necesitas?"),
                 "en": ("What exactly?", "Tell me a bit more.", "What do you mean?", "What do you need?")},
+    "referent": {"es": ("¿A qué te refieres?", "¿Qué cosa?", "¿Cuál, exactamente?"),
+                 "en": ("What do you mean?", "Which one?", "Which one, exactly?")},
     "options": {"es": ("¿Cuál? {options}", "Tengo varias: {options}. ¿Cuál?", "¿Cuál de estas? {options}"),
                 "en": ("Which one? {options}", "I have a few: {options}. Which?",
                        "Which of these? {options}")},
@@ -429,6 +431,8 @@ def _fills(template: str, slots: Mapping[str, SlotScalar]) -> bool:
 
 
 def _clarify_kind(d: Decision) -> str:
+    if d.reason == "anaphora:no_referent":
+        return "referent"
     first = normalize(d.utterance).tokens[:1]
     verb = first[0] if first else ""
     if verb.startswith(("busca", "search")):

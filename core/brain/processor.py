@@ -27,7 +27,7 @@ import asyncio
 import time
 from collections import deque
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 import structlog
@@ -77,6 +77,10 @@ class Host(Protocol):
 
     def facts(self) -> Sequence[str]:
         """Memory facts (non-secret), confidence-ordered. Ranked per turn here."""
+
+
+# What a clitic on a music verb ("reanúdala", "páusala") can refer to.
+MEDIA_TOOLS = frozenset({"play_track", "play_playlist", "resume", "pause", "next_track"})
 
 
 def _not_ready(text: str) -> Decision:
@@ -196,12 +200,20 @@ class BrainProcessor(FrameProcessor):
 
         if d.verdict in ("refuse", "clarify", "none"):
             return self.responder.say(d, lang), {"path": "template"}
+        if d.verdict == "local" and d.anaphor and not self._has_referent(d):
+            # "Reanúdala" with nothing played this session: ask, don't drop or guess.
+            d = replace(d, verdict="clarify", reason="anaphora:no_referent")
+            return self.responder.say(d, lang), {"path": "template", "tool": d.chosen}
         if d.verdict == "local" and d.chosen and self._host is not None:
             slots = {k: v.value for k, v in d.slots.items()}
             if d.needs_confirmation:
                 return self._ask(d, slots, lang), {"path": "confirm_ask", "tool": d.chosen}
             return await self._execute(d, slots, lang, path="local")
         return await self._think(d)
+
+    def _has_referent(self, d: Decision) -> bool:
+        """Only a music verb resolves today, against the session's last music action."""
+        return d.chosen in MEDIA_TOOLS and any(t.tool in MEDIA_TOOLS for t in self._context)
 
     def _ask(self, d: Decision, slots: dict[str, SlotScalar], lang: str) -> str:
         assert d.chosen is not None and self._host is not None
@@ -247,6 +259,4 @@ class BrainProcessor(FrameProcessor):
 
 
 def _with_confirmation(d: Decision) -> Decision:
-    from dataclasses import replace
-
     return replace(d, needs_confirmation=True)

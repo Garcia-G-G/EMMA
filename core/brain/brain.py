@@ -16,7 +16,7 @@ from core.brain.gate import Thresholds, decide
 from core.brain.index import ExampleIndex
 from core.brain.normalize import normalize
 from core.brain.retrieve import DualRetriever, ToolDoc
-from core.brain.slots import Vocab
+from core.brain.slots import Vocab, split_clitics
 
 
 class Brain:
@@ -42,11 +42,13 @@ class Brain:
         """``exclude_id(s)``: evaluation only — the item itself and any phrasing
         that near-copies it may not answer (leave-one-out)."""
         t0 = time.perf_counter()
-        norm = normalize(utterance)
+        split, anaphor = split_clitics(utterance)
+        norm = normalize(split)
         t1 = time.perf_counter()
         r = self.retriever.rank(norm, exclude_id=exclude_id, exclude_ids=exclude_ids)
         t2 = time.perf_counter()
         d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.knn_status)
+        d.utterance, d.anaphor = utterance, anaphor
         t3 = time.perf_counter()
         d.timings = {
             "normalize_ms": round((t1 - t0) * 1000, 3),

@@ -1,0 +1,7 @@
+[
+  {"id": "rl_01", "text": "Pausa la música.", "accept": ["pause"], "src": "landing-40.2", "cat": "real", "brain_path": "L1"},
+  {"id": "rl_02", "text": "Pausa la música, please.", "accept": ["pause"], "src": "landing-40.2", "cat": "real", "brain_path": "L1"},
+  {"id": "rl_03", "text": "Pause the music.", "accept": ["pause"], "src": "landing-40.2", "cat": "real", "brain_path": "L1"},
+  {"id": "rl_04", "text": "Reanúdala.", "accept": ["resume"], "src": "landing-40.2", "cat": "real", "brain_path": "L1"},
+  {"id": "rl_05", "text": "Resume the music.", "accept": ["resume"], "src": "landing-40.2", "cat": "real", "brain_path": "L1"}
+]

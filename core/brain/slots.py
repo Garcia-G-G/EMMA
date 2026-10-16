@@ -217,7 +217,10 @@ TOOLS: dict[str, ToolSlots] = {
     "list_today": _t(None, "mis recordatorios de hoy", "recordatorios de hoy",
                      "recordatorios", "hoy", "my reminders today"),
     "mute": _t(None, "silencia el audio", "silencia", "audio", "mute"),
-    "resume": _t(None, "pon musica", "reanuda", "resume", "musica"),
+    "resume": _t(None, "pon musica", "reanuda la musica", "reanuda", "resume the music",
+                 "resume", "musica", "music"),
+    "pause": _t(None, "pausa la musica", "pausa", "pause the music", "pause", "musica",
+                "music"),
     "recall_last_action": _t(None, "hazlo de nuevo", "hazlo otra vez", "de nuevo",
                              "otra vez", "hazlo", "do it again"),
     "repeat_last": _t(None, "repite eso", "no te escuche", "repite", "repeat that"),
@@ -233,6 +236,38 @@ TOOLS: dict[str, ToolSlots] = {
                         "listo", "shut down"),
     "snooze_listening": _t(None, "duermete", "deja de escuchar", "snooze"),
 }
+
+
+# A Spanish imperative carries its object as a clitic: "reanúdala", "ábrelo".
+# Split only when the stem is a frame's command word, so "escuela" or "hola"
+# never split. The pronoun is anaphoric: the caller must find its referent.
+_CLITICS = ("las", "los", "la", "lo")
+_FRAME_VERBS = frozenset(
+    w for spec in TOOLS.values() for f in spec.frames
+    if len(w := f.split()[0]) >= 3 and w not in STOP and w not in FILLER
+)
+_FRAME_WORDS = frozenset(w for spec in TOOLS.values() for f in spec.frames for w in f.split())
+_WORD_RUN = re.compile(r"\w+", re.UNICODE)
+
+
+def split_clitics(utterance: str) -> tuple[str, str]:
+    """``("reanuda la.", "la")`` for ``"Reanúdala."``; ``(utterance, "")`` when none."""
+    found = ""
+
+    def cut(m: re.Match[str]) -> str:
+        nonlocal found
+        w = m.group()
+        f = fold(w)
+        if f in _FRAME_WORDS:  # "hazlo" is a frame word of its own
+            return w
+        for c in _CLITICS:
+            if f.endswith(c) and f[: -len(c)] in _FRAME_VERBS:
+                found = found or c
+                return f"{f[: -len(c)]} {c}"  # the stem loses the clitic's accent: "reanuda la"
+        return w
+
+    out = _WORD_RUN.sub(cut, utterance)
+    return out, found
 
 
 # ---- matching ----------------------------------------------------------------------------

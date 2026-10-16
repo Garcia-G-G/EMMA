@@ -58,6 +58,7 @@ class Decision:
     slots: dict[str, SlotValue] = field(default_factory=dict)
     features: tuple[Feature, ...] = ()
     needs_confirmation: bool = False
+    anaphor: str = ""  # a clitic object ("reanúdaLA"): the processor must find its referent
     timings: dict[str, float] = field(default_factory=dict)
 
     def to_record(self) -> dict[str, object]:
