@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from core.brain.decision import Candidate, Decision, Feature, Verdict
+from core.brain.decision import Candidate, Decision, Feature, SlotValue, Verdict
 from core.brain.normalize import Normalized, fold
 from core.brain.retrieve import NONE_TOOL, PSEUDO_TOOLS, Retrieval, ToolDoc
 from core.brain.sinks import PERSIST, is_sink
@@ -281,6 +281,37 @@ def decide(
         norm, "local", "ok", f, retrieval, chosen=chosen, slots=res.slots,
         needs_confirmation=risky,
     )
+
+
+def admit(
+    tool: str,
+    args: Mapping[str, object],
+    tools: Mapping[str, ToolDoc],
+    utterance: str = "",
+) -> Decision:
+    """A Thinker's proposed call, held to the brain's own rules (Step 43 Part 4).
+
+    The tool must exist on this machine; every required argument must be there and
+    non-empty; no argument the tool doesn't take; never ``confirmed`` or
+    ``cancelled`` (only a spoken yes confirms). Then the same risk rule as step 8
+    decides whether Emma asks first. Anything else defers, with the reason.
+    """
+    doc = tools.get(tool)
+    if doc is None or tool in PSEUDO_TOOLS:
+        return Decision(utterance, "", "defer", "thinker:unavailable", chosen=tool)
+    missing = [p for p in doc.required if not str(args.get(p, "")).strip()]
+    unknown = [k for k in args if k not in doc.params]
+    if missing or unknown:
+        return Decision(utterance, "", "defer", "thinker:slots", chosen=tool,
+                        features=(Feature("slots_missing", ",".join(missing)),
+                                  Feature("unknown_args", ",".join(unknown))))
+    slots = {k: SlotValue(v, "thinker", 1.0, str(v)) for k, v in args.items()
+             if isinstance(v, (str, int, float, bool))}
+    if len(slots) != len(args):
+        return Decision(utterance, "", "defer", "thinker:arg_type", chosen=tool)
+    risky = doc.destructive or is_sink(tool) or not doc.reversible
+    return Decision(utterance, "", "local", "thinker", chosen=tool, slots=slots,
+                    needs_confirmation=risky)
 
 
 def _choose(

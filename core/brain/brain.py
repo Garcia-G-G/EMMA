@@ -8,12 +8,12 @@ vocabularies, thresholds) plus the retriever. Built by the host
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from core.brain.decision import Decision
 from core.brain.embed import Embedder
-from core.brain.gate import Thresholds, decide
+from core.brain.gate import Thresholds, admit, decide
 from core.brain.index import ExampleIndex
 from core.brain.normalize import normalize
 from core.brain.retrieve import DualRetriever, ToolDoc
@@ -33,6 +33,10 @@ class Brain:
         self.vocab = vocab
         self.thresholds = thresholds
         self.retriever = DualRetriever(tools, index, embedder)
+
+    def admit(self, tool: str, args: Mapping[str, object], utterance: str = "") -> Decision:
+        """A Thinker's proposed call through the gate's own rules (``gate.admit``)."""
+        return admit(tool, args, self.tools, utterance)
 
     def decide(
         self,

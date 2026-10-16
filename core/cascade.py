@@ -443,6 +443,11 @@ def _decide_getter() -> Any:
     return brain.decide if brain is not None else None
 
 
+def _admit_getter() -> Any:
+    brain = brain_shadow.loaded()
+    return brain.admit if brain is not None else None
+
+
 async def build_pipeline(
     http: aiohttp.ClientSession, host: _Host | None = None, latency: Latency | None = None
 ) -> tuple[PipelineTask, BrainProcessor, ScribeSTT]:
@@ -499,7 +504,8 @@ async def build_pipeline(
     )
     turns = _Turns()
     host = host or _Host()
-    brain_proc = BrainProcessor(_decide_getter, record=turns.record, host=host)
+    brain_proc = BrainProcessor(_decide_getter, record=turns.record, host=host,
+                                admit=_admit_getter)
     pipeline = Pipeline(
         [
             transport.input(),

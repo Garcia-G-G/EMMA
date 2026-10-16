@@ -57,6 +57,8 @@ from core.brain.thinker import (
 log = structlog.get_logger("emma.brain.processor")
 
 Decide = Callable[[str], Decision]
+# (tool, args, utterance) -> a Decision under the brain's rules (Brain.admit).
+Admit = Callable[[str, dict[str, SlotScalar], str], Decision]
 # (decision, what was said, extra fields) -> None. The host writes the log line.
 Record = Callable[[Decision, str, dict[str, object]], None]
 
@@ -118,6 +120,7 @@ class BrainProcessor(FrameProcessor):
         responder: Responder | None = None,
         host: Host | None = None,
         thinker: Thinker | None = None,
+        admit: Callable[[], Admit | None] | None = None,
     ) -> None:
         super().__init__()
         self._decide = decide  # a getter: the brain may finish loading mid-session
@@ -125,6 +128,7 @@ class BrainProcessor(FrameProcessor):
         self.responder = responder or Responder()
         self._host = host
         self._thinker = thinker or NoThinker(self.responder)
+        self._admit = admit  # a getter, like decide: no brain loaded = the thinker can't act
         self._lock = asyncio.Lock()
         self._last_executed: tuple[str, str] | None = None  # (tool, utterance), one turn back
         self._context: deque[ContextTurn] = deque(maxlen=CONTEXT_TURNS)
@@ -255,7 +259,23 @@ class BrainProcessor(FrameProcessor):
         extra: dict[str, Any] = {"path": "thinker", "thinker": type(self._thinker).__name__,
                                  "defer_reason": d.reason, "facts": len(facts),
                                  "context_turns": len(turn.context)}
-        return result.text, extra
+        if result.tool is None:
+            return result.text, extra
+        # A proposed call runs only as a brain decision would: admitted by the gate's
+        # rules, then the same confirmation and the same Host (dispatch, guards).
+        admit = self._admit() if self._admit is not None else None
+        if admit is None or self._host is None:
+            return result.text, {**extra, "thinker_tool": result.tool, "admitted": "no_brain"}
+        a = admit(result.tool, dict(result.args), d.utterance)
+        extra = {**extra, "thinker_tool": result.tool, "admitted": a.reason}
+        if a.verdict != "local" or a.chosen is None:
+            return result.text, extra
+        lang = language(d.utterance)
+        slots = {k: v.value for k, v in a.slots.items()}
+        if a.needs_confirmation:
+            return self._ask(a, slots, lang), {**extra, "path": "thinker:confirm_ask", "tool": a.chosen}
+        said, ran = await self._execute(a.chosen, slots, lang, path="thinker:local")
+        return said, {**extra, **ran}
 
     async def say(self, text: str) -> None:
         await self.push_frame(TTSSpeakFrame(text))
