@@ -217,7 +217,7 @@ def test_a_missing_embedder_is_logged_once_at_load(
 
     monkeypatch.setattr(embed_mod, "MODEL_DIR", tmp_path / "no-model")
     monkeypatch.setattr(embed_mod.Embedder.__init__, "__defaults__",
-                        (tmp_path / "no-model", 2))
+                        (tmp_path / "no-model", 2, embed_mod.E5))
     monkeypatch.setattr(brain_shadow, "_brain", None)
     with capture_logs() as logs:
         brain_shadow._load_brain()

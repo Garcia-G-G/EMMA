@@ -44,6 +44,10 @@ if Path("/usr/bin/security").exists():
     for _cmd in ("create-keychain", "unlock-keychain"):
         subprocess.run(["/usr/bin/security", _cmd, "-p", "", str(_KEYCHAIN)],
                        check=False, capture_output=True, timeout=10)
+    # No auto-lock: a long suite outlived the default 5-minute timeout and the
+    # locked keychain then waited for a password (secrets tests timed out).
+    subprocess.run(["/usr/bin/security", "set-keychain-settings", str(_KEYCHAIN)],
+                   check=False, capture_output=True, timeout=10)
     os.environ["EMMA_KEYCHAIN_PATH"] = str(_KEYCHAIN)
 os.environ.pop("EMMA_HOME", None)
 os.environ.pop("MEMORY_DB_PATH", None)

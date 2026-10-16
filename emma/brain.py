@@ -136,7 +136,9 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--log", type=Path, default=brain_log.DEFAULT_PATH)
     dp = sub.add_parser("decide", help="run one utterance through the brain")
     dp.add_argument("text")
-    sub.add_parser("fetch-model", help="download the pinned local embedder")
+    fm = sub.add_parser("fetch-model", help="download the pinned local embedder")
+    fm.add_argument("--memory", action="store_true",
+                    help="memory's embedder (Step 42) instead of the brain's")
     a = ap.parse_args(argv)
 
     if a.cmd == "report":
@@ -145,9 +147,14 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "decide":
         print(json.dumps(_decide(a.text), ensure_ascii=False, indent=1, default=str))
         return 0
-    from core.brain.embed import fetch
+    from core.brain.embed import E5, ModelSpec, fetch
 
-    for f, h in fetch().items():
+    spec: ModelSpec = E5
+    if a.memory:
+        from memory.local_embed import MEMORY_MODEL
+
+        spec = MEMORY_MODEL
+    for f, h in fetch(spec=spec).items():
         print(f"{f}  sha256 {h}")
     return 0
 

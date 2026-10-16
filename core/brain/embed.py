@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import threading
 import urllib.request
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -36,11 +38,37 @@ _MAX_TOKENS = 64  # utterances are short; bounds latency on a long transcript
 Vector = npt.NDArray[np.float32]
 
 
+@dataclass(frozen=True)
+class ModelSpec:
+    """A pinned local embedder: where it comes from, what it must hash to, how to call it."""
+
+    name: str  # directory under ~/.emma/models
+    repo: str
+    revision: str
+    onnx_file: str
+    sha256: Mapping[str, str]
+    dim: int
+    query_prefix: str = ""
+    doc_prefix: str = ""
+    max_tokens: int = _MAX_TOKENS
+    tokenizer_file: str = TOKENIZER_FILE
+
+    @property
+    def model_dir(self) -> Path:
+        return Path.home() / ".emma" / "models" / self.name
+
+
+# The brain's embedder. Memory pins its own (memory/local_embed.py, Step 42).
+E5 = ModelSpec("multilingual-e5-small", REPO, REVISION, ONNX_FILE, SHA256, DIM,
+               query_prefix=_PREFIX, doc_prefix=_PREFIX)
+
+
 class Embedder:
     """Lazy, thread-safe. One instance per process is enough."""
 
-    def __init__(self, model_dir: Path = MODEL_DIR, threads: int = 2) -> None:
-        self.model_dir = model_dir
+    def __init__(self, model_dir: Path | None = None, threads: int = 2, spec: ModelSpec = E5) -> None:
+        self.spec = spec
+        self.model_dir = model_dir or spec.model_dir
         self.threads = threads
         self._lock = threading.Lock()
         self._session: object | None = None
@@ -48,7 +76,8 @@ class Embedder:
         self._needs_type_ids = False
 
     def available(self) -> bool:
-        return (self.model_dir / ONNX_FILE).exists() and (self.model_dir / TOKENIZER_FILE).exists()
+        return ((self.model_dir / self.spec.onnx_file).exists()
+                and (self.model_dir / self.spec.tokenizer_file).exists())
 
     def _load(self) -> None:
         import onnxruntime as ort
@@ -57,21 +86,24 @@ class Embedder:
         so = ort.SessionOptions()
         so.intra_op_num_threads = self.threads
         session = ort.InferenceSession(
-            str(self.model_dir / ONNX_FILE), so, providers=["CPUExecutionProvider"]
+            str(self.model_dir / self.spec.onnx_file), so, providers=["CPUExecutionProvider"]
         )
-        tok = Tokenizer.from_file(str(self.model_dir / TOKENIZER_FILE))
-        tok.enable_truncation(_MAX_TOKENS)
+        tok = Tokenizer.from_file(str(self.model_dir / self.spec.tokenizer_file))
+        tok.enable_truncation(self.spec.max_tokens)
         self._needs_type_ids = any(i.name == "token_type_ids" for i in session.get_inputs())
         self._session, self._tok = session, tok
 
-    def embed(self, texts: list[str]) -> npt.NDArray[np.float32]:
-        """(n, 384) L2-normalized rows. Cosine similarity is a dot product."""
+    def embed(self, texts: list[str], prefix: str | None = None) -> npt.NDArray[np.float32]:
+        """(n, dim) L2-normalized rows. Cosine similarity is a dot product.
+
+        ``prefix`` defaults to the spec's query prefix (e5's "query: ")."""
         with self._lock:
             if self._session is None:
                 self._load()
             session, tok = self._session, self._tok
         assert session is not None and tok is not None
-        enc = tok.encode_batch([_PREFIX + t for t in texts])  # type: ignore[attr-defined]
+        pre = self.spec.query_prefix if prefix is None else prefix
+        enc = tok.encode_batch([pre + t for t in texts])  # type: ignore[attr-defined]
         width = max(len(e.ids) for e in enc)
         ids = np.zeros((len(enc), width), dtype=np.int64)
         mask = np.zeros((len(enc), width), dtype=np.int64)
@@ -101,19 +133,24 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def fetch(model_dir: Path = MODEL_DIR, expected: dict[str, str] | None = None) -> dict[str, str]:
+def fetch(
+    model_dir: Path | None = None,
+    expected: Mapping[str, str] | None = None,
+    spec: ModelSpec = E5,
+) -> dict[str, str]:
     """Download the pinned revision into ``model_dir``; return {file: sha256}.
 
     If ``expected`` has a non-empty hash for a file and it doesn't match, the
     file is deleted and ``ValueError`` raised — a swapped model never loads.
     """
-    want = expected if expected is not None else SHA256
+    model_dir = model_dir or spec.model_dir
+    want = expected if expected is not None else spec.sha256
     got: dict[str, str] = {}
-    for rel in (ONNX_FILE, TOKENIZER_FILE):
+    for rel in (spec.onnx_file, spec.tokenizer_file):
         dst = model_dir / rel
         if not dst.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            url = f"https://huggingface.co/{REPO}/resolve/{REVISION}/{rel}"
+            url = f"https://huggingface.co/{spec.repo}/resolve/{spec.revision}/{rel}"
             tmp = dst.with_name(dst.name + ".part")
             with urllib.request.urlopen(url, timeout=120) as r, tmp.open("wb") as f:
                 while chunk := r.read(1 << 20):
