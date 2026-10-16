@@ -25,6 +25,9 @@ import structlog
 log = structlog.get_logger("emma.secrets")
 
 SERVICE = os.environ.get("EMMA_KEYCHAIN_SERVICE") or "com.garcia.emma"
+# Tests only: a throwaway keychain file instead of the user's login keychain
+# (tests/conftest.py). Unset in production, where the default keychain is used.
+_KEYCHAIN = os.environ.get("EMMA_KEYCHAIN_PATH")
 _TIMEOUT_S = 5.0
 
 # Credential env-var heuristics for .env migration. ``_WEBHOOK`` covers Discord
@@ -38,6 +41,7 @@ async def _run(args: list[str]) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
         "/usr/bin/security",
         *args,
+        *([_KEYCHAIN] if _KEYCHAIN else []),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

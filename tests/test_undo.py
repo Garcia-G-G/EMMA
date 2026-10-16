@@ -177,7 +177,9 @@ async def test_codex_delegate_manual_blueprint_shape(monkeypatch) -> None:
         start = AsyncMock(return_value=type("Rec", (), {"id": "t1"})())
 
     monkeypatch.setattr(cx, "registry", lambda: _Reg())
-    res = await cx.delegate_to_codex("añade un docstring", branch="feat", confirmed=True)
+    repo = Path.home() / "repo"  # the test home, not the developer's (Step 42 Part 0)
+    (repo / ".git").mkdir(parents=True, exist_ok=True)
+    res = await cx.delegate_to_codex("añade un docstring", cwd=str(repo), branch="feat", confirmed=True)
     bp = res.data["_reverse_blueprint"]
     assert bp["kind"] == "manual"
     assert "branch -D feat" in bp["hint"] and "worktree remove" in bp["hint"]

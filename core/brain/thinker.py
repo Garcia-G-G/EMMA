@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from core.brain.decision import Decision, SlotScalar
+from core.brain.normalize import fold, normalize
 from core.brain.respond import Responder, language
 from core.tool_selection import BM25, doc_tokens, query_tokens
 
@@ -62,6 +63,30 @@ class Thinker(Protocol):
     async def think(self, turn: Turn) -> ThinkerResult: ...
 
 
+# Requests to keep, recall or forget a memory. While memory can't store on this
+# machine, NoThinker says so instead of "lo apunté" (nothing would be kept).
+MEMORY_TOOLS = frozenset({"remember_fact", "recall_facts", "forget_fact", "forget_last_turn"})
+
+
+# How a memory request opens, both languages, neutral. With memory_tool unavailable
+# retrieval never proposes it, so the words themselves say what was asked.
+_MEMORY_OPENERS = tuple(" ".join(fold(p).split()) for p in (
+    "recuerda que", "recuerdame que", "recuerdeme que", "acuerdate de que", "acuerdate que",
+    "no olvides que", "guarda que", "apunta que", "anota que", "ten en cuenta que",
+    "que sabes de mi", "que recuerdas de mi", "olvida que", "olvidate de que",
+    "remember that", "don't forget that", "dont forget that", "keep in mind that", "note that",
+    "what do you know about me", "what do you remember about me", "forget that",
+))
+
+
+def asks_memory(d: Decision) -> bool:
+    """The brain chose a memory tool, or the sentence opens like a memory request."""
+    if d.chosen in MEMORY_TOOLS:
+        return True
+    said = " ".join(normalize(d.utterance).tokens)
+    return said.startswith(_MEMORY_OPENERS)
+
+
 class NoThinker:
     """The only thinker in VOICE-1: no model, a template that doesn't sound like an error."""
 
@@ -69,7 +94,10 @@ class NoThinker:
         self.responder = responder or Responder()
 
     async def think(self, turn: Turn) -> ThinkerResult:
-        return ThinkerResult(text=self.responder.not_yet(language(turn.transcript)))
+        lang = language(turn.transcript)
+        if asks_memory(turn.decision):
+            return ThinkerResult(text=self.responder.no_memory(lang))
+        return ThinkerResult(text=self.responder.not_yet(lang))
 
 
 def rank_facts(query: str, facts: Sequence[str], k: int = FACTS_K) -> tuple[str, ...]:

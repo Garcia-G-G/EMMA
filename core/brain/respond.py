@@ -348,6 +348,14 @@ _NOT_YET: Phrasings = {
            "Still learning that one. I wrote it down.",
            "Not on my own yet. I've noted it for later."),
 }
+# A memory request while memory can't store anything (Step 42 Part 0): the truth,
+# never "lo apunté" — nothing would be kept.
+_NO_MEMORY: Phrasings = {
+    "es": ("Todavía no puedo guardar recuerdos.", "Aún no sé guardar recuerdos; eso no quedó guardado.",
+           "Por ahora no guardo recuerdos, así que eso no lo tengo."),
+    "en": ("I can't save memories yet.", "I don't keep memories yet, so that wasn't saved.",
+           "I can't remember things yet; that wasn't stored."),
+}
 _SMALLTALK: Phrasings = {
     "es": ("Bien, ¿en qué te ayudo?", "Aquí ando, ¿qué necesitas?", "Todo bien. ¿Qué hacemos?",
            "Con gusto.", "Aquí estoy."),
@@ -412,6 +420,9 @@ class Responder:
 
     def not_yet(self, lang: SpokenLang) -> str:
         return self.pick(f"not_yet:{lang}", _NOT_YET[lang])
+
+    def no_memory(self, lang: SpokenLang) -> str:
+        return self.pick(f"no_memory:{lang}", _NO_MEMORY[lang])
 
     def unclear(self, lang: SpokenLang) -> str:
         return self.pick(f"unclear:{lang}", _UNCLEAR_ANSWER[lang])
@@ -536,7 +547,7 @@ def fixed_phrasings() -> list[tuple[str, SpokenLang, str]]:
     templates), until the live log can rank them; Spanish before English.
     """
     ordered: list[tuple[str, Phrasings]] = [
-        ("not_yet", _NOT_YET), ("done", _DONE),
+        ("not_yet", _NOT_YET), ("no_memory", _NO_MEMORY), ("done", _DONE),
         *((f"tool:{name}", phr) for name, phr in _TOOL.items()),
         ("smalltalk", _SMALLTALK), ("refuse:safety", _REFUSE["safety"]),
         *((f"clarify:{k}", v) for k, v in _CLARIFY.items() if k != "options"),
