@@ -11,7 +11,7 @@ import pytest
 
 from core.brain.normalize import normalize
 from core.brain.slots import TOOLS, Vocab, resolve
-from core.brain_host import labelled_examples, tool_docs, vocab
+from core.brain_host import EXAM_NOW, labelled_examples, tool_docs, vocab
 from tests.brain_slot_fixtures import APPS, CONNECTIONS, EXPECTED, NOTES, PAGES, PLAYLISTS
 
 DOCS = {d.name: d for d in tool_docs()}
@@ -29,7 +29,8 @@ def v() -> Vocab:
 
 def test_every_l2_item_has_a_fixture() -> None:
     l2 = {i for i, e in ITEMS.items() if e.brain_path == "L2"}
-    assert l2 == set(EXPECTED), f"missing {sorted(l2 - set(EXPECTED))} extra {sorted(set(EXPECTED) - l2)}"
+    pinned = set(EXPECTED) - {i for i, e in ITEMS.items() if e.brain_path == "L3"}  # L3: Step 43
+    assert l2 == pinned, f"missing {sorted(l2 - pinned)} extra {sorted(pinned - l2)}"
 
 
 def _cases() -> list[object]:
@@ -44,7 +45,7 @@ def _cases() -> list[object]:
 def test_l2_item_resolves_its_values(v: Vocab, item_id: str, tool: str, expected: dict[str, object]) -> None:
     ex = ITEMS[item_id]
     assert tool in ex.accept_tools, f"fixture tool {tool} not accepted for {item_id}"
-    r = resolve(tool, normalize(ex.text), v, required=DOCS[tool].required)
+    r = resolve(tool, normalize(ex.text), v, required=DOCS[tool].required, now=EXAM_NOW)
     got = {p: r.slots[p].value for p in expected if p in r.slots}
     assert got == expected, f"{item_id} {ex.text!r}: got {got}, slots={r.slots}"
     assert not r.missing, f"{item_id}: required {r.missing} unresolved"

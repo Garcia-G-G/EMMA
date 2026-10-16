@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 
 from rapidfuzz import fuzz
@@ -38,6 +39,7 @@ from core.brain.normalize import Normalized, fold
 SlotKind = Literal[
     "app", "ide", "page", "note", "playlist", "connection", "contact", "number", "url",
     "url_scheme", "profile_field", "app_category", "connection_or_residue", "residue",
+    "when", "duration",
 ]
 
 DEFAULT_FLOOR = 0.85
@@ -55,6 +57,9 @@ class Vocab:
     playlists: tuple[str, ...] = ()
     connections: tuple[str, ...] = ()
     contacts: Mapping[str, tuple[str, ...]] = field(default_factory=dict)  # name -> aliases
+    # The person's own time phrases ([user.time] in the dictionary): folded phrase ->
+    # minutes from now. Empty by default: the grammar itself is neutral.
+    time_phrases: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -96,7 +101,9 @@ _UNITS = {
     "cero": 0, "uno": 1, "un": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
     "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
     "trece": 13, "catorce": 14, "quince": 15, "dieciseis": 16, "diecisiete": 17,
-    "dieciocho": 18, "diecinueve": 19, "veinte": 20, "zero": 0, "one": 1, "two": 2,
+    "dieciocho": 18, "diecinueve": 19, "veinte": 20, "veintiuno": 21, "veintiun": 21,
+    "veintidos": 22, "veintitres": 23, "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26,
+    "veintisiete": 27, "veintiocho": 28, "veintinueve": 29, "zero": 0, "one": 1, "two": 2,
     "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
     "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
     "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
@@ -198,6 +205,20 @@ TOOLS: dict[str, ToolSlots] = {
                             "recuerda que", "prefiero", "prefer", "remember that"),
     "remember_app": _t({"name": "app", "url_scheme": "url_scheme"}, "recuerda que",
                        "usa el esquema", "el esquema", "usa", "remember that", "uses"),
+    "add_reminder": _t({"due_iso": "when", "title": "residue"}, "pon un recordatorio para",
+                       "pon un recordatorio de", "pon un recordatorio", "crea un recordatorio para",
+                       "crea un recordatorio", "agrega un recordatorio para", "agrega un recordatorio",
+                       "recordatorio para", "recordatorio de", "recuerdame", "recuerdeme",
+                       "set a reminder to", "set a reminder for", "add a reminder for",
+                       "create a reminder", "new reminder", "remind me to", "remind me",
+                       "reminder to", "reminder for"),
+    "start_timer": _t({"duration_min": "duration"}, "pon un temporizador de", "pon un temporizador",
+                      "pon un timer de", "pon un timer", "inicia un temporizador de",
+                      "inicia un timer de", "arranca un temporizador de", "cuenta regresiva de",
+                      "temporizador de", "temporizador", "timer de", "timer", "cronometro de",
+                      "avisame en", "ponme", "cuenta", "set a timer for", "set a timer",
+                      "start a timer for", "start a timer", "minute timer", "timer for",
+                      "count down", "countdown", "alert me in", "start a"),
     "find_button": _t({"name": "residue"}, "hay un boton de", "hay un boton", "boton de",
                       "boton", "is there a button", "button"),
     "click_button": _t({"name": "residue"}, "haz click en", "haz clic en", "dale click a",
@@ -457,7 +478,10 @@ def resolve(
     vocab: Vocab,
     required: tuple[str, ...] = (),
     floor: float = DEFAULT_FLOOR,
+    now: datetime | None = None,
 ) -> Resolution:
+    from core.brain import when  # when reads this module's number tables
+
     spec = TOOLS.get(tool, ToolSlots())
     text = _Text(norm)
     slots: dict[str, SlotValue] = {}
@@ -466,6 +490,12 @@ def resolve(
         for k in range(i, j):
             text.used[k] = True
         slots[param] = SlotValue(value, source, round(conf, 3), text.display(list(range(i, j))))
+
+    def take_spans(param: str, value: SlotScalar, source: str, spans: list[tuple[int, int]]) -> None:
+        idx = sorted(k for i, j in spans for k in range(i, j))
+        for k in idx:
+            text.used[k] = True
+        slots[param] = SlotValue(value, source, 1.0, " ".join(text.norm.words[k] for k in idx))
 
     # Deterministic and closed-table slots first, fuzzy entities next, residue last.
     order = sorted(spec.slots.items(), key=lambda kv: _PRIORITY[kv[1]])
@@ -486,6 +516,15 @@ def resolve(
                 site = _site(text, vocab, floor)
                 if site:
                     take(param, SITES[site[0]], site[1], site[2], site[3], site[4])
+        elif kind == "when":
+            hit_w = when.moment(text.tokens, text.used, norm.folded, now or datetime.now(),
+                                vocab.time_phrases)
+            if hit_w:
+                take_spans(param, hit_w[0].isoformat(timespec="minutes"), "grammar:when", hit_w[1])
+        elif kind == "duration":
+            hit_d = when.duration(text.tokens, text.used)
+            if hit_d:
+                take_spans(param, hit_d[0], "grammar:duration", [hit_d[1]])
         elif kind == "url_scheme":
             m = _regex_span(text, _SCHEME)
             if m:
@@ -541,7 +580,7 @@ def resolve(
 
 
 _PRIORITY: dict[SlotKind, int] = {
-    "number": 0, "url": 0, "url_scheme": 0, "profile_field": 1, "app_category": 1,
+    "when": 0, "duration": 0, "number": 0, "url": 0, "url_scheme": 0, "profile_field": 1, "app_category": 1,
     "ide": 2, "app": 3, "page": 4, "note": 4, "playlist": 4, "connection": 4, "contact": 4,
     "connection_or_residue": 5, "residue": 9,
 }

@@ -65,7 +65,7 @@ def test_saying_a_site_into_remember_page_is_not_a_store(brain: Brain) -> None:
 @needs_model
 def test_repeating_an_llm_labelled_item_defers(brain: Brain) -> None:
     for ex in labelled_examples():
-        if ex.brain_path in ("LLM", "READ", "L3"):
+        if ex.brain_path in ("LLM", "READ"):
             d = brain.decide(ex.text)  # its own row IS in the index here
             assert d.verdict != "local", (ex.id, d.chosen, d.reason)
 

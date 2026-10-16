@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from datetime import datetime
 
 from core.brain.decision import Decision
 from core.brain.embed import Embedder
@@ -38,6 +39,7 @@ class Brain:
         utterance: str,
         exclude_id: str | None = None,
         exclude_ids: frozenset[str] = frozenset(),
+        now: datetime | None = None,
     ) -> Decision:
         """``exclude_id(s)``: evaluation only — the item itself and any phrasing
         that near-copies it may not answer (leave-one-out)."""
@@ -47,7 +49,8 @@ class Brain:
         t1 = time.perf_counter()
         r = self.retriever.rank(norm, exclude_id=exclude_id, exclude_ids=exclude_ids)
         t2 = time.perf_counter()
-        d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.knn_status)
+        d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.knn_status,
+                   now=now)
         d.utterance, d.anaphor = utterance, anaphor
         t3 = time.perf_counter()
         d.timings = {

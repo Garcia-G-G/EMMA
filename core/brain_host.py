@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -60,7 +61,11 @@ def tool_docs(available_only: bool = False) -> list[ToolDoc]:
     return docs
 
 
-_NOT_LOCAL = frozenset({"LLM", "READ", "L3"})
+# L3 (time) is served since Step 43 Part 3: its rows vote their real tool.
+_NOT_LOCAL = frozenset({"LLM", "READ"})
+# The exam's clock (a Thursday, 9:00): an item that names a time resolves against
+# it, so an expected value like "tomorrow at nine" is a fixed ISO string.
+EXAM_NOW = datetime(2026, 10, 15, 9, 0)
 
 
 def labelled_examples(path: Path = LABELLED) -> list[Example]:
@@ -205,6 +210,9 @@ def vocab(
     aliases = {fold(k): v for k, v in vocabulary.alias_map().items()}
     pages = {k: p.title for k, p in dictionary.pages().items()}
     contacts = {c.name: tuple(c.aliases) for c in dictionary.contacts().values() if c.name}
+    user = dictionary.tables().get("user", {})
+    own_time = user.get("time", {}) if isinstance(user, dict) else {}
+    time_phrases = {fold(k): int(v) for k, v in own_time.items() if isinstance(v, int)}
     return Vocab(
         apps=apps,
         aliases=aliases,
@@ -213,6 +221,7 @@ def vocab(
         playlists=playlists,
         connections=connections or tuple(dictionary.connections()),
         contacts=contacts,
+        time_phrases=time_phrases,
     )
 
 
@@ -241,7 +250,8 @@ def evaluate(
     rows = examples if examples is not None else labelled_examples()
     held = held or {}
     return [
-        (ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held.get(ex.id, frozenset())))
+        (ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held.get(ex.id, frozenset()),
+                          now=EXAM_NOW))
         for ex in rows
     ]
 

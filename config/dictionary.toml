@@ -24,6 +24,11 @@ linkedin = ""
 website = ""
 preferred_lang = "es"
 
+# [user.time] — your own time phrases, as minutes from now. The built-in grammar
+# is neutral; add the expressions you actually say here. None by default.
+# [user.time]
+# "<your phrase>" = 30
+
 # [redaction] — government-ID formats to redact from logs, as regexes. Emma
 # hard-codes no country's format, only a generic ID shape; add yours here.
 # [redaction]

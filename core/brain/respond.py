@@ -24,6 +24,7 @@ from typing import Literal
 
 from rapidfuzz import fuzz
 
+from core.brain import when
 from core.brain.decision import Decision, SlotScalar
 from core.brain.normalize import fold, lang_hint, normalize
 from core.brain.phrases import is_no, is_yes
@@ -222,6 +223,16 @@ _TOOL: dict[str, Phrasings] = {
         "es": ("Me apago. Hasta luego.", "Listo, me apago.", "Hasta pronto.", "Nos vemos."),
         "en": ("Shutting down. Bye.", "Done, shutting down.", "See you soon.", "Bye for now."),
     },
+    "start_timer": {
+        "es": ("Timer de {duration_min} minutos.", "Listo, {duration_min} minutos.",
+               "Cuento {duration_min} minutos.", "Va, {duration_min} minutos."),
+        "en": ("Timer set for {duration_min} minutes.", "Done, {duration_min} minutes.",
+               "Counting {duration_min} minutes.", "Okay, {duration_min} minutes."),
+    },
+    "add_reminder": {
+        "es": ("Listo, te lo recuerdo.", "Anotado en recordatorios.", "Hecho, te aviso."),
+        "en": ("Done, I'll remind you.", "Added to your reminders.", "Okay, I'll remind you."),
+    },
     "snooze_listening": {
         "es": ("Dejo de escuchar un rato.", "Listo, en pausa.", "Me duermo un rato.", "En pausa."),
         "en": ("Pausing for a bit.", "Done, paused.", "Taking a break.", "Paused."),
@@ -249,6 +260,8 @@ _ACTION: dict[str, Mapping[SpokenLang, str]] = {
     "remember_app": {"es": "aprender {name} con {url_scheme}", "en": "learn {name} via {url_scheme}"},
     "set_preferred_app": {"es": "usar {app_name} para {category}", "en": "use {app_name} for {category}"},
     "append_to_note": {"es": "agregar «{text}» a {title}", "en": "add «{text}» to {title}"},
+    "add_reminder": {"es": "recordarte «{title}» {due_iso}", "en": "remind you to «{title}» {due_iso}"},
+    "add_reminder:no_time": {"es": "recordarte «{title}»", "en": "remind you to «{title}»"},
     "shutdown_emma": {"es": "apagarme", "en": "shut down"},
     "snooze_listening": {"es": "dejar de escuchar un rato", "en": "stop listening for a while"},
 }
@@ -409,7 +422,11 @@ class Responder:
 
 def action_phrase(tool: str, slots: Mapping[str, SlotScalar], lang: SpokenLang) -> str:
     """The concrete action and its target — what a "sí" agrees to. Capitalized."""
+    if any(k.endswith("_iso") for k in slots):  # a moment is said, never read as ISO
+        slots = {k: when.spoken(str(v), lang) if k.endswith("_iso") else v for k, v in slots.items()}
     phrase = _ACTION.get(tool, {}).get(lang)
+    if phrase and not _fills(phrase, slots):
+        phrase = _ACTION.get(f"{tool}:no_time", {}).get(lang)
     if phrase and _fills(phrase, slots):
         text = phrase.format_map(_Default(slots))
     else:  # never the tool's code name alone: say its target too

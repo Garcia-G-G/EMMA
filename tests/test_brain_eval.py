@@ -30,6 +30,7 @@ from core.brain.normalize import normalize
 from core.brain.sinks import is_sink
 from core.brain.slots import Vocab
 from core.brain_host import (
+    EXAM_NOW,
     build_index,
     holdouts,
     is_wrong,
@@ -50,8 +51,9 @@ needs_model = pytest.mark.skipif(
 # gate variant D + site table): coverage 78, local 52. Review fixes (labelled
 # LLM/READ/L3 rows vote "__llm__"): sc_A20 now defers — its nearest neighbor is the
 # READ item sc_V56 — so coverage 77, local 51. Wrong stays 0. Step 43 Part 1
-# (frames for the reversible tools that had none): local 52.
-PIN = {"coverage": 77, "local": 52, "wrong": 0}
+# (frames for the reversible tools that had none): local 52. Part 3 (time grammar;
+# sc_A16 "recuérdame mañana a las nueve…" goes local, values pinned): 78 / 53.
+PIN = {"coverage": 78, "local": 53, "wrong": 0}
 DOCS = {d.name: d for d in tool_docs()}
 
 
@@ -64,7 +66,8 @@ def results(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[tuple[Exa
     v = Vocab(apps=base.apps, aliases=base.aliases, pages=PAGES, notes=base.notes,
               playlists=base.playlists, connections=base.connections, contacts=base.contacts)
     brain = Brain(list(DOCS.values()), v, thresholds_from_settings(), index, EMBEDDER)
-    yield [(ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held[ex.id])) for ex in examples]
+    yield [(ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held[ex.id], now=EXAM_NOW))
+           for ex in examples]
     index.close()
 
 
@@ -90,8 +93,11 @@ def test_every_non_local_verdict_says_why(results: list[tuple[Example, Decision]
 @needs_model
 def test_per_path_invariants(results: list[tuple[Example, Decision]]) -> None:
     for e, d in results:
-        if e.brain_path in ("L3", "LLM"):
+        if e.brain_path == "LLM":
             assert d.verdict != "local", f"{e.id} ({e.brain_path}) went local as {d.chosen}"
+        if e.brain_path == "L3" and d.verdict == "local":
+            # A time the grammar resolved: its values are pinned, or it may not go local.
+            assert e.id in EXPECTED, f"{e.id} went local with unpinned slots {d.slots}"
         if e.brain_path == "TPL":
             assert d.verdict in ("refuse", "clarify", "none", "defer"), (e.id, d.verdict)
 

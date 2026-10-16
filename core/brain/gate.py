@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 
 from core.brain.decision import Candidate, Decision, Feature, Verdict
 from core.brain.normalize import Normalized, fold
@@ -178,6 +179,7 @@ def decide(
     vocab: Vocab,
     th: Thresholds,
     knn_status: str = "ok",
+    now: datetime | None = None,
 ) -> Decision:
     f: list[Feature] = []
     content = _content(norm.tokens)
@@ -256,7 +258,7 @@ def decide(
     # 7. slots: every required argument, nothing unexplained, no dangling pronoun
     doc = tools.get(chosen)
     required = doc.required if doc else ()
-    res = resolve(chosen, norm, vocab, required=required, floor=th.slot_floor)
+    res = resolve(chosen, norm, vocab, required=required, floor=th.slot_floor, now=now)
     anaphora = [t for t in res.leftover if t in _ANAPHORA]
     f.append(Feature("slots_missing", ",".join(res.missing), passed=not res.missing))
     f.append(Feature("leftover", ",".join(res.leftover), passed=not res.leftover))

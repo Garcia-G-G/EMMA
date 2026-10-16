@@ -38,10 +38,10 @@ EXPECTED_UNEXPLAINED = {
 }
 
 
-def test_every_reversible_tool_has_a_frame_but_the_timer() -> None:
-    # start_timer waits for the time grammar (Part 3).
+def test_every_reversible_tool_has_a_frame() -> None:
+    # start_timer got its frame with the time grammar (Part 3).
     missing = sorted(d.name for d in DOCS.values() if d.reversible and d.name not in TOOLS)
-    assert missing == ["start_timer"]
+    assert missing == []
 
 
 @pytest.mark.parametrize("tool", sorted(EXPECTED_UNEXPLAINED))

@@ -42,6 +42,8 @@ EXPECTED: dict[str, dict[str, Slots]] = {
     "sc_A06": {"remember_fact": {"content": "soy alérgico a los mariscos"}},
     "sc_A14": {"append_to_note": {"title": "Compras", "text": "comprar café"}},
     "sc_A15": {"read_note": {"title": "Compras"}},
+    # Against brain_host.EXAM_NOW (Thursday 2026-10-15 09:00): "mañana a las nueve".
+    "sc_A16": {"add_reminder": {"title": "llamar al dentista", "due_iso": "2026-10-16T09:00"}},
     "sc_A20": {"search_github": {"query": "pytorch"}},
     "sc_A23": {"ide_terminal_send": {"text": "ls", "ide": "Cursor"}},
     "sc_A24": {"run_command": {"command": "uptime"}},
