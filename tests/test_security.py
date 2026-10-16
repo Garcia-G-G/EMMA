@@ -10,14 +10,14 @@ from __future__ import annotations
 import asyncio
 import shutil
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from core.redaction import redact, redaction_processor
 
 _HAS_SECURITY = sys.platform == "darwin" and shutil.which("security") is not None
-_FAKE_VEC = [0.05] * 1536
+_FAKE_VEC = [0.05] * 384  # memory's local model (Step 42)
 
 
 @pytest.fixture(autouse=True)
@@ -184,7 +184,7 @@ def test_reflection_routes_secret_to_keychain_not_db(tmp_path) -> None:
         patch("memory.long_term.settings") as ms,
         patch("memory.long_term.embeddings.embed", new=AsyncMock(return_value=_FAKE_VEC)),
         patch("memory.reflection.reflect_once", new=AsyncMock(return_value=[fact])),
-        patch("memory.reflection._classify_sensitivity", new=AsyncMock(return_value="secret")),
+        patch("memory.reflection._classify_sensitivity", new=MagicMock(return_value="secret")),
         patch("memory.reflection.secrets.store", new=AsyncMock()) as store_mock,
     ):
         ms.MEMORY_DB_PATH = tmp_path / "m.db"

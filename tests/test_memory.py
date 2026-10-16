@@ -88,7 +88,7 @@ class TestLongTerm:
                 ("old fact", "general", 0.8, "reflection", time.time() - 10_000, time.time() - 10_000),
             )
         assert _count_sync() == 2
-        removed = asyncio.get_event_loop().run_until_complete(long_term.forget_recent(120))
+        removed = asyncio.run(long_term.forget_recent(120))
         assert removed == 1  # only the fresh one
         assert _count_sync() == 1
 
@@ -99,7 +99,7 @@ class TestLongTerm:
         _remember_sync("auto-inferred junk", "general", 0.7, "reflection")  # created now
         _remember_sync("I am allergic to shrimp", "fact", 1.0, "explicit")  # explicit, now
         assert _count_sync() == 2
-        removed = asyncio.get_event_loop().run_until_complete(long_term.forget_recent(120))
+        removed = asyncio.run(long_term.forget_recent(120))
         assert removed == 1  # only the reflection fact
         assert _count_sync() == 1  # the explicit safety fact survives
 
@@ -110,11 +110,11 @@ class TestLongTerm:
 
         reflection._suppress_until = 0.0
         _remember_sync("the user just said something private", "general", 0.7, "reflection")
-        res = asyncio.get_event_loop().run_until_complete(forget_last_turn())
+        res = asyncio.run(forget_last_turn())
         assert res.success and res.data["removed"] >= 1
         # the in-flight reflection from the purged turn will be swallowed
         assert reflection._is_suppressed() is True
-        assert asyncio.get_event_loop().run_until_complete(long_term.count()) == 0
+        assert asyncio.run(long_term.count()) == 0
         reflection._suppress_until = 0.0
 
     def test_dedup_on_same_content(self) -> None:
@@ -144,12 +144,12 @@ class TestLongTerm:
     def test_priming_block_empty(self) -> None:
         from memory.long_term import priming_block
 
-        block = asyncio.get_event_loop().run_until_complete(priming_block())
+        block = asyncio.run(priming_block())
         assert block == ""
 
     def test_priming_block_with_facts(self) -> None:
         from memory.long_term import _remember_sync, priming_block
 
         _remember_sync("the user speaks Spanish", "language", 0.9, "explicit")
-        block = asyncio.get_event_loop().run_until_complete(priming_block())
+        block = asyncio.run(priming_block())
         assert "the user speaks Spanish" in block

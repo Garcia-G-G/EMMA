@@ -429,6 +429,11 @@ class Settings(BaseSettings):
     # user+assistant pair plus a small window of history.
     MEMORY_REFLECTION_MODEL: str = "gpt-4o-mini"
     MEMORY_REFLECTION_MAX_FACTS_PER_TURN: int = 5
+    # Step 42 (owner decision): consolidating memory with a language model sends
+    # conversation text off the Mac, so it is OFF unless the owner opts in here
+    # (~/.emma/settings.env). Secret-shaped lines are never sent; every payload is
+    # appended to ~/.emma/memory_consolidation.jsonl so what left is visible.
+    MEMORY_CONSOLIDATION_OPT_IN: bool = False
 
     # Memory priming: how many of the highest-confidence / most-recent
     # facts to inject into the system prompt each turn. Keep small so

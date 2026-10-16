@@ -101,13 +101,32 @@ from core.realtime_playback import (
     PlaybackTrackingLocalAudioTransport,
     TruncateAccurateRealtimeLLMService,
 )
-from memory import episodic
+from memory import episodic, reflection
 from memory.long_term import priming_block
 from memory.reflection import schedule_reflection
 from memory.short_term import append_turn, last_turns
 from tools.registry import available_specs, dispatch, get_tool, list_tools, openai_tool_specs
 
 log = structlog.get_logger("emma.conversation")
+
+
+async def _reflection_complete(system: str, user: str) -> str:
+    """The Realtime path's model for memory reflection (Step 42). Reflection only
+    calls it when the owner opted in (MEMORY_CONSOLIDATION_OPT_IN); memory/ itself
+    imports no model client."""
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
+    completion = await client.chat.completions.create(
+        model=settings.MEMORY_REFLECTION_MODEL,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        response_format={"type": "json_object"},
+        temperature=0.2,
+    )
+    return completion.choices[0].message.content or ""
+
+
+reflection.configure(_reflection_complete)
 
 # Native sample rate of the Realtime model.
 SAMPLE_RATE_HZ = 24000

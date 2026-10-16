@@ -1,27 +1,31 @@
-"""Post-turn reflection: pull durable facts out of the conversation.
+"""Post-turn reflection: a language model proposes durable facts from the talk.
 
-After every turn the orchestrator schedules :func:`reflect_async` as a
-fire-and-forget task. It feeds gpt-4o-mini a short window of the
-session (the just-completed user/assistant pair plus a few prior
-turns) and asks for a small list of new long-term facts about the user.
-Each fact is then upserted into the long-term store via
-:func:`memory.long_term.remember`.
+**Off by default** (Step 42, owner decision): it sends conversation text off the
+Mac, so it runs only when the owner sets ``MEMORY_CONSOLIDATION_OPT_IN`` AND a
+caller outside ``memory/`` has wired a model with :func:`configure` (today only
+the Realtime path does). ``memory/`` imports no model client.
 
-The reflection runs in the background so it never adds to per-turn
-latency. If the LLM call fails or returns garbage, we drop the result
-silently - the turn still completed for the user.
+Before anything is sent, secret-shaped lines are dropped whole (redaction
+patterns and a closed list of credential words), and the exact payload is
+appended to ``~/.emma/memory_consolidation.jsonl`` so what left is visible. A
+proposed fact that still looks secret goes to the Keychain, never to memory.db;
+that check is rules only (no second model call).
+
+Runs in the background, never adds to turn latency; any failure drops silently.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 import structlog
-from openai import AsyncOpenAI
 
 from config.settings import settings
 from core import redaction, secrets
@@ -29,14 +33,43 @@ from memory import long_term, short_term
 
 log = structlog.get_logger("emma.memory.reflection")
 
-_client: AsyncOpenAI | None = None
+# (system prompt, user text) -> the model's reply (JSON text). Wired from outside memory/.
+Complete = Callable[[str, str], Awaitable[str]]
+_complete: Complete | None = None
+
+# Lines carrying any of these are never sent, even after redaction (rules, no model).
+_SECRET_WORDS = re.compile(
+    r"contrase[nñ]a|password|passcode|\bpin\b|\bclave\b|token|api ?key|cvv|tarjeta|"
+    r"credit card|card number|iban|cuenta bancaria|bank account|n[uú]mero de cuenta|"
+    r"account number|seed phrase|private key|clave privada",
+    re.IGNORECASE,
+)
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
-    return _client
+def configure(complete: Complete | None) -> None:
+    """Wire (or unwire) the model reflection may call. Only callers outside memory/."""
+    global _complete
+    _complete = complete
+
+
+def enabled() -> bool:
+    return bool(settings.MEMORY_CONSOLIDATION_OPT_IN) and _complete is not None
+
+
+def _sendable(text: str) -> str:
+    """Drop every line that looks secret; redact what's left."""
+    keep = [ln for ln in text.splitlines()
+            if not _SECRET_WORDS.search(ln) and redaction.redact(ln) == ln]
+    return "\n".join(keep)
+
+
+def _record_sent(payload: str) -> None:
+    """Append exactly what is about to leave the Mac (owner-visible, 0600)."""
+    path = settings.EMMA_HOME / "memory_consolidation.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": time.time(), "sent": payload}, ensure_ascii=False) + "\n")
 
 
 _SYSTEM_PROMPT = """You read short windows of a conversation between the user and his \
@@ -77,30 +110,19 @@ async def reflect_once(window: list[short_term.Turn]) -> list[dict[str, Any]]:
 
     Returns an empty list on any failure. Never raises.
     """
-    if not window:
+    if not window or not enabled() or _complete is None:
         return []
-    body = _format_window(window)
+    body = _sendable(_format_window(window))
     if not body.strip():
         return []
-    body = redaction.redact(body)  # egress guard: strip secrets/PII before the transcript leaves
     try:
-        completion = await asyncio.wait_for(
-            _get_client().chat.completions.create(
-                model=settings.MEMORY_REFLECTION_MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": body},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-            ),
-            timeout=settings.API_TIMEOUT_S,
-        )
+        _record_sent(body)
+        text = (await asyncio.wait_for(_complete(_SYSTEM_PROMPT, body),
+                                       timeout=settings.API_TIMEOUT_S)).strip()
     except Exception as exc:
-        log.warning("reflection_llm_failed", error=str(exc))
+        log.warning("reflection_llm_failed", error=type(exc).__name__)
         return []
 
-    text = (completion.choices[0].message.content or "").strip()
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -127,42 +149,11 @@ async def reflect_once(window: list[short_term.Turn]) -> list[dict[str, Any]]:
     return cleaned
 
 
-_SENSITIVITY_PROMPT = """Classify the following fact as either "personal" or "secret".
-A fact is "secret" if it contains a password, an account number, a government
-ID, a credit card, a private cryptographic key, or any other value whose
-disclosure would harm the person.
-A fact is "personal" if it describes preferences, habits, names, locations,
-non-sensitive relationships.
-Output a single word: personal or secret."""
-
-
-async def _classify_sensitivity(fact: str) -> Literal["personal", "secret"]:
-    """Route a candidate fact to the Personal or Secret tier.
-
-    Deterministic first: if a redaction pattern fires (card/government ID/
-    IBAN/phone/API-key), it's secret. Otherwise ask gpt-4o-mini for the
-    unstructured cases ("my password is ..."). Defaults to personal on LLM
-    failure — the redaction net already catches pattern-based secrets.
-    """
-    if redaction.redact(fact) != fact:
+def _classify_sensitivity(fact: str) -> Literal["personal", "secret"]:
+    """Secret if a redaction pattern fires or a credential word appears. Rules only."""
+    if redaction.redact(fact) != fact or _SECRET_WORDS.search(fact):
         return "secret"
-    try:
-        completion = await asyncio.wait_for(
-            _get_client().chat.completions.create(
-                model=settings.MEMORY_REFLECTION_MODEL,
-                messages=[
-                    {"role": "system", "content": _SENSITIVITY_PROMPT},
-                    {"role": "user", "content": fact},
-                ],
-                temperature=0,
-            ),
-            timeout=settings.API_TIMEOUT_S,
-        )
-        answer = (completion.choices[0].message.content or "").strip().lower()
-        return "secret" if "secret" in answer else "personal"
-    except Exception as exc:
-        log.warning("sensitivity_classify_failed", error=str(exc))
-        return "personal"
+    return "personal"
 
 
 _suppress_until: float = 0.0
@@ -206,7 +197,7 @@ async def reflect_async(window: list[short_term.Turn]) -> None:
     for f in facts:
         value = f["content"]
         try:
-            tier = await _classify_sensitivity(value)
+            tier = _classify_sensitivity(value)
             # Re-check AFTER the long classify await, right before any write:
             # `forget_last_turn` may have fired the blackout while we were awaiting.
             # Without this, a fact from the just-purged turn is written back AFTER
@@ -244,8 +235,8 @@ _INFLIGHT: set[asyncio.Task[None]] = set()
 
 def schedule_reflection(window: list[short_term.Turn]) -> asyncio.Task[None] | None:
     """Start reflection in the background. Returns the task (or None on no-op)."""
-    if not window:
-        return None
+    if not window or not enabled():
+        return None  # off unless the owner opted in and a model is wired
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:

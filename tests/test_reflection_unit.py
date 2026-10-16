@@ -3,15 +3,16 @@
 The voice harness exercises reflection end-to-end and test_operational_hardening
 covers the *wiring* (_BotTextTap → schedule_reflection). These tests target the
 pure functions instead, so a regression surfaces as a precise failure rather
-than a flaky voice scenario. The OpenAI client is mocked; nothing hits the network
-or a real DB.
+than a flaky voice scenario. Step 42: the model is injected (``configure``) and
+reflection is off unless the owner opts in; here a fake model stands in. Nothing
+hits the network or a real DB.
 """
 
 from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -37,18 +38,18 @@ def _turn(user: str | None = None, assistant: str | None = None) -> SimpleNamesp
     return SimpleNamespace(user_text=user, assistant_text=assistant)
 
 
-def _completion(content: str) -> SimpleNamespace:
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+@pytest.fixture(autouse=True)
+def _unwired():
+    yield
+    reflection.configure(None)
 
 
 def _mock_client(monkeypatch, *, content: str | None = None, raises: Exception | None = None):
-    client = MagicMock()
-    if raises is not None:
-        client.chat.completions.create = AsyncMock(side_effect=raises)
-    else:
-        client.chat.completions.create = AsyncMock(return_value=_completion(content or ""))
-    monkeypatch.setattr(reflection, "_get_client", lambda: client)
-    return client
+    """Opt in and wire a fake model; returns the AsyncMock that stands for it."""
+    monkeypatch.setattr(reflection.settings, "MEMORY_CONSOLIDATION_OPT_IN", True)
+    fake = AsyncMock(side_effect=raises) if raises is not None else AsyncMock(return_value=content or "")
+    reflection.configure(fake)
+    return fake
 
 
 # ---- reflect_once: parsing + cleaning ---------------------------------------
@@ -115,29 +116,60 @@ def test_empty_content_facts_are_skipped(monkeypatch) -> None:
     assert [f["content"] for f in out] == ["real fact"]
 
 
-# ---- _classify_sensitivity --------------------------------------------------
+# ---- _classify_sensitivity (rules only since Step 42) ---------------------------
 
 
-def test_redaction_hit_classifies_secret_without_llm(monkeypatch) -> None:
-    """A deterministic redaction match short-circuits to 'secret' — no LLM call."""
+def test_redaction_hit_classifies_secret(monkeypatch) -> None:
     monkeypatch.setattr(reflection.redaction, "redact", lambda s: "[REDACTED]")
-    client = _mock_client(monkeypatch, content="personal")  # would say personal if asked
-    assert _run(reflection._classify_sensitivity("mi tarjeta es 4111 1111 1111 1111")) == "secret"
-    client.chat.completions.create.assert_not_awaited()
+    assert reflection._classify_sensitivity("mi tarjeta es 4111 1111 1111 1111") == "secret"
 
 
-def test_llm_classifies_secret(monkeypatch) -> None:
-    monkeypatch.setattr(reflection.redaction, "redact", lambda s: s)  # no pattern hit
-    _mock_client(monkeypatch, content="secret")
-    assert _run(reflection._classify_sensitivity("mi contraseña es hunter2")) == "secret"
+def test_credential_words_classify_secret_without_a_model() -> None:
+    assert reflection._classify_sensitivity("mi contraseña es hunter2") == "secret"
+    assert reflection._classify_sensitivity("the wifi password is in the drawer") == "secret"
 
 
-def test_llm_failure_defaults_to_personal(monkeypatch) -> None:
-    """On LLM error we default to personal — the redaction net already caught
-    pattern-based secrets, and personal is the safe-to-store tier."""
-    monkeypatch.setattr(reflection.redaction, "redact", lambda s: s)
-    _mock_client(monkeypatch, raises=RuntimeError("api down"))
-    assert _run(reflection._classify_sensitivity("le gusta el jazz")) == "personal"
+def test_everything_else_is_personal() -> None:
+    assert reflection._classify_sensitivity("le gusta el jazz") == "personal"
+
+
+# ---- Step 42: off by default, nothing secret sent, what was sent is visible -------
+
+
+def test_off_by_default_even_with_a_model_wired(monkeypatch) -> None:
+    fake = AsyncMock(return_value='{"facts": []}')
+    reflection.configure(fake)
+    assert reflection.settings.MEMORY_CONSOLIDATION_OPT_IN is False
+    assert not reflection.enabled()
+    assert _run(reflection.reflect_once([_turn(user="me gusta el jazz")])) == []
+    assert reflection.schedule_reflection([_turn(user="x")]) is None
+    fake.assert_not_awaited()
+
+
+def test_opted_in_but_no_model_wired_does_nothing(monkeypatch) -> None:
+    monkeypatch.setattr(reflection.settings, "MEMORY_CONSOLIDATION_OPT_IN", True)
+    assert not reflection.enabled()
+
+
+def test_secret_lines_are_never_sent_and_the_payload_is_recorded(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(reflection.settings, "EMMA_HOME", tmp_path)
+    fake = _mock_client(monkeypatch, content='{"facts": []}')
+    window = [_turn(user="mi contraseña del banco es hunter2"),
+              _turn(user="me gusta el jazz", assistant="Anotado.")]
+    _run(reflection.reflect_once(window))
+    sent = fake.await_args.args[1]
+    assert "hunter2" not in sent and "contraseña" not in sent and "jazz" in sent
+    log = (tmp_path / "memory_consolidation.jsonl").read_text(encoding="utf-8")
+    assert "jazz" in log and "hunter2" not in log
+    assert oct((tmp_path / "memory_consolidation.jsonl").stat().st_mode & 0o777) == "0o600"
+
+
+def test_a_window_with_only_secrets_sends_nothing(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(reflection.settings, "EMMA_HOME", tmp_path)
+    fake = _mock_client(monkeypatch, content='{"facts": []}')
+    assert _run(reflection.reflect_once([_turn(user="my api key is in the notes")])) == []
+    fake.assert_not_awaited()
+    assert not (tmp_path / "memory_consolidation.jsonl").exists()
 
 
 # ---- reflect_async: no partial / spurious writes (B49.3 regression) ----------

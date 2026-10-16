@@ -55,16 +55,40 @@ async def test_proactive_speech_failure_is_swallowed(cascade, monkeypatch):
     await proactive_voice.speak_unprompted("hola")  # no raise
 
 
-def test_memory_boot_backfill_never_calls_openai_on_the_cascade(cascade, monkeypatch, tmp_path):
+def test_memory_boot_backfill_is_local_and_runs_on_the_cascade(cascade, monkeypatch, tmp_path):
+    """Step 42: the backfill embeds with memory's own model, so it runs at every
+    boot — and no socket may open while it does."""
+    import socket
+
     from memory import long_term
 
     monkeypatch.setattr(long_term, "_connect", lambda: _NullCtx())
+    ran: list[bool] = []
 
-    async def forbidden(*a, **k):
-        pytest.fail("memory backfill ran on the cascade (it embeds through OpenAI)")
+    async def local_backfill(*a, **k):
+        ran.append(True)
+        return (0, 0)
 
-    monkeypatch.setattr(long_term, "backfill_embeddings", forbidden)
+    def no_network(*a, **k):
+        pytest.fail("memory boot opened a network connection")
+
+    monkeypatch.setattr(long_term, "backfill_embeddings", local_backfill)
+    monkeypatch.setattr(socket.socket, "connect", no_network)
     long_term.initialize()
+    assert ran == [True]
+
+
+def test_nothing_in_memory_imports_a_model_client():
+    """Step 42 bar: no OpenAI (or any hosted-model SDK) anywhere in memory/."""
+    import ast
+
+    banned = ("openai", "anthropic", "httpx", "requests", "aiohttp")
+    for path in (ROOT / "memory").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                     else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            for n in names:
+                assert n.split(".")[0] not in banned, f"{path.name} imports {n}"
 
 
 class _NullCtx:

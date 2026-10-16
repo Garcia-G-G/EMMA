@@ -1,8 +1,10 @@
-"""Prompt 25-B: reflection conflict-resolution (supersede on contradiction).
+"""Supersession helpers (Prompt 25-B) after Step 42.
 
-The supersede DECISION (nearest-in-band + gpt-4o-mini contradiction) is unit-
-tested by stubbing the nearest lookup and the classifier; the SQL helpers and
-read-path filtering run against a real tmp DB. No network.
+The gpt-4o-mini contradiction classifier is gone: no model decides that a new
+fact replaces an old one, and similarity never does either (Step 42 measured
+that no embedder tells a restatement from a changed value). Structured facts
+supersede deterministically (memory.structured, Part 3). These tests keep the
+SQL helpers and read filters honest, against a real tmp DB. No network.
 """
 
 from __future__ import annotations
@@ -85,85 +87,14 @@ class TestReadFilters:
         assert [f.id for f in active] == [keep]
 
 
-class TestRememberSupersedePath:
-    def test_contradiction_in_band_supersedes(self, tmp_mem, monkeypatch):
-        old = _seed("the user prefiere VSCode", confidence=0.9)
-        monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.6)
-        )
-        monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=True))
+class TestNoSimilaritySupersede:
+    def test_a_contradiction_by_similarity_alone_keeps_both(self, tmp_mem):
+        half = lt._EMBED_DIMS // 2  # cosine ~0.95 with the new fact's vector: close, not equal
+        old = _seed("the user prefiere VSCode", confidence=0.9, vec=[0.1] * half + [0.2] * half)
         new = asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
-        assert _superseded_at(old) is not None
-        active = asyncio.run(lt.recall(limit=20))
-        assert [f.content for f in active] == ["the user prefiere Zed"]
-        assert new != old
+        assert new != old and _superseded_at(old) is None
+        assert {f.content for f in asyncio.run(lt.recall(limit=20))} == {
+            "the user prefiere VSCode", "the user prefiere Zed"}
 
-    def test_publishes_fact_superseded_event(self, tmp_mem, monkeypatch):
-        from core import events_bus
-
-        old = _seed("the user prefiere VSCode", confidence=0.9)
-        monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.6)
-        )
-        monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=True))
-
-        async def _go():
-            q = events_bus.subscribe()
-            await lt.remember("the user prefiere Zed", kind="preference", confidence=0.9)
-            events_bus.unsubscribe(q)
-            return [q.get_nowait() for _ in range(q.qsize())]
-
-        events = asyncio.run(_go())
-        assert any(e["type"] == "fact_superseded" and e["old_id"] == old for e in events)
-
-    def test_classifier_false_keeps_both(self, tmp_mem, monkeypatch):
-        # orthogonal vectors so the fall-through dedup INSERTS instead of merging
-        e0 = [1.0] + [0.0] * (lt._EMBED_DIMS - 1)
-        e1 = [0.0, 1.0] + [0.0] * (lt._EMBED_DIMS - 2)
-        old = _seed("the user entrena en las mañanas", vec=e0)
-        monkeypatch.setattr(lt.embeddings, "embed", AsyncMock(return_value=e1))
-        monkeypatch.setattr(
-            lt,
-            "_nearest_active_fact_sync",
-            lambda qv: (_fact(old, "the user entrena en las mañanas"), 0.6),
-        )
-        monkeypatch.setattr(lt, "_classify_contradiction", AsyncMock(return_value=False))
-        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
-        assert _superseded_at(old) is None
-        active = asyncio.run(lt.recall(limit=20))
-        assert len(active) == 2
-
-    def test_out_of_band_never_classifies(self, tmp_mem, monkeypatch):
-        old = _seed("the user prefiere VSCode")
-        # sim 0.9 >= dedup floor → out of supersede band; classifier must NOT run
-        monkeypatch.setattr(
-            lt, "_nearest_active_fact_sync", lambda qv: (_fact(old, "the user prefiere VSCode"), 0.9)
-        )
-        classifier = AsyncMock(return_value=True)
-        monkeypatch.setattr(lt, "_classify_contradiction", classifier)
-        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.9))
-        classifier.assert_not_awaited()
-        assert _superseded_at(old) is None
-
-    def test_low_confidence_does_not_supersede(self, tmp_mem, monkeypatch):
-        old = _seed("the user prefiere VSCode", confidence=0.9)
-        monkeypatch.setattr(
-            lt,
-            "_nearest_active_fact_sync",
-            lambda qv: (_fact(old, "the user prefiere VSCode", 0.9), 0.6),
-        )
-        classifier = AsyncMock(return_value=True)
-        monkeypatch.setattr(lt, "_classify_contradiction", classifier)
-        # 0.5 < 0.9 * 0.8 → confidence guard blocks supersession (and the classifier)
-        asyncio.run(lt.remember("the user prefiere Zed", kind="preference", confidence=0.5))
-        classifier.assert_not_awaited()
-        assert _superseded_at(old) is None
-
-
-class TestClassifierSafety:
-    def test_classifier_error_returns_false(self, monkeypatch):
-        def _boom():
-            raise RuntimeError("no client")
-
-        monkeypatch.setattr(lt, "_get_client", _boom)
-        assert asyncio.run(lt._classify_contradiction("a", "b")) is False
+    def test_no_model_client_in_long_term(self):
+        assert not hasattr(lt, "_classify_contradiction") and not hasattr(lt, "_get_client")

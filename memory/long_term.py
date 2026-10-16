@@ -7,13 +7,11 @@ of each turn. They are read back into every turn's system prompt via
 :func:`priming_block` so Emma starts each session knowing what she
 already knows.
 
-Storage: SQLite via stdlib ``sqlite3`` wrapped in ``asyncio.to_thread``
-for the rare async caller. Schema is a single ``facts`` table; we keep
-it intentionally flat (no embeddings, no FTS) because Phase 03's goal
-is "Emma stops being a stranger", not full retrieval-augmented
-generation. A Postgres backend can be added when
-``settings.POSTGRES_DSN`` is set; today the SQLite path is the only
-one wired up.
+Storage: SQLite via stdlib ``sqlite3`` wrapped in ``asyncio.to_thread``.
+``facts`` holds the text; ``facts_vec`` (sqlite-vec) holds a local embedding per
+fact from memory's own model (Step 42: no OpenAI, nothing leaves the Mac);
+``memory_meta`` records which model made those vectors, so a model change
+re-embeds instead of mixing spaces (``_migrate_vectors``).
 """
 
 from __future__ import annotations
@@ -30,35 +28,22 @@ import sqlite_vec
 import structlog
 
 from config.settings import settings
-from core import events_bus, redaction
+from core import redaction
 from memory import embeddings
 
 log = structlog.get_logger("emma.memory.long_term")
 
-# Semantic thresholds (cosine similarity). sqlite-vec returns cosine
-# *distance* = 1 - similarity, so sim >= X  <=>  distance <= 1 - X.
-# Dedup threshold. Spec said 0.92, but measured cosine sims for genuine
-# paraphrases under text-embedding-3-small run 0.52-0.86 (e.g. neovim
-# paraphrases=0.82), while distinct facts top out ~0.64 (Zed vs neovim).
-# 0.92 merges almost nothing; 0.75 sits in the gap — merges paraphrases,
-# keeps Zed!=neovim. See PR notes (CP6) for the full measurement.
-_DEDUP_MIN_SIM = 0.75  # near-duplicate => bump existing instead of inserting
-# Recall floor. text-embedding-3-small yields LOW absolute cosine sims
-# (short query vs full sentence, cross-language), so the spec's 0.40 cut
-# correctly-ranked top hits. 0.20 keeps the relevant fact (always ranked
-# #1 in testing) while still rejecting true noise. See CP5 in PR notes.
-_RECALL_MIN_SIM = 0.20
-# Supersede band (Prompt 25). A new fact whose nearest active fact lands in
-# [_SUPERSEDE_MIN_SIM, _DEDUP_MIN_SIM) is "same topic, different content" — a
-# candidate contradiction. 0.45 floor measured live: "prefiere VSCode" vs
-# "prefiere Zed" = 0.632, looser "ahora usa Zed" = 0.468; unrelated facts sit
-# ~0.50 but the gpt-4o-mini classifier (not similarity) makes the final call.
-# (Contradictions that embed >= 0.75 — e.g. "vive en X" where only the city
-# changes, ~0.89 — are deduped not superseded; a documented, conservative miss.)
-_SUPERSEDE_MIN_SIM = 0.45
-# A low-confidence fact must not bury a high-confidence one: only supersede when
-# the newcomer is at least this fraction as confident as the fact it replaces.
-_SUPERSEDE_CONF_RATIO = 0.8
+# Thresholds (cosine similarity) for memory's local model, measured on
+# tests/memory_recall_set.py (Step 42). sqlite-vec returns cosine *distance*.
+# Dedup: a contradiction can embed at 0.962 ("talla 42" / "talla 43"); at 0.97
+# no contradiction and no distinct fact merges (8/20 restatements do). Structured
+# facts dedup exactly by (subject, attribute, value) instead (Step 42 Part 3).
+_DEDUP_MIN_SIM = 0.97
+# Recall floor for an ANSWER: at 0.77 no unanswerable question got a fact on the
+# set (Part 1, cosine gate tuned for 0 wrong).
+_RECALL_MIN_SIM = 0.77
+# Ranking floor for priming context (orders facts for a model; answers nothing).
+_RANK_MIN_SIM = 0.30
 _EMBED_DIMS = embeddings.EMBED_DIMS
 
 _SCHEMA = f"""
@@ -80,7 +65,9 @@ CREATE INDEX IF NOT EXISTS idx_facts_conf ON facts(confidence DESC);
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_vec USING vec0(
     embedding FLOAT[{_EMBED_DIMS}] distance_metric=cosine
 );
+CREATE TABLE IF NOT EXISTS memory_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+_migrated: set[str] = set()  # database paths already checked this process
 
 
 @dataclass(frozen=True)
@@ -135,9 +122,48 @@ def _connect() -> sqlite3.Connection:
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
+    if str(path) not in _migrated:
+        _migrate_vectors(conn, path)
+        _migrated.add(str(path))
     conn.executescript(_SCHEMA)
     _ensure_columns(conn)
     return conn
+
+
+def _migrate_vectors(conn: sqlite3.Connection, path: Path) -> None:
+    """Make ``facts_vec`` hold this model's vectors, never another's (Step 42).
+
+    A store whose vectors came from another model (the OpenAI 1536-dim ones, or
+    none recorded) gets: a backup copy of the file (0600), the vector table
+    dropped and recreated at this model's size, and the model recorded. Facts
+    are never touched; their vectors are re-made locally by
+    :func:`backfill_embeddings` (at boot). Idempotent.
+    """
+    has_meta = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_meta'").fetchone()
+    model = conn.execute(
+        "SELECT value FROM memory_meta WHERE key='embed_model'").fetchone() if has_meta else None
+    has_vec = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='facts_vec'").fetchone() is not None
+    if model is not None and model[0] == embeddings.EMBED_MODEL:
+        return
+    if has_vec:
+        n = int(conn.execute("SELECT count(*) FROM facts").fetchone()[0])
+        if n:
+            stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+            backup = path.with_name(f"{path.name}.backup-{stamp}-pre-local-vectors")
+            with sqlite3.connect(str(backup)) as dst:
+                conn.backup(dst)
+            backup.chmod(0o600)
+            log.info("memory_vectors_backup", path=str(backup), facts=n)
+        conn.execute("DROP TABLE facts_vec")
+    conn.executescript(_SCHEMA)
+    conn.execute("INSERT OR REPLACE INTO memory_meta(key, value) VALUES ('embed_model', ?)",
+                 (embeddings.EMBED_MODEL,))
+    conn.execute("INSERT OR REPLACE INTO memory_meta(key, value) VALUES ('embed_dim', ?)",
+                 (str(embeddings.EMBED_DIMS),))
+    conn.commit()
+    log.info("memory_vectors_migrated", model=embeddings.EMBED_MODEL, dim=embeddings.EMBED_DIMS)
 
 
 def _serialize(vec: list[float]) -> bytes:
@@ -273,7 +299,8 @@ def _nearest_active_fact_sync(query_vec: bytes) -> tuple[Fact, float] | None:
 
 
 def _supersede_insert_sync(
-    old_id: int, content: str, kind: str, confidence: float, source: str, vec: list[float]
+    old_id: int, content: str, kind: str, confidence: float, source: str,
+    vec: list[float] | None = None,
 ) -> int:
     """Mark ``old_id`` superseded and insert ``content`` as its replacement.
 
@@ -290,9 +317,10 @@ def _supersede_insert_sync(
             (content, kind, confidence, source, now, now, old_id),
         )
         rid = int(cur.lastrowid or 0)
-        conn.execute(
-            "INSERT INTO facts_vec(rowid, embedding) VALUES (?, ?)", (rid, _serialize(vec))
-        )
+        if vec is not None:
+            conn.execute(
+                "INSERT INTO facts_vec(rowid, embedding) VALUES (?, ?)", (rid, _serialize(vec))
+            )
     return rid
 
 
@@ -360,7 +388,7 @@ def _recall_vec_ranked_sync(query_vec: bytes, knn_limit: int) -> list[tuple[Fact
         ).fetchall()
         for row in knn:
             sim = 1.0 - float(row["distance"])
-            if sim < _RECALL_MIN_SIM:
+            if sim < _RANK_MIN_SIM:
                 continue
             frow = conn.execute(
                 "SELECT * FROM facts WHERE id = ? AND vault_ref IS NULL AND superseded_at IS NULL",
@@ -425,57 +453,6 @@ def _count_sync() -> int:
     return int(row["n"]) if row else 0
 
 
-# ---------- conflict-resolution classifier (Prompt 25) ------------------
-
-_client: Any = None
-
-
-def _get_client() -> Any:
-    global _client
-    if _client is None:
-        from openai import AsyncOpenAI
-
-        _client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
-    return _client
-
-
-_CONTRADICTION_PROMPT = (
-    "Two facts about the same person, the user:\n"
-    'A (older): "{old}"\n'
-    'B (newer): "{new}"\n'
-    "Does B CONTRADICT A — same subject and predicate, different object, so B "
-    "should REPLACE A (e.g. a changed preference, location, or choice)? A mere "
-    "paraphrase, elaboration, or unrelated fact does NOT contradict.\n"
-    'Answer strict JSON: {{"contradicts": true|false}}'
-)
-
-
-async def _classify_contradiction(old: str, new: str) -> bool:
-    """True if the newer fact should supersede the older one. gpt-4o-mini, cheap.
-
-    Conservative: any error or ambiguity returns False (keep both facts)."""
-    try:
-        completion = await asyncio.wait_for(
-            _get_client().chat.completions.create(
-                model=settings.MEMORY_REFLECTION_MODEL,
-                messages=[
-                    {"role": "user", "content": redaction.redact(
-                        _CONTRADICTION_PROMPT.format(old=old, new=new))}  # egress guard
-                ],
-                response_format={"type": "json_object"},
-                temperature=0,
-            ),
-            timeout=settings.API_TIMEOUT_S,
-        )
-        import json
-
-        payload = json.loads(completion.choices[0].message.content or "{}")
-        return bool(payload.get("contradicts", False))
-    except Exception as exc:
-        log.warning("contradiction_classify_failed", error=str(exc))
-        return False
-
-
 # ---------- async wrappers (for the orchestrator + tool layer) ----------
 
 
@@ -489,8 +466,10 @@ async def remember(
 ) -> int:
     """Store a fact, deduplicating semantically (cosine >= _DEDUP_MIN_SIM).
 
-    Embeds the content (async), then upserts: a near-duplicate bumps the
+    Embeds the content on this Mac, then upserts: a near-duplicate bumps the
     existing fact's confidence/observation count instead of inserting a row.
+    Without the memory model installed, the fact is still kept (exact-text
+    dedup, no vector); the next boot's backfill embeds it.
 
     If ``vault_ref`` is set, the fact is Secret-tier: the value lives in
     Keychain under that label, and we store ONLY a placeholder as content —
@@ -502,39 +481,17 @@ async def remember(
     content = content.strip()
     if not content:
         return -1
-    # LAUNCH-11 Part 2: scrub credential shapes BEFORE the embed call, not just
-    # before the insert. `embeddings.embed` ships this string to OpenAI, so a key
-    # that reached only the DB would still have left the machine — and reflection
-    # writes here unattended, from whatever the user happened to say out loud
-    # ("mi api key es sk-..."). vault_ref is the deliberate path for a secret;
-    # this is the guard for the accidental one.
+    # LAUNCH-11 Part 2: credential shapes never reach the DB or a vector. vault_ref
+    # is the deliberate path for a secret; this is the guard for the accidental one.
     content = redaction.redact(content)
-    vec = await embeddings.embed(content)
-
-    # Conflict-resolution (Prompt 25): if the nearest active fact is "same topic,
-    # different content" (sim in the supersede band) AND gpt-4o-mini judges it a
-    # contradiction, replace it (mark stale, never delete). Secret-tier skips
-    # this entirely — its content is an opaque placeholder.
-    if vault_ref is None:
-        nearest = await asyncio.to_thread(_nearest_active_fact_sync, _serialize(vec))
-        if nearest is not None:
-            old, sim = nearest
-            in_band = _SUPERSEDE_MIN_SIM <= sim < _DEDUP_MIN_SIM
-            confident_enough = confidence >= old.confidence * _SUPERSEDE_CONF_RATIO
-            if in_band and confident_enough and await _classify_contradiction(old.content, content):
-                new_id = await asyncio.to_thread(
-                    _supersede_insert_sync, old.id, content, kind, confidence, source, vec
-                )
-                events_bus.publish(
-                    "fact_superseded",
-                    old_id=old.id,
-                    new_id=new_id,
-                    old=old.content[:120],
-                    new=content[:120],
-                )
-                log.info("fact_superseded", old_id=old.id, new_id=new_id)
-                return new_id
-
+    try:
+        vec = await embeddings.embed(content)
+    except embeddings.EmbedderMissingError:
+        log.warning("memory_embedder_missing", stored="without_vector")
+        return await asyncio.to_thread(_remember_sync, content, kind, confidence, source)
+    # Contradictions are decided by structure (same subject + attribute), not by
+    # similarity: Step 42 measured that no embedder tells a restatement from a
+    # changed value. See memory.structured (Step 42 Part 3).
     return await asyncio.to_thread(
         _remember_with_vec_sync, content, kind, confidence, source, vec, vault_ref
     )
@@ -722,14 +679,17 @@ def _insert_vecs_sync(items: list[tuple[int, list[float]]]) -> None:
 async def backfill_embeddings(batch_size: int = 10) -> tuple[int, int]:
     """Embed every fact lacking a facts_vec entry. Returns (done, total).
 
-    Batched to avoid one giant API spike. Idempotent: a fully-embedded
-    store backfills nothing.
+    Local (memory's own model): no network. Idempotent: a fully-embedded store
+    backfills nothing. Without the model installed it embeds nothing and says so.
     """
     missing = await asyncio.to_thread(_missing_vec_rows_sync)
     total = len(missing)
     if total == 0:
         log.info("memory_backfill_progress", done=0, total=0)
         return (0, 0)
+    if not embeddings.available():
+        log.warning("memory_backfill_waiting_for_model", missing=total)
+        return (0, total)
     done = 0
     for start in range(0, total, batch_size):
         chunk = missing[start : start + batch_size]
@@ -739,7 +699,7 @@ async def backfill_embeddings(batch_size: int = 10) -> tuple[int, int]:
                 vec = await embeddings.embed(content)
                 embedded.append((rid, vec))
             except Exception as exc:
-                log.warning("memory_backfill_embed_failed", id=rid, error=str(exc))
+                log.warning("memory_backfill_embed_failed", id=rid, error=type(exc).__name__)
         if embedded:
             await asyncio.to_thread(_insert_vecs_sync, embedded)
         done += len(embedded)
@@ -853,14 +813,8 @@ def initialize() -> None:
     if running:
         log.info("memory_backfill_deferred_loop_running")
         return
-    from config.settings import settings
-
-    if settings.VOICE_BACKEND != "realtime":
-        # Step 40: the backfill embeds through OpenAI. The cascade makes no
-        # OpenAI calls, so it must not make one at every boot either; local
-        # embeddings for memory are Step 42.
-        log.info("memory_backfill_skipped", reason="cascade_no_openai")
-        return
+    # Step 42: the backfill is local (memory's own model), so it runs on every
+    # backend and never touches the network.
     try:
         asyncio.run(backfill_embeddings())
     except Exception as exc:

@@ -45,19 +45,31 @@ def test_managed_unpaired_falls_back_to_env_key(monkeypatch):
 
 
 def test_a_migrated_site_passes_proxy_base_url(monkeypatch):
-    """A real AsyncOpenAI call site (embeddings) must hand the SDK the proxy base_url
-    + device token in managed mode."""
+    """A real AsyncOpenAI call site must hand the SDK the proxy base_url + device token
+    in managed mode. (memory.embeddings was the site; since Step 42 memory embeds on
+    the Mac, so the Realtime path's reflection model is.)"""
+    import asyncio
+    from types import SimpleNamespace
+
+    import openai
+
+    from core import conversation
+
     monkeypatch.setenv("EMMA_REQUIRE_PAIRING", "1")
     monkeypatch.setattr(pairing, "_token_cache", "device-" + "y" * 40)
-    import memory.embeddings as emb
-    emb._client = None  # reset singleton
     captured: dict = {}
 
     class _FakeClient:
         def __init__(self, **kw):
             captured.update(kw)
 
-    monkeypatch.setattr(emb, "AsyncOpenAI", _FakeClient)
-    emb._client_singleton()
+            async def create(**_):
+                msg = SimpleNamespace(content='{"facts": []}')
+                return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", _FakeClient)
+    asyncio.run(conversation._reflection_complete("s", "u"))
     assert captured["base_url"] == settings.OPENAI_BASE_URL
     assert captured["api_key"] == "device-" + "y" * 40

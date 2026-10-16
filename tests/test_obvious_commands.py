@@ -66,7 +66,7 @@ async def test_reflection_rechecks_blackout_after_classify(monkeypatch) -> None:
     async def fake_remember(*a, **k):
         writes.append(a)
 
-    async def fake_classify(_v):
+    def fake_classify(_v):  # rules only since Step 42 (sync)
         reflection.suppress(30)  # blackout fires while classifying
         return "personal"
 

@@ -1,43 +1,54 @@
-"""OpenAI embedding helper for the memory store. Single-call async.
+"""Local embeddings for the memory store (Step 42). No network, no OpenAI.
 
-Used by :mod:`memory.long_term` for semantic recall and dedup. The
-vectors are 1536-dim ``text-embedding-3-small`` embeddings, stored in
-the ``facts_vec`` sqlite-vec virtual table.
+Used by :mod:`memory.long_term` for note recall, dedup and backfill. The vectors
+come from memory's own pinned model (``memory.local_embed.MEMORY_MODEL``, 384-dim,
+onnxruntime on the Mac), stored in the ``facts_vec`` sqlite-vec table. The model
+id is recorded in the database, so a model change re-embeds instead of mixing.
 """
 
 from __future__ import annotations
 
-import structlog
-from openai import AsyncOpenAI
+import asyncio
+import threading
 
-from config.settings import settings
+from core.brain.embed import Embedder
+from memory.local_embed import MEMORY_MODEL, embedder
 
-log = structlog.get_logger("emma.memory.embeddings")
+EMBED_MODEL = f"{MEMORY_MODEL.repo}@{MEMORY_MODEL.revision}"
+EMBED_DIMS = MEMORY_MODEL.dim
 
-_client: AsyncOpenAI | None = None
-EMBED_MODEL = "text-embedding-3-small"
-EMBED_DIMS = 1536
+_lock = threading.Lock()
+_embedder: Embedder | None = None
 
 
-def _client_singleton() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key(), base_url=settings.openai_base_url())
-    return _client
+class EmbedderMissingError(RuntimeError):
+    """The memory model isn't installed (installer step 5.3)."""
+
+
+def _get() -> Embedder:
+    global _embedder
+    with _lock:
+        if _embedder is None:
+            _embedder = embedder()
+        return _embedder
+
+
+def available() -> bool:
+    return _get().available()
+
+
+def embed_sync(text: str) -> list[float]:
+    if not text.strip():
+        raise ValueError("empty text")
+    e = _get()
+    if not e.available():
+        raise EmbedderMissingError(f"memory embedder not installed: {e.model_dir}")
+    return [float(x) for x in e.embed_one(text)]
 
 
 async def embed(text: str) -> list[float]:
-    """Return the 1536-dim embedding for `text`. Raises on API failure."""
-    if not text.strip():
-        raise ValueError("empty text")
-    resp = await _client_singleton().embeddings.create(
-        model=EMBED_MODEL,
-        input=text,
-    )
-    vec = resp.data[0].embedding
-    if len(vec) != EMBED_DIMS:
-        raise RuntimeError(f"unexpected embedding dim: {len(vec)}")
-    return vec
+    """Return the 384-dim embedding for `text`, computed on this Mac."""
+    return await asyncio.to_thread(embed_sync, text)
 
 
 def cosine(a: list[float], b: list[float]) -> float:
