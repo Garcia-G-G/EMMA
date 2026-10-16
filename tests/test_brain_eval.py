@@ -50,10 +50,11 @@ needs_model = pytest.mark.skipif(
 # Of 140. BRAIN-1 (be86cfc): coverage 48, local 22. BRAIN-1.5 (phrasebook +
 # gate variant D + site table): coverage 78, local 52. Review fixes (labelled
 # LLM/READ/L3 rows vote "__llm__"): sc_A20 now defers — its nearest neighbor is the
-# READ item sc_V56 — so coverage 77, local 51. Wrong stays 0. Step 43 Part 1
-# (frames for the reversible tools that had none): local 52. Part 3 (time grammar;
-# sc_A16 "recuérdame mañana a las nueve…" goes local, values pinned): 78 / 53.
-PIN = {"coverage": 78, "local": 53, "wrong": 0}
+# READ item sc_V56 — so coverage 77, local 51. Wrong stays 0. Step 43: the time
+# grammar serves sc_A16 ("recuérdame mañana a las nueve…", values pinned): 78 / 52.
+# (Part 1's +1 was sc_A08 via describe_capabilities, which overclaims; its frame
+# was withdrawn in Part 5.)
+PIN = {"coverage": 78, "local": 52, "wrong": 0}
 DOCS = {d.name: d for d in tool_docs()}
 
 
