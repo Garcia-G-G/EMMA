@@ -29,7 +29,7 @@ import structlog
 
 from config.settings import settings
 from core import redaction
-from memory import embeddings
+from memory import embeddings, structured
 
 log = structlog.get_logger("emma.memory.long_term")
 
@@ -126,6 +126,7 @@ def _connect() -> sqlite3.Connection:
         _migrate_vectors(conn, path)
         _migrated.add(str(path))
     conn.executescript(_SCHEMA)
+    conn.executescript(structured.SCHEMA)  # Step 42 Part 3: slots live in the same file
     _ensure_columns(conn)
     return conn
 
