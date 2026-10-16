@@ -73,12 +73,14 @@ from core import (
     brain_shadow,
     events_bus,
     injection,
+    runtime,
     session_memory,
     speaker,
     vocabulary,
     voice,
 )
 from core.brain import log as brain_log
+from core.brain.confirm import Pending
 from core.brain.decision import Decision
 from core.brain.processor import BrainProcessor, Outcome
 from core.brain_host import CHANGES_LISTINGS
@@ -381,8 +383,19 @@ class _Host:
     def facts(self) -> list[str]:
         return self._facts
 
-    def asked(self, tool: str) -> None:
-        session_memory.push_event("tool", f"requires_confirmation:{tool}")
+    # The session guard owns the pending confirmation; one is installed per wake
+    # session (run_session), so the brain's and the guard's questions are one.
+    def asked(self, pending: Pending) -> None:
+        if (guard := injection.current()) is not None:
+            guard.asked(pending)
+
+    def pending(self) -> Pending | None:
+        guard = injection.current()
+        return guard.pending if guard is not None else None
+
+    def settle(self) -> None:
+        if (guard := injection.current()) is not None:
+            guard.settle()
 
     async def execute(self, tool: str, args: dict[str, Any]) -> Outcome:
         from tools.registry import dispatch
@@ -403,7 +416,9 @@ class _Host:
         events_bus.publish("tool_completed", name=tool, elapsed_ms=elapsed,
                            success=result.success)
         if result.requires_confirmation:
-            self.asked(tool)
+            # The tool asked its own question: it is now the pending one.
+            slots = {k: v for k, v in args.items() if k not in ("confirmed", "cancelled")}
+            self.asked(Pending(tool, slots, runtime.get_spoken_lang(), time.monotonic()))
         elif result.success:
             session_memory.record_completed_action(
                 tool, dict(args), user_text=session_memory.last_user_speech_text()

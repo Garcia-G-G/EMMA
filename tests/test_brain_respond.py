@@ -109,16 +109,10 @@ def test_clarify_asks_by_verb() -> None:
     ],
 )
 def test_confirmation_turn(answer: str, kind: str) -> None:
-    pending = _local("delete_note", confirm=True, title="Compras")
-    out = answer_confirmation(pending, answer)
+    out = answer_confirmation("delete_note", {"title": "Compras"}, answer)
     assert out.kind == kind
     assert out.confirmed is (kind == "execute")
     assert out.tool == "delete_note" and out.slots == {"title": "Compras"}
-
-
-def test_confirmation_needs_a_pending_question() -> None:
-    with pytest.raises(ValueError):
-        answer_confirmation(_local("open_application", name="Spotify"), "sí")
 
 
 # ---- the clarification turn ---------------------------------------------------------------

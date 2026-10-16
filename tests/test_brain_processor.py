@@ -12,8 +12,10 @@ from pipecat.frames.frames import TranscriptionFrame, TTSSpeakFrame
 from pipecat.tests.utils import run_test
 
 from core import cascade, injection, session_memory
+from core.brain.confirm import Pending
+from core.brain.confirm import question as confirm_question
 from core.brain.decision import Decision, SlotScalar, SlotValue
-from core.brain.processor import BrainProcessor, Outcome, confirm_question
+from core.brain.processor import BrainProcessor, Outcome
 from core.brain.respond import _NOT_YET, Responder
 from core.brain.thinker import NoThinker, ThinkerResult, Turn, rank_facts
 from tools.base import RegisteredTool, ToolResult
@@ -31,15 +33,25 @@ class FakeHost:
     def __init__(self, outcome: Outcome | None = None, facts: Sequence[str] = ()) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.asked_for: list[str] = []
+        self._pending: Pending | None = None
         self._outcome = outcome or Outcome(True, "ok")
         self._facts = list(facts)
 
     async def execute(self, tool: str, args: dict[str, SlotScalar]) -> Outcome:
         self.calls.append((tool, dict(args)))
+        if args.get("confirmed"):
+            self._pending = None  # the guard settles on the spoken yes
         return self._outcome
 
-    def asked(self, tool: str) -> None:
-        self.asked_for.append(tool)
+    def asked(self, pending: Pending) -> None:
+        self.asked_for.append(pending.tool)
+        self._pending = pending
+
+    def pending(self) -> Pending | None:
+        return self._pending
+
+    def settle(self) -> None:
+        self._pending = None
 
     def facts(self) -> Sequence[str]:
         return self._facts

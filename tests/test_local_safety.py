@@ -12,6 +12,7 @@ from pipecat.frames.frames import TranscriptionFrame, TTSSpeakFrame
 from pipecat.tests.utils import run_test
 
 from config.settings import Settings, settings
+from core.brain.confirm import Pending
 from core.brain.decision import Decision, SlotScalar, SlotValue
 from core.brain.embed import Embedder
 from core.brain.phrases import is_correction
@@ -252,7 +253,12 @@ class Host:
         self.calls.append(t)
         return Outcome(True, self.message)
 
-    def asked(self, t: str) -> None: ...
+    def asked(self, p: Pending) -> None: ...
+
+    def pending(self) -> Pending | None:
+        return None
+
+    def settle(self) -> None: ...
 
     def facts(self) -> Sequence[str]:
         return ()

@@ -34,12 +34,13 @@ import structlog
 from pipecat.frames.frames import Frame, TranscriptionFrame, TTSSpeakFrame
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
+from core import runtime
+from core.brain.confirm import Pending, question
 from core.brain.decision import Decision, SlotScalar
 from core.brain.phrases import is_correction
 from core.brain.respond import (
     SPEAKS_RESULT,
     Responder,
-    action_phrase,
     answer_confirmation,
     language,
 )
@@ -72,8 +73,14 @@ class Outcome:
 class Host(Protocol):
     async def execute(self, tool: str, args: dict[str, SlotScalar]) -> Outcome: ...
 
-    def asked(self, tool: str) -> None:
-        """Emma just asked to confirm ``tool``: the guard dates the question from here."""
+    def asked(self, pending: Pending) -> None:
+        """Emma just asked: this is now THE pending confirmation (the guard owns it)."""
+
+    def pending(self) -> Pending | None:
+        """The question waiting for a yes — asked by the brain, the guard or a tool."""
+
+    def settle(self) -> None:
+        """The answer came (yes, no, or something else): nothing is pending any more."""
 
     def facts(self) -> Sequence[str]:
         """Memory facts (non-secret), confidence-ordered. Ranked per turn here."""
@@ -103,12 +110,6 @@ class TurnTiming:
         return out
 
 
-def confirm_question(tool: str, slots: dict[str, SlotScalar], lang: str) -> str:
-    """Short, names the action, answerable with one word — same shape as the guard's."""
-    action = action_phrase(tool, slots, "en" if lang == "en" else "es")
-    return f"{action}?" if lang == "en" else f"¿{action}?"
-
-
 class BrainProcessor(FrameProcessor):
     def __init__(
         self,
@@ -125,7 +126,6 @@ class BrainProcessor(FrameProcessor):
         self._host = host
         self._thinker = thinker or NoThinker(self.responder)
         self._lock = asyncio.Lock()
-        self._pending: Decision | None = None  # waiting for a spoken yes/no
         self._last_executed: tuple[str, str] | None = None  # (tool, utterance), one turn back
         self._context: deque[ContextTurn] = deque(maxlen=CONTEXT_TURNS)
 
@@ -153,6 +153,8 @@ class BrainProcessor(FrameProcessor):
                     d = Decision(utterance=text, normalized="", verdict="defer",
                                  reason=f"brain_error:{type(exc).__name__}")
             timing.decided = time.monotonic()
+            # Tools, templates and the guard's questions speak the speaker's language.
+            runtime.set_spoken_lang(language(text))
             # The wrong-rate signal: the utterance right after an executed turn
             # is a closed-list correction ("no, eso no", "cancela", "otra vez").
             corrects = self._last_executed if is_correction(text) else None
@@ -187,16 +189,19 @@ class BrainProcessor(FrameProcessor):
     async def respond(self, d: Decision) -> tuple[str, dict[str, Any]]:
         """What to say for ``d`` (after acting on it), plus fields for the log."""
         lang = language(d.utterance)
-        if self._pending is not None:
-            pending, self._pending = self._pending, None
-            outcome = answer_confirmation(pending, d.utterance)
+        pending = self._host.pending() if self._host is not None else None
+        if pending is not None:
+            outcome = answer_confirmation(pending.tool, pending.slots, d.utterance)
             if outcome.kind == "execute":
-                return await self._execute(pending, {**outcome.slots, "confirmed": True}, lang,
-                                           path="confirmed")
+                # The guard settles it when it clears the spoken yes.
+                return await self._execute(pending.tool, {**outcome.slots, "confirmed": True},
+                                           lang, path="confirmed")
+            assert self._host is not None
+            self._host.settle()
             if outcome.kind == "cancel":
-                return self.responder.cancelled(lang), {"path": "cancelled", "tool": pending.chosen}
+                return self.responder.cancelled(lang), {"path": "cancelled", "tool": pending.tool}
             # Not a yes or a no: the window closes, and this is a new request.
-            log.info("confirmation_abandoned", tool=pending.chosen)
+            log.info("confirmation_abandoned", tool=pending.tool)
 
         if d.verdict in ("refuse", "clarify", "none"):
             return self.responder.say(d, lang), {"path": "template"}
@@ -208,37 +213,35 @@ class BrainProcessor(FrameProcessor):
             slots = {k: v.value for k, v in d.slots.items()}
             if d.needs_confirmation:
                 return self._ask(d, slots, lang), {"path": "confirm_ask", "tool": d.chosen}
-            return await self._execute(d, slots, lang, path="local")
+            return await self._execute(d.chosen, slots, lang, path="local")
         return await self._think(d)
 
     def _has_referent(self, d: Decision) -> bool:
         """Only a music verb resolves today, against the session's last music action."""
         return d.chosen in MEDIA_TOOLS and any(t.tool in MEDIA_TOOLS for t in self._context)
 
-    def _ask(self, d: Decision, slots: dict[str, SlotScalar], lang: str) -> str:
+    def _ask(self, d: Decision, slots: dict[str, SlotScalar], lang: runtime.SpokenLang) -> str:
         assert d.chosen is not None and self._host is not None
-        self._pending = d
-        self._host.asked(d.chosen)
-        return confirm_question(d.chosen, slots, lang)
+        self._host.asked(Pending(d.chosen, slots, lang, time.monotonic()))
+        return question(d.chosen, slots, lang)
 
     async def _execute(
-        self, d: Decision, args: dict[str, SlotScalar], lang: str, path: str
+        self, tool: str, args: dict[str, SlotScalar], lang: str, path: str
     ) -> tuple[str, dict[str, Any]]:
-        assert d.chosen is not None and self._host is not None
-        out = await self._host.execute(d.chosen, args)
-        extra: dict[str, Any] = {"path": path, "tool": d.chosen, "executed": out.success,
+        assert self._host is not None
+        out = await self._host.execute(tool, args)
+        extra: dict[str, Any] = {"path": path, "tool": tool, "executed": out.success,
                                  "result": one_line(out.message, 160)}
         if out.asks and not out.success:
-            # The guard or the tool wants a yes first (e.g. a tainted sink): its
-            # question is what we say, and the next transcript answers it.
-            self._pending = _with_confirmation(d)
+            # The guard or the tool wants a yes first (e.g. a tainted sink): it
+            # opened the pending question; we say it, the next transcript answers.
             return out.message, {**extra, "path": f"{path}:asked"}
         if not out.success:
             return out.message, extra  # never "Listo" over a failure
-        if d.chosen in SPEAKS_RESULT and out.message:
+        if tool in SPEAKS_RESULT and out.message:
             return out.message, extra  # the result is the answer; a preamble would be all she said
         slots = {k: v for k, v in args.items() if k not in ("confirmed", "cancelled")}
-        return self.responder.ack(d.chosen, slots, "en" if lang == "en" else "es"), extra
+        return self.responder.ack(tool, slots, "en" if lang == "en" else "es"), extra
 
     async def _think(self, d: Decision) -> tuple[str, dict[str, Any]]:
         facts: tuple[str, ...] = ()
@@ -257,6 +260,3 @@ class BrainProcessor(FrameProcessor):
     async def say(self, text: str) -> None:
         await self.push_frame(TTSSpeakFrame(text))
 
-
-def _with_confirmation(d: Decision) -> Decision:
-    return replace(d, needs_confirmation=True)

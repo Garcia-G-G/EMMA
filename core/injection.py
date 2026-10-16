@@ -31,7 +31,8 @@ from typing import Any
 
 import structlog
 
-from core import session_memory
+from core import runtime, session_memory
+from core.brain.confirm import Pending, question
 from core.brain.normalize import fold
 from core.brain.phrases import is_forget, is_yes
 from core.brain.sinks import CLOSED_ARGS, is_sink
@@ -99,8 +100,16 @@ class SessionGuard:
     tainted: bool = False
     taint_sources: list[str] = field(default_factory=list)
     _trusted: list[str] = field(default_factory=list)  # canon text of trusted results
-    _asked: dict[str, float] = field(default_factory=dict)  # sink -> when WE asked
+    pending: Pending | None = None  # THE question waiting for a yes (brain, guard or tool)
     _used_yes: set[float] = field(default_factory=set)  # yes events already spent
+
+    # ---- the pending confirmation -------------------------------------------
+
+    def asked(self, pending: Pending) -> None:
+        self.pending = pending
+
+    def settle(self) -> None:
+        self.pending = None
 
     # ---- inputs --------------------------------------------------------------
 
@@ -160,15 +169,19 @@ class SessionGuard:
 
         t_req = self._question_ts(name)
         if t_req is not None and await self._yes_after(t_req):
-            self._asked.pop(name, None)
+            if self.pending is not None and self.pending.tool == name:
+                self.pending = None
             return Clearance(by_mic=True)
 
         # No spoken yes after a question: ask (again). The answer must be a NEW
         # transcript, so this also defeats a model that asks and answers itself.
-        self._asked[name] = time.monotonic()
+        lang = runtime.get_spoken_lang()
+        self.pending = Pending(name, {k: v for k, v in args.items()
+                                      if k not in ("confirmed", "cancelled")},
+                               lang, time.monotonic())
         reason = "tainted_sink" if (self.tainted and sink and not confirmed) else "no_mic_yes"
         log.info("injection_ask", tool=name, reason=reason, tainted=self.tainted)
-        return Refusal(self._question(name, args), ask=True, reason=reason)
+        return Refusal(self._question(name, args, lang), ask=True, reason=reason)
 
     # ---- helpers ----------------------------------------------------------------
 
@@ -194,8 +207,8 @@ class SessionGuard:
         """Newest moment Emma asked about ``name`` (the tool's own question or ours)."""
         kind = f"requires_confirmation:{name}"
         ts = [ev.ts for ev in session_memory.recent(200) if ev.role == "tool" and ev.kind == kind]
-        if name in self._asked:
-            ts.append(self._asked[name])
+        if self.pending is not None and self.pending.tool == name:
+            ts.append(self.pending.asked_at)
         return max(ts) if ts else None
 
     async def _yes_after(self, t_req: float) -> bool:
@@ -227,15 +240,9 @@ class SessionGuard:
             await asyncio.sleep(_POLL_S)
 
     @staticmethod
-    def _question(name: str, args: dict[str, Any]) -> str:
-        """Short, and names the action: "¿Borrar la nota Compras?" — one word answers it."""
-        from core.brain.respond import action_phrase
-
-        # Bounded: 60 chars a value, 3 values — a long body (possibly attacker
-        # text, when tainted) is never read aloud as "the short question".
-        pairs = [(k, redact(v)) for k, v in _strings(args) if k not in ("confirmed", "cancelled")]
-        clean = {k: (v if len(v) <= 60 else v[:57] + "...") for k, v in pairs[:3]}
-        return f"¿{action_phrase(name, clean, 'es')}?"
+    def _question(name: str, args: dict[str, Any], lang: runtime.SpokenLang) -> str:
+        """The one builder (``core.brain.confirm.question``) over redacted values."""
+        return question(name, {k: redact(v) for k, v in _strings(args)}, lang)
 
 
 # ---- the one live guard ----------------------------------------------------------

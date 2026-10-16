@@ -25,15 +25,17 @@ from core.brain.slots import FILLER, STOP, TOOLS, Vocab, resolve
 
 @dataclass(frozen=True)
 class Thresholds:
+    """Defaults = the ``BRAIN_*`` settings defaults (test_brain_confirm pins it)."""
+
     knn_min: float = 0.85  # τ: cosine to the nearest example (novelty floor)
-    margin_min: float = 0.15  # δ: top-1 vs top-2, on both sources
+    margin_min: float = 0.0  # δ: top-1 vs top-2, on both sources
     max_content_tokens: int = 12
     slot_floor: float = 0.85
     # BRAIN-1.5 gate study. How step 3 may pick a tool besides strict agreement:
-    relaxed_agreement: bool = False  # B: kNN top-1 in BM25 top-3, or BM25 top-1 in kNN top-3
+    relaxed_agreement: bool = True  # B: kNN top-1 in BM25 top-3, or BM25 top-1 in kNN top-3
     bm25_single_min: float | None = None  # C: θ1, BM25 top-1 score alone is enough …
     bm25_single_gap: float = 0.0  # … with this relative gap to BM25 top-2 (δ1)
-    knn_single_min: float | None = None  # C: θ2, kNN top-1 cosine alone is enough
+    knn_single_min: float | None = 0.94  # C: θ2, kNN top-1 cosine alone is enough
     # Study only — never a setting: what the argument check is worth on its own.
     require_slots: bool = True
 

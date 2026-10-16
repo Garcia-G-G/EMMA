@@ -459,16 +459,15 @@ class ConfirmationOutcome:
     confirmed: bool  # True only for "execute" — the brain's ONLY path to confirmed=True
 
 
-def answer_confirmation(pending: Decision, transcript: str) -> ConfirmationOutcome:
-    """Resolve the turn after a ``needs_confirmation`` decision. Closed lists only."""
-    if pending.chosen is None or not pending.needs_confirmation:
-        raise ValueError("nothing is waiting for a confirmation")
-    slots = {k: v.value for k, v in pending.slots.items()}
+def answer_confirmation(
+    tool: str, slots: Mapping[str, SlotScalar], transcript: str
+) -> ConfirmationOutcome:
+    """Resolve the turn after Emma asked to confirm ``tool``. Closed lists only."""
     if is_yes(transcript):
-        return ConfirmationOutcome("execute", pending.chosen, slots, confirmed=True)
+        return ConfirmationOutcome("execute", tool, slots, confirmed=True)
     if is_no(transcript):
-        return ConfirmationOutcome("cancel", pending.chosen, slots, confirmed=False)
-    return ConfirmationOutcome("unclear", pending.chosen, slots, confirmed=False)
+        return ConfirmationOutcome("cancel", tool, slots, confirmed=False)
+    return ConfirmationOutcome("unclear", tool, slots, confirmed=False)
 
 
 _ORDINALS = {
