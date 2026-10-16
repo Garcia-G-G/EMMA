@@ -180,6 +180,7 @@ def decide(
     th: Thresholds,
     knn_status: str = "ok",
     now: datetime | None = None,
+    routed: tuple[str, str] | None = None,
 ) -> Decision:
     f: list[Feature] = []
     content = _content(norm.tokens)
@@ -190,6 +191,17 @@ def decide(
     f.append(Feature("pre_retrieval", early[1] if early else "pass"))
     if early:
         return _decision(norm, early[0], early[1], f, retrieval)
+    if routed is not None:
+        # A closed grammar named the tool (memory, Step 42): its whole sentence is
+        # the argument, read by the tool. Same risk rule as step 8.
+        tool, arg = routed
+        rdoc = tools[tool]
+        param = rdoc.required[0] if rdoc.required else (rdoc.params[0] if rdoc.params else "")
+        f.append(Feature("routed", tool))
+        slots = {param: SlotValue(arg, "route", 1.0, arg)} if param and arg else {}
+        risky = rdoc.destructive or is_sink(tool) or not rdoc.reversible
+        return _decision(norm, "local", "routed", f, retrieval, chosen=tool, slots=slots,
+                         needs_confirmation=risky)
     # A single word nobody's frame or vocabulary explains is STT noise ("KMO", "Hmm").
     if len(content) == 1 and not _explained_single(content[0], tools, vocab):
         f.append(Feature("single_unexplained_token", content[0]))

@@ -319,3 +319,102 @@ def forget(conn: sqlite3.Connection, row_id: int) -> bool:
     cur = conn.execute("UPDATE user_facts SET valid_to = ? WHERE id = ? AND valid_to IS NULL",
                        (time.time(), row_id))
     return cur.rowcount > 0
+
+
+# ---- saying a slot back (ES/EN, neutral, no gendered adjectives) ------------------
+
+_SUBJECT_ES = {"sister": "tu hermana", "brother": "tu hermano", "mother": "tu mamá",
+               "father": "tu papá", "partner": "tu pareja", "spouse": "tu pareja",
+               "daughter": "tu hija", "son": "tu hijo", "boss": "tu jefe o jefa",
+               "best_friend": "tu mejor amistad", "dog": "tu perro", "cat": "tu gato"}
+_SUBJECT_EN = {"sister": "your sister", "brother": "your brother", "mother": "your mom",
+               "father": "your dad", "partner": "your partner", "spouse": "your partner",
+               "daughter": "your daughter", "son": "your son", "boss": "your boss",
+               "best_friend": "your best friend", "dog": "your dog", "cat": "your cat"}
+_THING_ES = {"color": "color", "movie": "película", "book": "libro", "band": "banda",
+             "food": "comida", "season": "estación", "song": "canción", "show": "serie",
+             "sport": "deporte", "lucky_number": "número de la suerte"}
+_FEMININE = frozenset({"movie", "band", "food", "season", "song", "show"})
+_SIZE_ES = {"shoe": "zapato", "shirt": "camisa", "pants": "pantalón"}
+_MONTH_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+             "septiembre", "octubre", "noviembre", "diciembre")
+_MONTH_EN = ("January", "February", "March", "April", "May", "June", "July", "August",
+             "September", "October", "November", "December")
+
+
+def _day(mmdd: str, lang: str) -> str:
+    m, d = (int(x) for x in mmdd.split("-"))
+    return f"{_MONTH_EN[m - 1]} {d}" if lang == "en" else f"{d} de {_MONTH_ES[m - 1]}"
+
+
+def say(subject: str, attribute: str, value: str, lang: str) -> str:
+    """'tu perro se llama Toby' / 'your dog is called Toby' — what Emma says back."""
+    en = lang == "en"
+    kind, _, detail = attribute.partition(":")
+    who = (_SUBJECT_EN if en else _SUBJECT_ES).get(subject, "")
+    if kind == "name":
+        if subject == "user":
+            return f"your name is {value}" if en else f"te llamas {value}"
+        return f"{who} is called {value}" if en else f"{who} se llama {value}"
+    if kind == "birthday":
+        day = _day(value, lang)
+        if subject == "user":
+            return f"your birthday is {day}" if en else f"tu cumpleaños es el {day}"
+        return f"{who}'s birthday is {day}" if en else f"el cumpleaños de {who} es el {day}"
+    if kind == "favorite":
+        thing = detail.replace("_", " ") if en else _THING_ES.get(detail, detail)
+        fav = "favorita" if detail in _FEMININE else "favorito"
+        return f"your favorite {thing} is {value}" if en else f"tu {thing} {fav} es {value}"
+    if kind == "preferred_app":
+        return f"you use {value} for {detail}" if en else f"usas {value} para {detail}"
+    if kind == "allergy":
+        return f"you're allergic to {value}" if en else f"tienes alergia a {value}"
+    if kind == "diet":
+        return f"your diet is {value}" if en else f"tu dieta es {'vegetariana' if value == 'vegetarian' else 'vegana'}"
+    if kind == "size":
+        return f"your {detail} size is {value}" if en else f"tu talla de {_SIZE_ES.get(detail, detail)} es {value}"
+    return value
+
+
+# ---- routing for the brain (injected by core.brain_host; core/brain stays generic) ----
+
+# Attributes only memory keeps. Birthdays (birthday_remember) and app preferences
+# (set_preferred_app) have tools of their own; those stay with retrieval.
+_ROUTED = frozenset({"name", "favorite", "allergy", "diet", "size"})
+
+
+def strip_trigger(text: str) -> str:
+    """The sentence without its wake word and "recuérdame que" / "remember that" opener,
+    accents and case kept where the folded form lines up with the original."""
+    t = text.strip()
+    folded = fold(t)
+    m = _TRIGGER.match(folded)
+    cut = m.end() if m else 0
+    out = t[cut:] if len(folded) == len(t) else folded[cut:]
+    return out.strip(" ,.;:¿?¡!")
+
+
+_FORGET = re.compile(r"^(?:(?:hey|oye|ey)\s+)?(?:emma[\s,]+)?(?:olvida que|olvidate de que|borra que|"
+                     r"deja de recordar que|forget that|stop remembering that)\s+")
+
+
+def route(text: str) -> tuple[str, str] | None:
+    """(tool, argument) for a statement memory owns ('remember_fact', the content),
+    a request to forget one ('forget_fact', the content) or a question about one
+    ('recall_facts', the question); else None. Stores and forgets still ask first
+    (the tool's own question)."""
+    folded = fold(text).strip()
+    m = _FORGET.match(folded)
+    if m:
+        rest = text.strip()[m.end():] if len(folded) == len(text.strip()) else folded[m.end():]
+        f = parse_statement(rest)
+        if f is not None and f.attribute.split(":")[0] in _ROUTED:
+            return "forget_fact", rest.strip(" ,.;:¿?¡!")
+        return None
+    s = parse_statement(text)
+    if s is not None and s.attribute.split(":")[0] in _ROUTED:
+        return "remember_fact", strip_trigger(text)
+    q = parse_question(text)
+    if q is not None and q[1].split(":")[0] in _ROUTED:
+        return "recall_facts", strip_trigger(text)
+    return None

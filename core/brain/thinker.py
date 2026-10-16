@@ -18,7 +18,7 @@ in touches nothing in the pipeline.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -90,12 +90,18 @@ def asks_memory(d: Decision) -> bool:
 class NoThinker:
     """The only thinker in VOICE-1: no model, a template that doesn't sound like an error."""
 
-    def __init__(self, responder: Responder | None = None) -> None:
+    def __init__(self, responder: Responder | None = None,
+                 memory_ready: Callable[[], bool] = lambda: False) -> None:
         self.responder = responder or Responder()
+        self._memory_ready = memory_ready
 
     async def think(self, turn: Turn) -> ThinkerResult:
         lang = language(turn.transcript)
         if asks_memory(turn.decision):
+            # Memory works but the brain couldn't tell what to keep: ask, don't
+            # claim it was noted. Memory absent: say it can't save yet.
+            if self._memory_ready():
+                return ThinkerResult(text=self.responder.memory_unclear(lang))
             return ThinkerResult(text=self.responder.no_memory(lang))
         return ThinkerResult(text=self.responder.not_yet(lang))
 

@@ -30,7 +30,8 @@ REVERSIBLE = {
     "close_current_tab", "current_datetime_speak", "current_time", "describe_capabilities",
     "find_file", "list_browser_tabs", "list_notes", "list_timers", "list_today", "mute",
     "my_repos", "next_event", "next_track", "now_playing", "open_application", "open_in_ide",
-    "open_my_page", "pause", "play_playlist", "play_track", "read_note", "recall_last_action",
+    "open_my_page", "pause", "play_playlist", "play_track", "read_note", "recall_facts",
+    "recall_last_action",
     "repeat_last", "resume", "set_brightness", "set_volume", "start_timer", "today_events",
     "toggle_ide_terminal", "unmute", "what_did_you_do",
 }
@@ -124,8 +125,8 @@ def test_the_live_loader_refuses_a_brain_without_it(monkeypatch: pytest.MonkeyPa
 # ---- availability: never a tool this machine can't run, never an LLM ------------------------
 
 
-LLM_IMPORTS = ("openai", "anthropic", "groq", "ollama", "memory.embeddings", "memory.reflection",
-               "memory.long_term", "core.coding_agent")
+# memory.* is not here since Step 42: it embeds on the Mac and calls no model.
+LLM_IMPORTS = ("openai", "anthropic", "groq", "ollama", "core.coding_agent")
 
 
 def _imports(path: Path) -> set[str]:
@@ -164,10 +165,10 @@ def test_llm_backed_tool_modules_are_derived_not_remembered() -> None:
 def test_the_cascade_offers_no_llm_backed_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "VOICE_BACKEND", "cascade")
     names = {e.name for e in registry.available_tools()}
-    for gone in ("remember_fact", "recall_facts", "search_web", "describe_screen",
-                 "deep_research", "delegate_to_codex"):
+    for gone in ("search_web", "describe_screen", "deep_research", "delegate_to_codex"):
         assert gone not in names, gone
-    assert "open_application" in names
+    for kept in ("open_application", "remember_fact", "recall_facts", "forget_fact"):
+        assert kept in names, kept  # Step 42: memory runs on the Mac
 
 
 def test_the_brain_only_sees_tools_this_machine_can_run(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -177,7 +178,8 @@ def test_the_brain_only_sees_tools_this_machine_can_run(monkeypatch: pytest.Monk
     available = {e.name for e in registry.available_tools()}
     docs = {d.name for d in tool_docs(available_only=True)}
     assert docs == available
-    assert "remember_fact" not in docs
+    assert "delegate_to_codex" not in docs  # LLM-backed: absent on the cascade
+    assert "remember_fact" in docs  # Step 42: memory runs on the Mac
 
 
 def test_the_live_loader_builds_from_available_tools_only(monkeypatch: pytest.MonkeyPatch) -> None:

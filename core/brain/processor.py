@@ -88,6 +88,11 @@ class Host(Protocol):
         """Memory facts (non-secret), confidence-ordered. Ranked per turn here."""
 
 
+# Tools whose unconfirmed call only ASKS (naming e.g. the value it would replace)
+# and writes nothing: the brain lets them ask instead of asking a generic question
+# itself; the spoken yes then runs them with confirmed=True (Step 42 Part 4).
+ASKS_ITSELF = frozenset({"remember_fact", "forget_fact"})
+
 # What a clitic on a music verb ("reanúdala", "páusala") can refer to.
 MEDIA_TOOLS = frozenset({"play_track", "play_playlist", "resume", "pause", "next_track"})
 
@@ -215,7 +220,7 @@ class BrainProcessor(FrameProcessor):
             return self.responder.say(d, lang), {"path": "template", "tool": d.chosen}
         if d.verdict == "local" and d.chosen and self._host is not None:
             slots = {k: v.value for k, v in d.slots.items()}
-            if d.needs_confirmation:
+            if d.needs_confirmation and d.chosen not in ASKS_ITSELF:
                 return self._ask(d, slots, lang), {"path": "confirm_ask", "tool": d.chosen}
             return await self._execute(d.chosen, slots, lang, path="local")
         return await self._think(d)

@@ -18,10 +18,8 @@ from tests.test_brain_processor import _local, _say, _user
 from tools import self_tool
 
 # What the LLM-free cascade can't do, in both languages, plus any tool count.
-FORBIDDEN = re.compile(
-    r"web|internet|pantalla|screen|recordar cosas|remember things|herramientas|\btools\b|\d",
-    re.IGNORECASE,
-)
+# (Memory came off this list in Step 42: it runs on the Mac now.)
+FORBIDDEN = re.compile(r"web|internet|pantalla|screen|herramientas|\btools\b|\d", re.IGNORECASE)
 
 
 @pytest.fixture(autouse=True)

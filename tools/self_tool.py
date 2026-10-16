@@ -129,7 +129,7 @@ _GROUPS: tuple[tuple[str, str, frozenset[str]], ...] = (
     ("repetir o contarte lo que hice", "repeat or tell you what I did", frozenset({
         "recall_last_action", "repeat_last", "what_did_you_do"})),
     ("recordar cosas sobre ti", "remember things about you", frozenset({
-        "remember_fact", "recall_facts"})),
+        "remember_fact", "recall_facts", "forget_fact"})),
     ("buscar y pulsar botones por su nombre", "find and click buttons by name", frozenset({
         "find_button", "click_button"})),
 )

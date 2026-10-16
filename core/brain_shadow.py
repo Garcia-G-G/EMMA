@@ -204,7 +204,9 @@ def _load_brain() -> None:
         th = thresholds_from_settings()
         if not th.require_slots:  # rule 9: the live brain never runs without it
             raise RuntimeError("argument completeness is mandatory on the live brain")
-        brain = Brain(docs, vocab(apps=installed_apps()), th, index, embedder)
+        from memory.structured import route  # memory's closed grammar (Step 42)
+
+        brain = Brain(docs, vocab(apps=installed_apps()), th, index, embedder, route=route)
         # The first decide pays ONNX's lazy session warm-up (~3 s, measured in the
         # VOICE-1 probe). Pay it here, off the turn, so the first spoken request
         # is as fast as the rest.

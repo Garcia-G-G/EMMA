@@ -107,8 +107,9 @@ def has_web_search() -> bool:
 
 
 # VOICE-1: tool modules whose tools reach a language model when they run —
-# directly (an OpenAI client) or through memory's embeddings / contradiction
-# check / reflection, the coding agent, or another such tool module. The
+# directly (an OpenAI client), through the coding agent, or through another such
+# tool module. (memory/ left this list in Step 42: it embeds on the Mac and calls
+# no model; reflection runs only on an owner opt-in with a model wired outside.) The
 # cascade runs no LLM anywhere, so in VOICE_BACKEND=cascade these tools are
 # unavailable: the brain defers them ("unavailable") and nothing executes them.
 # tests/test_local_safety.py re-derives this set from the imports, so a new
@@ -117,7 +118,6 @@ def has_web_search() -> bool:
 LLM_BACKED_MODULES = frozenset({
     "codex_tool",
     "deep_research",
-    "memory_tool",
     "screen_vision_tool",
     "url_summary_tool",
     "visual_screen_tool",  # imports screen_vision_tool._summarize

@@ -320,6 +320,7 @@ SPEAKS_RESULT: frozenset[str] = frozenset({
     "current_time", "current_datetime_speak", "describe_capabilities", "find_file",
     "list_browser_tabs", "list_notes", "list_timers", "list_today", "my_repos", "next_event",
     "now_playing", "read_note", "recall_facts", "recall_last_action", "repeat_last",
+    "remember_fact", "forget_fact",
     "today_events", "what_did_you_do",
 })
 
@@ -355,6 +356,12 @@ _NO_MEMORY: Phrasings = {
            "Por ahora no guardo recuerdos, así que eso no lo tengo."),
     "en": ("I can't save memories yet.", "I don't keep memories yet, so that wasn't saved.",
            "I can't remember things yet; that wasn't stored."),
+}
+_MEMORY_UNCLEAR: Phrasings = {
+    "es": ("No entendí qué quieres que recuerde. Dímelo de otra forma.",
+           "No me quedó claro qué guardar. ¿Me lo repites?"),
+    "en": ("I didn't catch what to remember. Say it another way?",
+           "I'm not sure what to save. Could you repeat it?"),
 }
 _SMALLTALK: Phrasings = {
     "es": ("Bien, ¿en qué te ayudo?", "Aquí ando, ¿qué necesitas?", "Todo bien. ¿Qué hacemos?",
@@ -423,6 +430,9 @@ class Responder:
 
     def no_memory(self, lang: SpokenLang) -> str:
         return self.pick(f"no_memory:{lang}", _NO_MEMORY[lang])
+
+    def memory_unclear(self, lang: SpokenLang) -> str:
+        return self.pick(f"memory_unclear:{lang}", _MEMORY_UNCLEAR[lang])
 
     def unclear(self, lang: SpokenLang) -> str:
         return self.pick(f"unclear:{lang}", _UNCLEAR_ANSWER[lang])
@@ -547,7 +557,8 @@ def fixed_phrasings() -> list[tuple[str, SpokenLang, str]]:
     templates), until the live log can rank them; Spanish before English.
     """
     ordered: list[tuple[str, Phrasings]] = [
-        ("not_yet", _NOT_YET), ("no_memory", _NO_MEMORY), ("done", _DONE),
+        ("not_yet", _NOT_YET), ("no_memory", _NO_MEMORY), ("memory_unclear", _MEMORY_UNCLEAR),
+        ("done", _DONE),
         *((f"tool:{name}", phr) for name, phr in _TOOL.items()),
         ("smalltalk", _SMALLTALK), ("refuse:safety", _REFUSE["safety"]),
         *((f"clarify:{k}", v) for k, v in _CLARIFY.items() if k != "options"),

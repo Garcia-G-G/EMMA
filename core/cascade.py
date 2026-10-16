@@ -83,6 +83,7 @@ from core.brain import log as brain_log
 from core.brain.confirm import Pending
 from core.brain.decision import Decision
 from core.brain.processor import BrainProcessor, Outcome
+from core.brain.thinker import NoThinker
 from core.brain_host import CHANGES_LISTINGS
 from core.confidence import is_low_confidence
 from core.echo_gate import EchoGateFilter, SpeechPhase
@@ -443,6 +444,12 @@ def _decide_getter() -> Any:
     return brain.decide if brain is not None else None
 
 
+def _memory_ready() -> bool:
+    """Memory can store on this machine: the live brain offers remember_fact."""
+    brain = brain_shadow.loaded()
+    return brain is not None and "remember_fact" in brain.tools
+
+
 def _admit_getter() -> Any:
     brain = brain_shadow.loaded()
     return brain.admit if brain is not None else None
@@ -505,7 +512,7 @@ async def build_pipeline(
     turns = _Turns()
     host = host or _Host()
     brain_proc = BrainProcessor(_decide_getter, record=turns.record, host=host,
-                                admit=_admit_getter)
+                                admit=_admit_getter, thinker=NoThinker(memory_ready=_memory_ready))
     pipeline = Pipeline(
         [
             transport.input(),

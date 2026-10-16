@@ -55,7 +55,8 @@ needs_model = pytest.mark.skipif(
 # (Part 1's +1 was sc_A08 via describe_capabilities, which overclaimed; its frame
 # was withdrawn in Part 5.) Step 43.1: the answer names only what this machine
 # serves, the frame is back, sc_A08 goes local: 78 / 53.
-PIN = {"coverage": 78, "local": 53, "wrong": 0}
+# Step 42: memory's closed grammar routes the slot statements/questions: 79 / 54.
+PIN = {"coverage": 79, "local": 54, "wrong": 0}
 DOCS = {d.name: d for d in tool_docs()}
 
 
@@ -67,7 +68,9 @@ def results(tmp_path_factory: pytest.TempPathFactory) -> Iterator[list[tuple[Exa
     base = vocab(apps=APPS, notes=NOTES, playlists=PLAYLISTS, connections=CONNECTIONS)
     v = Vocab(apps=base.apps, aliases=base.aliases, pages=PAGES, notes=base.notes,
               playlists=base.playlists, connections=base.connections, contacts=base.contacts)
-    brain = Brain(list(DOCS.values()), v, thresholds_from_settings(), index, EMBEDDER)
+    from memory.structured import route  # as the live brain (Step 42)
+
+    brain = Brain(list(DOCS.values()), v, thresholds_from_settings(), index, EMBEDDER, route=route)
     yield [(ex, brain.decide(ex.text, exclude_id=ex.id, exclude_ids=held[ex.id], now=EXAM_NOW))
            for ex in examples]
     index.close()
@@ -120,7 +123,10 @@ def test_decisions_log_their_features(results: list[tuple[Example, Decision]]) -
     for e, d in results:
         names = {f.name for f in d.features}
         assert {"content_tokens", "pre_retrieval"} <= names, e.id
-        if d.verdict == "local":
+        if d.verdict == "local" and d.reason == "routed":
+            # Memory's closed grammar named the tool (Step 42): no retrieval vote.
+            assert "routed" in names, e.id
+        elif d.verdict == "local":
             cos = next(f for f in d.features if f.name == "knn_cosine")
             assert cos.threshold == thresholds_from_settings().knn_min and cos.passed
             assert {"agree", "bm25_margin", "knn_margin", "leftover", "slots_missing"} <= names

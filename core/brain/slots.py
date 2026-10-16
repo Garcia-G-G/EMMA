@@ -39,7 +39,7 @@ from core.brain.normalize import Normalized, fold
 SlotKind = Literal[
     "app", "ide", "page", "note", "playlist", "connection", "contact", "number", "url",
     "url_scheme", "profile_field", "app_category", "connection_or_residue", "residue",
-    "when", "duration",
+    "when", "duration", "utterance",
 ]
 
 DEFAULT_FLOOR = 0.85
@@ -230,7 +230,11 @@ TOOLS: dict[str, ToolSlots] = {
                        "hora", "exacta", "what time is it", "time"),
     "current_datetime_speak": _t(None, "que hora es", "dime la hora", "la hora", "hora",
                                  "fecha", "what time is it"),
-    "recall_facts": _t(None, "que sabes de mi", "what do you know about me"),
+    # Step 42: the whole question goes to the tool; memory.structured reads it.
+    "recall_facts": _t({"query": "utterance"}, "que sabes de mi", "what do you know about me"),
+    "forget_fact": _t({"content": "residue"}, "olvida que", "olvidate de que", "borra que",
+                      "olvida lo de", "deja de recordar que", "forget that", "forget about",
+                      "delete the fact that", "stop remembering that"),
     "today_events": _t(None, "que tengo hoy en el calendario", "que tengo hoy", "calendario",
                        "hoy", "what do i have today"),
     "next_event": _t(None, "cual es mi siguiente evento", "mi siguiente evento",
@@ -566,6 +570,10 @@ def resolve(
         while text.consume_phrase(frame):
             pass
 
+    utter = next((p for p, k in spec.slots.items() if k == "utterance"), None)
+    if utter is not None:  # the tool reads the sentence itself (memory questions)
+        slots[utter] = SlotValue(norm.text, "utterance", 1.0, norm.text)
+        text.used = [True] * len(text.used)
     rest = [i for i, u in enumerate(text.used) if not u]
     if residue_param is not None:
         content = [i for i in rest if text.tokens[i] not in FILLER]
@@ -590,7 +598,7 @@ def resolve(
 
 
 _PRIORITY: dict[SlotKind, int] = {
-    "when": 0, "duration": 0, "number": 0, "url": 0, "url_scheme": 0, "profile_field": 1, "app_category": 1,
+    "when": 0, "duration": 0, "utterance": 9, "number": 0, "url": 0, "url_scheme": 0, "profile_field": 1, "app_category": 1,
     "ide": 2, "app": 3, "page": 4, "note": 4, "playlist": 4, "connection": 4, "contact": 4,
     "connection_or_residue": 5, "residue": 9,
 }

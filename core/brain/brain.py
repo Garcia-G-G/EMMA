@@ -8,7 +8,7 @@ vocabularies, thresholds) plus the retriever. Built by the host
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 
 from core.brain.decision import Decision
@@ -28,11 +28,15 @@ class Brain:
         thresholds: Thresholds,
         index: ExampleIndex | None = None,
         embedder: Embedder | None = None,
+        route: Callable[[str], tuple[str, str] | None] | None = None,
     ) -> None:
         self.tools = {t.name: t for t in tools}
         self.vocab = vocab
         self.thresholds = thresholds
         self.retriever = DualRetriever(tools, index, embedder)
+        # A host-provided closed grammar that names a tool outright (memory's
+        # statements and questions, Step 42). None: retrieval decides everything.
+        self.route = route
 
     def admit(self, tool: str, args: Mapping[str, object], utterance: str = "") -> Decision:
         """A Thinker's proposed call through the gate's own rules (``gate.admit``)."""
@@ -53,8 +57,9 @@ class Brain:
         t1 = time.perf_counter()
         r = self.retriever.rank(norm, exclude_id=exclude_id, exclude_ids=exclude_ids)
         t2 = time.perf_counter()
+        routed = self.route(utterance) if self.route is not None else None
         d = decide(norm, r, self.tools, self.vocab, self.thresholds, self.retriever.knn_status,
-                   now=now)
+                   now=now, routed=routed if routed and routed[0] in self.tools else None)
         d.utterance, d.anaphor = utterance, anaphor
         t3 = time.perf_counter()
         d.timings = {
